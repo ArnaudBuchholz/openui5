@@ -760,6 +760,9 @@ sap.ui.define([
 				// only take the allowed properties from the config
 				oOptionsPassedToOpa;
 
+			var { iframe: sIFrameSelector } = options;
+			delete options.iframe;
+
 			options = extend({},
 				oFilteredConfig,
 				options);
@@ -778,49 +781,132 @@ sap.ui.define([
 
 			oOptionsPassedToOpa = Opa._createFilteredOptions(aPropertiesThatShouldBePassedToOpaWaitFor, options);
 
-			oOptionsPassedToOpa.check = function () {
-				var bApplyAutoWait = !!options.actions || options.autoWait;
-				var oAutoWaiter = Opa5._getAutoWaiter();
+			if (sIFrameSelector) {
+				var oIFrame;
+				var oIFramePlugin;
+				var oIFrameAutoWaiter;
 
-				oAutoWaiter.extendConfig(options.autoWait);
+				oOptionsPassedToOpa.check = function () {
+					var bApplyAutoWait = !!options.actions || options.autoWait;
+					var oAutoWaiter = Opa5._getAutoWaiter();
 
-				if (bApplyAutoWait && oAutoWaiter.hasToWait()) {
-					return false;
-				}
+					oAutoWaiter.extendConfig(options.autoWait);
 
-				// Create a new options object for the plugin to keep the original one as is
-				var oPlugin = Opa5.getPlugin();
-				var oPluginOptions = extend({}, options, {
-					// ensure Interactable matcher is applied if autoWait is true or actions are specified
-					interactable: bApplyAutoWait || options.interactable
-				});
+					if (bApplyAutoWait && oAutoWaiter.hasToWait()) {
+						return false;
+					}
 
-				// even if we have no control the matchers may provide a value for vControl
-				vResult = oPlugin._getFilteredControls(oPluginOptions, vControl);
+					// Locate iframe
+					if (!oIFrame) {
+						const element = Opa5.getWindow().document.querySelector(sIFrameSelector);
+						if (!element || element.tagName.toLocaleLowerCase() !== 'iframe') {
+							return false;
+						}
+						oIFrame = element;
+					}
+					// Expect the iframe to load UI5
+					if (!oIFrame?.contentWindow?.sap?.ui?.require) {
+						return false;
+					}
+					// Grab the iframe's OpaPlugin
+					if (oIFramePlugin === undefined) {
+						oIFrame.contentWindow.sap.ui.require([
+							"sap/ui/test/OpaPlugin",
+							"sap/ui/test/autowaiter/_autoWaiter"
+						], function (
+							OpaPlugin,
+							_iframeAutoWaiter
+						) {
+							oIFramePlugin = new OpaPlugin();
+							oIFrameAutoWaiter = _iframeAutoWaiter;
+						});
+					}
+					if (!(oIFramePlugin && oIFrameAutoWaiter)) {
+						return false;
+					}
+					// Apply autowait to the iframe
+					oIFrameAutoWaiter.extendConfig(options.autoWait);
+					if (bApplyAutoWait && oIFrameAutoWaiter.hasToWait()) {
+						return false;
+					}
 
-				if (iFrameLauncher.hasLaunched() && Array.isArray(vResult)) {
-					// People are using instanceof Array in their check so i need to make sure the Array
-					// comes from the current document. I cannot use slice(0) or map because the original array is kept
-					// so i need to use the slowest way to create a shallow copy of the array
-					var aResult = [];
-					vResult.forEach(function (oControl) {
-						aResult.push(oControl);
+					// Create a new options object for the plugin to keep the original one as is
+					var oPluginOptions = extend({}, options, {
+						// ensure Interactable matcher is applied if autoWait is true or actions are specified
+						interactable: bApplyAutoWait || options.interactable
 					});
-					vResult = aResult;
-				}
 
-				if (vResult === OpaPlugin.FILTER_FOUND_NO_CONTROLS) {
-					oLogger.debug("Matchers found no controls so check function will be skipped");
-					return false;
-				}
+					// even if we have no control the matchers may provide a value for vControl
+					vResult = oIFramePlugin._getFilteredControls(oPluginOptions, vControl);
 
-				if (fnOriginalCheck) {
-					return this._executeCheck(fnOriginalCheck, vResult);
-				}
+					if (Array.isArray(vResult)) {
+						// People are using instanceof Array in their check so i need to make sure the Array
+						// comes from the current document. I cannot use slice(0) or map because the original array is kept
+						// so i need to use the slowest way to create a shallow copy of the array
+						var aResult = [];
+						vResult.forEach(function (oControl) {
+							aResult.push(oControl);
+						});
+						vResult = aResult;
+					}
 
-				//no check defined - continue
-				return true;
-			};
+					if (vResult === OpaPlugin.FILTER_FOUND_NO_CONTROLS) {
+						oLogger.debug("Matchers found no controls so check function will be skipped");
+						return false;
+					}
+
+					if (fnOriginalCheck) {
+						return this._executeCheck(fnOriginalCheck, vResult);
+					}
+
+					//no check defined - continue
+					return true;
+				};
+			} else {
+				oOptionsPassedToOpa.check = function () {
+					var bApplyAutoWait = !!options.actions || options.autoWait;
+					var oAutoWaiter = Opa5._getAutoWaiter();
+
+					oAutoWaiter.extendConfig(options.autoWait);
+
+					if (bApplyAutoWait && oAutoWaiter.hasToWait()) {
+						return false;
+					}
+
+					// Create a new options object for the plugin to keep the original one as is
+					var oPlugin = Opa5.getPlugin();
+					var oPluginOptions = extend({}, options, {
+						// ensure Interactable matcher is applied if autoWait is true or actions are specified
+						interactable: bApplyAutoWait || options.interactable
+					});
+
+					// even if we have no control the matchers may provide a value for vControl
+					vResult = oPlugin._getFilteredControls(oPluginOptions, vControl);
+
+					if (iFrameLauncher.hasLaunched() && Array.isArray(vResult)) {
+						// People are using instanceof Array in their check so i need to make sure the Array
+						// comes from the current document. I cannot use slice(0) or map because the original array is kept
+						// so i need to use the slowest way to create a shallow copy of the array
+						var aResult = [];
+						vResult.forEach(function (oControl) {
+							aResult.push(oControl);
+						});
+						vResult = aResult;
+					}
+
+					if (vResult === OpaPlugin.FILTER_FOUND_NO_CONTROLS) {
+						oLogger.debug("Matchers found no controls so check function will be skipped");
+						return false;
+					}
+
+					if (fnOriginalCheck) {
+						return this._executeCheck(fnOriginalCheck, vResult);
+					}
+
+					//no check defined - continue
+					return true;
+				};
+			}
 
 			oOptionsPassedToOpa.success = function () {
 				var oWaitForCounter = Opa._getWaitForCounter();
