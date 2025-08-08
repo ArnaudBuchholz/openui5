@@ -1201,6 +1201,26 @@ sap.ui.define([
 		assert.strictEqual(Input._DEFAULTRESULT_TABULAR(), "", "Should return empty string");
 	});
 
+	QUnit.test("When setting type and value in the same time, both should be applied syncronously", async function(assert) {
+		this.clock = sinon.useFakeTimers();
+		var oInput = new Input({
+			type: "Text",
+			value: "Test"
+		});
+
+		oInput.placeAt("content");
+		await nextUIUpdate(this.clock);
+		assert.strictEqual(oInput.getValue(), "Test", "The value is set correctly");
+
+		oInput.setType("Password");
+		oInput.setValue("Some password");
+
+		assert.strictEqual(oInput.getFocusDomRef().getAttribute("type"), "password", "The type is set correctly syncronously");
+
+		// cleanup
+		oInput.destroy();
+	});
+
 	QUnit.module("Destroy", {
 		afterEach: function(){
 			runAllTimersAndRestore(this.clock);
@@ -4821,7 +4841,7 @@ sap.ui.define([
 		// Act
 		oInput.onfocusin();
 		oInput._$input.trigger("focus").val("I").trigger("input");
-		this.clock.tick(400);
+		this.clock.tick(500);
 
 		//Assert
 		assert.ok(oAnnounceSpy.calledWith(oMessageBundle.getText("INPUT_SUGGESTIONS_MORE_HITS", [2])), "The description has correct text.");
@@ -5331,6 +5351,9 @@ sap.ui.define([
 		let bErrorMessageConainsAccForLinks = aErrorMessages.some(function (sId) {
 			return sId === oInputWithValueState.getValueStateLinksShortcutsId();
 		});
+		const bAriaDescribedByContainsAccForLinks = aDescribedBy.split(' ').some(function (sId) {
+			return sId === oInputWithValueState.getValueStateLinksShortcutsId();
+		});
 
 		const sLinksTextId = Device.os.macintosh ?  "INPUTBASE_VALUE_STATE_LINKS_MAC" : "INPUTBASE_VALUE_STATE_LINKS";
 		const sMultipleLinksText = Library.getResourceBundleFor("sap.m").getText(sLinksTextId);
@@ -5338,8 +5361,9 @@ sap.ui.define([
 		//Assert
 		assert.ok(oInputWithValueState.getDomRef().contains(oAccDomRef), "Accessibility DOM for links shortcuts announcement is created");
 		assert.strictEqual(oAccDomRef.innerText, sMultipleLinksText, "Links shortcuts announcement is as expected" );
-		assert.notOk(aDescribedBy, "Area-describedby for input does not exist");
-		assert.ok(bErrorMessageConainsAccForLinks, "Area-errormessage for input contains the links shortcuts element ID");
+		assert.ok(aDescribedBy, "Area-describedby for input should exist");
+		assert.notOk(bErrorMessageConainsAccForLinks, "Area-errormessage for input shouldn't contains the links shortcuts element ID");
+		assert.ok(bAriaDescribedByContainsAccForLinks, "Area-describedby for input contains the links shortcuts element ID");
 
 		// Remove formatted value state with link(s)
 		oInputWithValueState.setFormattedValueStateText(null);
@@ -6832,14 +6856,14 @@ sap.ui.define([
 				new Column({
 					popinDisplay: "Inline",
 					demandPopin: true,
-					content: [
+					header: [
 						new Label({text: "My text label"})
 					]
 				})
 			],
 			suggestionRows: [
 				new ColumnListItem({
-					content: [
+					cells: [
 						new Label({text: "My text label"})
 					]
 				})
@@ -7897,6 +7921,62 @@ sap.ui.define([
 		}
 	});
 
+	QUnit.test("Value state popup should be closed after setting the correct value", function (assert) {
+		this.oInput.setValueState("Error");
+		this.oInput.setValueStateText("Invalid entry!");
+		this.oInput.setShowValueHelp(true);
+		this.oInput.attachValueHelpRequest(function () {
+			this.oDialog = new Dialog({
+				title: "Select a Value",
+				content: new sap.m.List({
+					items: [
+						new sap.m.StandardListItem({ title: "one" }),
+						new sap.m.StandardListItem({ title: "two" })
+					]
+				}),
+				beginButton: new Button({
+					text: "OK",
+					press: function () {
+						this.oInput.setValue("two");
+						this.oInput.setValueState("None");
+						this.oInput.setValueStateText("");
+						this.oDialog.close();
+					}.bind(this)
+				}),
+				endButton: new Button({
+					text: "Cancel",
+					press: function () {
+						this.oDialog.close();
+					}
+				})
+			});
+
+			this.oDialog.open();
+		}.bind(this));
+		this.clock.tick(500);
+
+		// Show value state message
+		this.oInput.focus();
+		this.clock.tick(500);
+
+		let oPopup = this.oInput._oValueStateMessage._oPopup;
+		assert.ok(oPopup && oPopup.isOpen(), "Value state message is displayed initially");
+
+		// Act
+		this.oInput.fireValueHelpRequest();
+		this.clock.tick(500);
+
+		// After confirming the value, the value state should be cleared and popup should hide
+		this.oDialog.getBeginButton().firePress();
+		this.clock.tick(500);
+
+		oPopup = this.oInput._oValueStateMessage._oPopup;
+
+		// Assert
+		assert.notOk(oPopup.isOpen(), "Value state message is not displayed after selecting valid value");
+		this.oDialog.destroy();
+	});
+
 	QUnit.test("Value state with formatted text containing a link", async function (assert) {
 		// Arrange
 		this.oInput.setValueState("Error");
@@ -8242,40 +8322,6 @@ sap.ui.define([
 
 		// Assert
 		assert.strictEqual(oRenderedValueStateMessage, "New value state message containing a link", "The updated FormattedText aggregation is also correctly displayed in the Input's value state popup after the suggestion popover is closed");
-	});
-
-	QUnit.test("Should move the visual focus from value state header to the input when the user starts typing", async function (assert) {
-		// Arrange
-		var oFormattedValueStateText = new FormattedText({
-			htmlText: "Value state message containing a %%0",
-			controls: new Link({
-				text: "link",
-				href: "#"
-			})
-		});
-		var	oValueStateHeader;
-
-		// Act
-		this.oInput.setValueState("Information");
-		this.oInput.setFormattedValueStateText(oFormattedValueStateText);
-		await nextUIUpdate(this.clock);
-
-		this.oInput._$input.trigger("focus").val("o").trigger("input");
-		this.clock.tick(1000);
-
-		// Select the value state header
-		qutils.triggerKeydown(this.oInput.getFocusDomRef(), KeyCodes.ARROW_UP);
-		this.clock.tick();
-
-		this.oInput._$input.trigger("focus").val("one").trigger("input");
-		this.clock.tick();
-
-		oValueStateHeader = this.oInput._getSuggestionsPopover().getPopover().getCustomHeader();
-
-		// Assert
-		assert.notOk(oValueStateHeader.$().hasClass("sapMPseudoFocus"), "Pseudo focus is not the value state header");
-		assert.notOk(this.oInput._getSuggestionsPopover().getItemsContainer().getItems()[0].$().hasClass("sapMLIBFocused"), "The visual pseudo focus is not on the first item");
-		assert.ok(this.oInput.$().hasClass("sapMFocus"), "The visual pseudo focus is on the input");
 	});
 
 	QUnit.module("Input with suggestions - change event", {
@@ -9824,5 +9870,74 @@ sap.ui.define([
 		this.clock.tick(500);
 		oDeviceStub.restore();
 		oInput.destroy();
+	});
+
+	QUnit.module("Value State Mesage interactions",  {
+		beforeEach: async function () {
+			this.clock = sinon.useFakeTimers();
+			this.oInput = new Input({
+				valueState: "Error",
+				formattedValueStateText: new FormattedText({
+					htmlText: "Value state message containing a %%0",
+					controls: new Link({
+						text: "link",
+						href: "#"
+					})
+				})
+			});
+			this.oInput.placeAt("content");
+			await nextUIUpdate(this.clock);
+		},
+		afterEach: function () {
+			// cleanup
+			this.oInput.destroy();
+			runAllTimersAndRestore(this.clock);
+		}
+	});
+
+	QUnit.test("Ctrl+Alt+F8 moves focus from the input tho the first value state message link", function(assert){
+		this.oInput.focus();
+		this.clock.tick(300);
+
+		qutils.triggerKeydown(this.oInput.getFocusDomRef(), KeyCodes.F8, false, true, true);
+		this.clock.tick(300);
+
+		const aLink = this.oInput._getValueStateLinks();
+
+		assert.strictEqual(aLink.length, 1, "One link is rendered in the value state message");
+		assert.strictEqual(document.activeElement, aLink[0].getDomRef(), "Focus is on the first link in the value state message popup");
+	});
+
+	QUnit.test("Pressing SHIFT+TAB moves focus from the value state link to the input", function(assert){
+		this.oInput.focus();
+		this.clock.tick(300);
+
+		qutils.triggerKeydown(this.oInput.getFocusDomRef(), KeyCodes.F8, false, true, true);
+		this.clock.tick(500);
+
+		qutils.triggerKeydown(document.activeElement, KeyCodes.TAB, true);
+		this.clock.tick(500);
+
+		// assert
+		assert.strictEqual(document.activeElement, this.oInput.getFocusDomRef(), "Focus is on the input");
+	});
+
+	QUnit.test("Pressing TAB from the value state link closes the value state message and moves the focus", function(assert){
+		var fnValueStateCloseSpy = this.spy(this.oInput, "closeValueStateMessage");
+
+		this.oInput.focus();
+		this.clock.tick(300);
+
+		qutils.triggerKeydown(this.oInput.getFocusDomRef(), KeyCodes.F8, false, true, true);
+		this.clock.tick(500);
+
+		qutils.triggerKeydown(document.activeElement, KeyCodes.TAB);
+		this.clock.tick(500);
+
+		const aLinks = this.oInput._getValueStateLinks();
+
+		// assert
+		assert.strictEqual(fnValueStateCloseSpy.callCount, 1, "Value state message is closed");
+		assert.notStrictEqual(document.activeElement, aLinks[0].getDomRef(), "Focus is not on the link in the value state message popup");
 	});
 });

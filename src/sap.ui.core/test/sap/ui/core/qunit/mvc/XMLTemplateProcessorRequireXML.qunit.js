@@ -10,8 +10,18 @@ sap.ui.define([
 	"sap/ui/core/mvc/XMLView",
 	"sap/ui/core/routing/HashChanger",
 	"sap/ui/test/utils/nextUIUpdate"
-], function(Component, View,
-	InstanceManager, future, Log, merge, JSONModel, XMLView, HashChanger, nextUIUpdate) {
+], function(
+	Component,
+	View,
+	InstanceManager,
+	future,
+	Log,
+	merge,
+	JSONModel,
+	XMLView,
+	HashChanger,
+	nextUIUpdate
+) {
 	"use strict";
 
 	var TESTDATA_PREFIX = "testdata.xml-require";
@@ -649,25 +659,23 @@ sap.ui.define([
 			sinon.assert.notCalled(mSpies.requireSync);
 		}
 	},
-	/**
-	 * @deprecated
-	 */
 	{
-		testDescription: "core:require in XMLView with binding ($control, $controller) contexts in formatter functions - (future = false)",
+		testDescription: "core:require in XMLView with binding ($control, $controller) contexts in formatter functions",
 		viewName: ".view.XMLTemplateProcessorAsync_require_bind_formatter",
 		settings: {
 			async: {
-				create: createView,
-				spies: {
-					error: [Log, "error"],
-					fatal: [Log, "fatal"]
-				}
+				create: createView
 			}
 		},
-		future: false,
+		future: true,
 		runAssertions: async function (oView, mSpies, assert, bAsync) {
-			const oErrorSpy = mSpies.error;
-			const oFatalSpy = mSpies.fatal;
+			/*
+			 * The corresponding assertions for checking the this context are written in the Helper module and the controller
+			 *
+			 * see:
+			 *  - testdata/xml-require/helper/Helper.js
+			 *  - testdata/xml-require/view/XMLTemplateProcessorAsync_require_bind_formatter.controller.js
+			 */
 			oView.placeAt("qunit-fixture");
 			await nextUIUpdate();
 
@@ -676,8 +684,10 @@ sap.ui.define([
 
 			const oButton2 = oView.byId("btn_2");
 			assert.equal(oButton2.getText(), "$controller", "'$controller' shouldn't be resolved without a binding.");
-			assert.equal(oErrorSpy.getCall(0).args[0], "[FUTURE FATAL] formatter function $controller.formatter not found!", "'$controller.formatter': Correct Error Log shown.");
-			assert.equal(oFatalSpy.getCall(0).args[0], "[FUTURE FATAL] core:require in XMLView contains an invalid identifier: '$InvalidAlias' on Node: App. Keys that begin with '$' are reserved by the framework.", "'core:require': Correct Error Log shown when invalid alias is defined.");
+
+			const oButton5 = oView.byId("btn_5");
+			const sValue = oButton5.data("key");
+			assert.equal(sValue, "Click Me! (formatted by customDataFormatter)", "The custom data formatter is called with the correct value");
 
 			oView.destroy();
 		}
@@ -695,7 +705,25 @@ sap.ui.define([
 			assert.ok(oError.message.includes("formatter function $controller.formatter not found!"), "Correct error message is shown.");
 		}
 	},
-
+	/**
+	 * @deprecated
+	 */
+	{
+		testDescription: "Error-Handling: core:require in XMLView with binding formatter functions - invalid $controller usage in XML view (future=false)",
+		viewName: ".view.XMLTemplateProcessorAsync_require_bind_formatter_invalid$controllerUsage",
+		settings: {
+			async: {
+				create: createView,
+				spies: {
+					error: [Log, "error"]
+				}
+			}
+		},
+		future: false,
+		runAssertions: function (oView, mSpies, assert, bAsync) {
+			assert.ok(mSpies.error.calledWith(sinon.match(/formatter function \$controller\.formatter not found!/)), "Correct error message is shown.");
+		}
+	},
 	{
 		testDescription: "Error-Handling: core:require in XMLView with binding formatter functions - invalid alias defined (future=true)",
 		viewName: ".view.XMLTemplateProcessorAsync_require_bind_formatter_invalidAlias",
@@ -707,6 +735,25 @@ sap.ui.define([
 		future: true,
 		onRejection: function (assert, oError) {
 			assert.ok(oError.message.includes("core:require in XMLView contains an invalid identifier: '$invalidAlias' on Node: App. Keys that begin with '$' are reserved by the framework."), "Correct error message is shown.");
+		}
+	},
+	/**
+	 * @deprecated
+	 */
+	{
+		testDescription: "Error-Handling: core:require in XMLView with binding formatter functions - invalid alias defined (future=false)",
+		viewName: ".view.XMLTemplateProcessorAsync_require_bind_formatter_invalidAlias",
+		settings: {
+			async: {
+				create: createView,
+				spies: {
+					fatal: [Log, "fatal"]
+				}
+			}
+		},
+		future: false,
+		runAssertions: function (oView, mSpies, assert, bAsync) {
+			assert.ok(mSpies.fatal.calledWith(sinon.match(/core:require in XMLView contains an invalid identifier: '\$invalidAlias' on Node: App. Keys that begin with '\$' are reserved by the framework\./)), "Correct error message is shown.");
 		}
 	},
 	{

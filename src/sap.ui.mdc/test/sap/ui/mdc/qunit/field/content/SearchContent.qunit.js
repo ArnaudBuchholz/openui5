@@ -64,6 +64,11 @@ sap.ui.define([
 				width: "100%"
 			}
 		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			}
+		],
 		events: [
 			{
 				change: {value: "X"},
@@ -101,6 +106,17 @@ sap.ui.define([
 		modules: [],
 		instances: [],
 		createFunction: "createEditForHelp",
+		noFormatting: false,
+		editMode: FieldEditMode.Editable,
+		throwsError: true
+	};
+
+	ContentBasicTest.controlMap.EditSelect = {
+		getPathsFunction: "getEditSelect",
+		paths: [null],
+		modules: [],
+		instances: [],
+		createFunction: "createEditSelect",
 		noFormatting: false,
 		editMode: FieldEditMode.Editable,
 		throwsError: true

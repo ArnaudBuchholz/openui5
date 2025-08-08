@@ -71,7 +71,7 @@
 					<OverflowToolbar class="sapUiDemoKitHeaderOTB" style="Clear">
 						<ObjectStatus
 							text="{ parts:
-								['appView>/bShowVersionSwitchButton', 'versionData>/isDevVersion', 'versionData>/version'],
+								['appView>/bShowVersionSwitchButton', 'versionData>/isDevVersion', 'versionData>/fullVersion'],
 								formatter: '.formatter.formatVersionStatus'
 							}"
 							state="Information"
@@ -85,7 +85,10 @@
 							type="Default"
 							icon="sap-icon://dimension"
 							text="{= ${appView>/bDesktopSize}
-								? [${i18n>APP_VERSION_VERSION}, ${versionData>/version}].join(' ')
+								? [${i18n>APP_VERSION_VERSION}, ${versionData>/fullVersion}].join(' ')
+								: '' }"
+							tooltip="{= ${appView>/bDesktopSize}
+								? [${i18n>APP_VERSION_VERSION}, ${versionData>/fullVersion}].join(' ')
 								: '' }"
 							press="onChangeVersionButtonPress"
 							visible="{= ${appView>/bShowVersionSwitchButton} }">
@@ -197,7 +200,8 @@
 							icon="sap-icon://bell"
 							press="onNewsButtonPress"
 							text="{i18n>APP_INFORMATION_BTN_NEWS}"
-							tooltip="{i18n>APP_NEWS_BTN_TOOLTIP}">
+							tooltip="{i18n>APP_NEWS_BTN_TOOLTIP}"
+							visible="{= !${versionData>/isURLVersioned} }">
 							<customData>
 								<BadgeCustomData key="badge" value="{news>/newsCount}" />
 							</customData>
@@ -294,6 +298,27 @@
 		</tnt:sideContent>
 
 		<tnt:mainContents>
+			<VBox items="{messagesData>/messages}" width="100%" class="sapUiTinyMarginTop" visible="{=!!${messagesData>/iVisibleMessagesCount}}">
+				<items>
+					<MessageStrip close="onCloseImportantMessage" text="{
+						parts: [
+							'messagesData>text'
+						],
+						formatter: '.formatter.formatImportantMessage'
+					}" class="sapUiTinyMarginBottom sapUiTinyMarginBeginEnd" showIcon="true" showCloseButton="{= !${messagesData>mandatory} }" visible="{messagesData>isMessageVisible}" type="{messagesData>type}">
+						<customData>
+							<core:CustomData key="messageID" value="{messagesData>id}" />
+						</customData>
+						<link>
+							<Link
+								visible="{= (!!${messagesData>linkText} &amp;&amp; !!${messagesData>linkHref}) }"
+								text="{messagesData>linkText}"
+								target="_blank"
+								href="{messagesData>linkHref}" />
+						</link>
+					</MessageStrip>
+				</items>
+			</VBox>
 			<OverflowToolbar
 				visible="{= (${appView>/bHasMaster} &amp;&amp; !${appView>/bLandscape}) &#124;&#124; ${appView>/bHasMaster} &amp;&amp; ${appView>/device/system/phone} }">
 				<ToggleButton

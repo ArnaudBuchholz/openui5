@@ -335,6 +335,10 @@ sap.ui.define([
 					mFormat.parts[1].toString()
 				],
 				formatter: function (sText, vParam1, vParam2) {
+					if (!sText) {
+						return "";
+					}
+
 					var sParam1 = vParam1 || mFormat.parts[0];
 					var sParam2 = vParam2 || mFormat.parts[1];
 
@@ -392,6 +396,50 @@ sap.ui.define([
 				bStopped = true;
 			}
 		};
+	};
+
+	/**
+	 * Recursively searches for a value in an object using a callback function.
+	 *
+	 * @param {object} oData The object in which to perform the search.
+	 * @param {function} fnPredicate The function applied to each value. It is provided with the argument (value) and returns true to stop the search.
+	 * @returns {object|false} The value that satisfies the function, or false if none is found.
+	 */
+	Utils.find = function(oData, fnPredicate) {
+		if (!isPlainObject(oData)) {
+			throw new Error("Parameter 'data' must be an object.");
+		}
+
+		function process(vValue) {
+			if (fnPredicate(vValue)) {
+				return vValue;
+			}
+
+			if (Array.isArray(vValue)) {
+				for (const item of vValue) {
+					const result = process(item);
+					if (result) {
+						return result;
+					}
+				}
+
+				return false;
+			}
+
+			if (isPlainObject(vValue)) {
+				for (const key of Object.keys(vValue)) {
+					const result = process(vValue[key]);
+
+					if (result) {
+						return result;
+					}
+				}
+			}
+
+			return false;
+		}
+
+		return process(oData);
 	};
 
 	return Utils;

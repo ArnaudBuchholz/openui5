@@ -16,6 +16,7 @@ sap.ui.define([
 	'sap/base/util/merge',
 	'sap/ui/mdc/enums/ValueHelpSelectionType',
 	'sap/base/Log',
+	'sap/base/util/isEmptyObject',
 	'sap/ui/core/Element',
 	'sap/ui/Device',
 	'sap/ui/dom/containsOrEquals',
@@ -34,6 +35,7 @@ sap.ui.define([
 	merge,
 	ValueHelpSelectionType,
 	Log,
+	isEmptyObject,
 	Element,
 	Device,
 	containsOrEquals,
@@ -470,6 +472,10 @@ sap.ui.define([
 					"sap/ui/model/resource/ResourceModel"
 				]).then((aModules) => {
 
+					if (this.isDestroyStarted()) {
+						return null;
+					}
+
 					const [FixFlex, VBox, Panel, ScrollContainer, ResourceModel] = aModules;
 
 					if (!this._oContentLayout && !this.isDestroyed()) {
@@ -632,7 +638,7 @@ sap.ui.define([
 
 		let oFilter = aFilters.length > 1 ? new Filter({ filters: aFilters, and: false }) : aFilters[0];
 
-		if (oFilter && oConditions) {
+		if (oFilter && oConditions && !isEmptyObject(oConditions)) {
 			const oConditionTypes = this._getTypesForConditions(oConditions);
 			const oConditionsFilter = FilterConverter.createFilters(oConditions, oConditionTypes, undefined, this.getCaseSensitive());
 			if (oConditionsFilter) {
@@ -1048,6 +1054,11 @@ sap.ui.define([
 
 							if (bDialogExist && oBindingInfo && oBindingInfo.length && !Device.system.phone) {
 								return loadModules(["sap/m/Button", "sap/m/Toolbar", "sap/m/ToolbarSpacer"]).then((aModules) => {
+
+									if (this.isDestroyStarted()) {
+										return null;
+									}
+
 									const [Button, Toolbar, ToolbarSpacer] = aModules;
 
 									const oShowAllButtonDelegate = {

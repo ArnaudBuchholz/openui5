@@ -17,8 +17,7 @@ sap.ui.define([],
 			{
 				"id": "accessibilityGuide",
 				"text": "Accessibility Guide",
-				"href": "test-resources/sap/m/demokit/accessibilityGuide/webapp/index.html",
-				"hideOnPhone": true
+				"href": "test-resources/sap/m/demokit/accessibilityGuide/webapp/index.html"
 			},
 
 			// #2 Category: Development Tools
@@ -40,7 +39,7 @@ sap.ui.define([],
 			{
 				"id": "linter",
 				"text": "UI5 linter",
-				"href": "https://github.com/SAP/ui5-linter"
+				"href": "https://github.com/UI5/linter"
 			},
 			{
 				"id": "fpmExplorer",

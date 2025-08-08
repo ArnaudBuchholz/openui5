@@ -1,29 +1,21 @@
-/*global QUnit, oTable, oTreeTable */
+/*global QUnit, oTable */
 
 sap.ui.define([
 	"sap/ui/table/qunit/TableQUnitUtils",
 	"sap/ui/qunit/utils/nextUIUpdate",
 	"sap/ui/table/utils/TableUtils",
-	"sap/ui/model/json/JSONModel",
 	"sap/ui/table/Table",
 	"sap/ui/table/Column",
 	"sap/ui/core/Control",
-	"sap/ui/Device",
-	"sap/m/Label",
-	"sap/m/Text",
-	"sap/m/Link"
+	"sap/ui/Device"
 ], function(
 	TableQUnitUtils,
 	nextUIUpdate,
 	TableUtils,
-	JSONModel,
 	Table,
 	Column,
 	Control,
-	Device,
-	Label,
-	Text,
-	Link
+	Device
 ) {
 	"use strict";
 
@@ -101,7 +93,7 @@ sap.ui.define([
 		this.oTable.addColumn(new Column("c3", {headerSpan: 1, template: new Control()}));
 
 		// strip returned data to minimum for better analysis
-		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils.getColumnMap(this.oTable));
+		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils._getColumnMap(this.oTable));
 
 		const oExpectedColumnMap = {
 			c1: {id: "c1", levelInfo: [{spannedColumns: []}], parents: []},
@@ -110,17 +102,17 @@ sap.ui.define([
 		};
 		assert.deepEqual(oColumnMap, oExpectedColumnMap, "ColumnMap OK");
 		assert.deepEqual(ColumnUtils.getParentSpannedColumns(this.oTable, "c1"), [], "No parents");
-		assert.deepEqual(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c1"), [], "No children");
-		assert.strictEqual(ColumnUtils.getChildrenSpannedColumns(this.oTable, "unknownColumnID"), undefined, "Wrong column ID");
+		assert.deepEqual(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c1"), [], "No children");
+		assert.strictEqual(ColumnUtils._getChildrenSpannedColumns(this.oTable, "unknownColumnID"), undefined, "Wrong column ID");
 
-		const aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c1"));
+		const aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c1"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
 			endColumn: "c1",
 			endIndex: 0
 		}, "ColumnBoundaries OK");
-		assert.strictEqual(ColumnUtils.getColumnBoundaries(this.oTable, "unknownColumnID"), undefined, "Wrong column ID");
+		assert.strictEqual(ColumnUtils._getColumnBoundaries(this.oTable, "unknownColumnID"), undefined, "Wrong column ID");
 	});
 
 	QUnit.test("Header Spans", function(assert) {
@@ -132,7 +124,7 @@ sap.ui.define([
 		this.oTable.addColumn(new Column("c6", {headerSpan: 1, template: new Control()}));
 
 		// strip returned data to minimum for better analysis
-		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils.getColumnMap(this.oTable));
+		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils._getColumnMap(this.oTable));
 
 		const oExpectedColumnMap = {
 			c1: {id: "c1", levelInfo: [{spannedColumns: ["c2"]}], parents: []},
@@ -164,16 +156,16 @@ sap.ui.define([
 		assert.deepEqual(aParents, [{column: "c4", level: 0}], "Parent is c4");
 
 		const aColumns = this.oTable.getColumns();
-		assert.equal(ColumnUtils.getMaxHeaderSpan(aColumns[0]), 2, "MaxHeaderSpan for column c1 is 2");
-		assert.equal(ColumnUtils.hasHeaderSpan(aColumns[0]), true, "c1 has headerSpan");
+		assert.equal(ColumnUtils._getMaxHeaderSpan(aColumns[0]), 2, "MaxHeaderSpan for column c1 is 2");
+		assert.equal(ColumnUtils._hasHeaderSpan(aColumns[0]), true, "c1 has headerSpan");
 
-		assert.equal(ColumnUtils.getMaxHeaderSpan(aColumns[1]), 1, "MaxHeaderSpan for column c2 is 1");
-		assert.equal(ColumnUtils.hasHeaderSpan(aColumns[1]), false, "c2 has no headerSpan");
+		assert.equal(ColumnUtils._getMaxHeaderSpan(aColumns[1]), 1, "MaxHeaderSpan for column c2 is 1");
+		assert.equal(ColumnUtils._hasHeaderSpan(aColumns[1]), false, "c2 has no headerSpan");
 
-		let aChildren = this.fnColumnArrayToIdArray(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c1"));
+		let aChildren = this.fnColumnArrayToIdArray(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c1"));
 		assert.deepEqual(aChildren, [{column: "c2", level: 0}], "c2 is child of c1");
 
-		aChildren = this.fnColumnArrayToIdArray(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c4"));
+		aChildren = this.fnColumnArrayToIdArray(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c4"));
 		assert.deepEqual(aChildren, [
 			{column: "c5", level: 0}, {
 				column: "c6",
@@ -181,7 +173,7 @@ sap.ui.define([
 			}
 		], "c5 and c6 are children of c4");
 
-		let aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c1"));
+		let aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c1"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -189,7 +181,7 @@ sap.ui.define([
 			endIndex: 1
 		}, "ColumnBoundaries c1 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c2"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c2"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -197,7 +189,7 @@ sap.ui.define([
 			endIndex: 1
 		}, "ColumnBoundaries c2 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c3"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c3"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c3",
 			startIndex: 2,
@@ -205,7 +197,7 @@ sap.ui.define([
 			endIndex: 2
 		}, "ColumnBoundaries c3 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c4"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c4"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c4",
 			startIndex: 3,
@@ -213,7 +205,7 @@ sap.ui.define([
 			endIndex: 5
 		}, "ColumnBoundaries c4 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c5"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c5"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c4",
 			startIndex: 3,
@@ -221,7 +213,7 @@ sap.ui.define([
 			endIndex: 5
 		}, "ColumnBoundaries c5 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c6"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c6"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c4",
 			startIndex: 3,
@@ -248,7 +240,7 @@ sap.ui.define([
 		}));
 
 		// strip returned data to minimum for better analysis
-		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils.getColumnMap(this.oTable));
+		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils._getColumnMap(this.oTable));
 
 		const oExpectedColumnMap = {
 			c1: {id: "c1", levelInfo: [{spannedColumns: ["c2"]}, {spannedColumns: []}], parents: []},
@@ -296,7 +288,7 @@ sap.ui.define([
 		}));
 
 		// strip returned data to minimum for better analysis
-		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils.getColumnMap(this.oTable));
+		const oColumnMap = this.fnColumnMapToMinimum(ColumnUtils._getColumnMap(this.oTable));
 
 		const oExpectedColumnMap = {
 			c1: {
@@ -338,15 +330,15 @@ sap.ui.define([
 		assert.deepEqual(aParents, [{column: "c2", level: 1}], "Parent c2 at level 1");
 
 		const aColumns = this.oTable.getColumns();
-		assert.equal(ColumnUtils.getMaxHeaderSpan(aColumns[0]), 3, "MaxHeaderSpan for column c1 is 3");
-		assert.equal(ColumnUtils.getMaxHeaderSpan(aColumns[1]), 2, "MaxHeaderSpan for column c2 is 2");
-		assert.equal(ColumnUtils.getMaxHeaderSpan(aColumns[2]), 1, "MaxHeaderSpan for column c3 is 1");
+		assert.equal(ColumnUtils._getMaxHeaderSpan(aColumns[0]), 3, "MaxHeaderSpan for column c1 is 3");
+		assert.equal(ColumnUtils._getMaxHeaderSpan(aColumns[1]), 2, "MaxHeaderSpan for column c2 is 2");
+		assert.equal(ColumnUtils._getMaxHeaderSpan(aColumns[2]), 1, "MaxHeaderSpan for column c3 is 1");
 
-		assert.equal(ColumnUtils.hasHeaderSpan(aColumns[0]), true, "c1 has headerSpan");
-		assert.equal(ColumnUtils.hasHeaderSpan(aColumns[1]), true, "c2 has headerSpan");
-		assert.equal(ColumnUtils.hasHeaderSpan(aColumns[2]), false, "c3 has headerSpan");
+		assert.equal(ColumnUtils._hasHeaderSpan(aColumns[0]), true, "c1 has headerSpan");
+		assert.equal(ColumnUtils._hasHeaderSpan(aColumns[1]), true, "c2 has headerSpan");
+		assert.equal(ColumnUtils._hasHeaderSpan(aColumns[2]), false, "c3 has headerSpan");
 
-		let aChildren = this.fnColumnArrayToIdArray(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c1"));
+		let aChildren = this.fnColumnArrayToIdArray(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c1"));
 		assert.deepEqual(aChildren, [
 			{column: "c2", level: 0}, {
 				column: "c3",
@@ -354,16 +346,16 @@ sap.ui.define([
 			}
 		], "c2 and c3 are children of c1");
 
-		aChildren = this.fnColumnArrayToIdArray(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c2"));
+		aChildren = this.fnColumnArrayToIdArray(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c2"));
 		assert.deepEqual(aChildren, [{column: "c3", level: 1}], "c3 is child of c2 at level 1");
 
-		aChildren = this.fnColumnArrayToIdArray(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c2", 0));
+		aChildren = this.fnColumnArrayToIdArray(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c2", 0));
 		assert.deepEqual(aChildren, [], "c2 has no children at level 0");
 
-		aChildren = this.fnColumnArrayToIdArray(ColumnUtils.getChildrenSpannedColumns(this.oTable, "c2", 1));
+		aChildren = this.fnColumnArrayToIdArray(ColumnUtils._getChildrenSpannedColumns(this.oTable, "c2", 1));
 		assert.deepEqual(aChildren, [{column: "c3", level: 1}], "c3 is child of c2 at level 1");
 
-		const aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c2"));
+		const aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c2"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -404,7 +396,7 @@ sap.ui.define([
 			template: new Control()
 		}));
 
-		let aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c1"));
+		let aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c1"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -412,7 +404,7 @@ sap.ui.define([
 			endIndex: 3
 		}, "ColumnBoundaries c1 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c2"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c2"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -420,7 +412,7 @@ sap.ui.define([
 			endIndex: 3
 		}, "ColumnBoundaries c2 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c3"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c3"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -428,7 +420,7 @@ sap.ui.define([
 			endIndex: 3
 		}, "ColumnBoundaries c3 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c4"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c4"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c1",
 			startIndex: 0,
@@ -436,7 +428,7 @@ sap.ui.define([
 			endIndex: 3
 		}, "ColumnBoundaries c4 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c5"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c5"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c5",
 			startIndex: 4,
@@ -444,7 +436,7 @@ sap.ui.define([
 			endIndex: 5
 		}, "ColumnBoundaries c5 OK");
 
-		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils.getColumnBoundaries(this.oTable, "c6"));
+		aBoundaries = this.fnColumnBoundariesToId(ColumnUtils._getColumnBoundaries(this.oTable, "c6"));
 		assert.deepEqual(aBoundaries, {
 			startColumn: "c5",
 			startIndex: 4,
@@ -501,194 +493,174 @@ sap.ui.define([
 		assert.equal(ColumnUtils.getHeaderSpan(aColumns[3], 0), 2, "Span OK for c4, level 0");
 	});
 
-	QUnit.module("ColumnMove", {
-		beforeEach: async function() {
-			await createTables();
+	QUnit.module("Move columns", {
+		beforeEach: function() {
+			this.oTable = TableQUnitUtils.createTable({
+				columns: [
+					new Column({template: new TestControl()}),
+					new Column({template: new TestControl()}),
+					new Column({template: new TestControl()}),
+					new Column({template: new TestControl()}),
+					new Column({template: new TestControl()})
+				],
+				enableColumnReordering: true,
+				fixedColumnCount: 1
+			});
 		},
 		afterEach: function() {
-			destroyTables();
+			this.oTable.destroy();
 		}
 	});
 
-	QUnit.test("isColumnMovable()", async function(assert) {
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[0]), "Fixed Column");
-		assert.ok(ColumnUtils.isColumnMovable(oTable.getColumns()[1]), "Non-Fixed Column");
-		assert.ok(ColumnUtils.isColumnMovable(oTable.getColumns()[2]), "Non-Fixed Column");
-		assert.ok(!ColumnUtils.isColumnMovable(oTreeTable.getColumns()[0]), "First column in TreeTable");
-		assert.ok(ColumnUtils.isColumnMovable(oTreeTable.getColumns()[2]), "Other column in TreeTable");
+	QUnit.test("isColumnMovable", function(assert) {
+		const aColumns = this.oTable.getColumns();
 
-		oTable.setEnableColumnReordering(false);
-		oTreeTable.setEnableColumnReordering(false);
-		await nextUIUpdate();
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[0]), false, "Fixed Column");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1]), true, "Non-Fixed Column");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[2]), true, "Non-Fixed Column");
 
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[0]), "ColumnReordering Disabled: Fixed Column");
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[2]), "ColumnReordering Disabled: Non-Fixed Column");
-		assert.ok(!ColumnUtils.isColumnMovable(oTreeTable.getColumns()[0]), "ColumnReordering Disabled: First column in TreeTable");
-		assert.ok(!ColumnUtils.isColumnMovable(oTreeTable.getColumns()[2]), "ColumnReordering Disabled: Other column in TreeTable");
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Tree);
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[0]), false, "First column in tree mode");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1]), true, "Other column in tree mode");
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Flat);
 
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[0], true), "ColumnReordering Disabled, but ignored: Fixed Column");
-		assert.ok(ColumnUtils.isColumnMovable(oTable.getColumns()[1], true), "ColumnReordering Disabled, but ignored: Non-Fixed Column");
-		assert.ok(ColumnUtils.isColumnMovable(oTable.getColumns()[2], true), "ColumnReordering Disabled, but ignored: Non-Fixed Column");
-		assert.ok(!ColumnUtils.isColumnMovable(oTreeTable.getColumns()[0], true),
-			"ColumnReordering Disabled, but ignored: First column in TreeTable");
-		assert.ok(ColumnUtils.isColumnMovable(oTreeTable.getColumns()[2], true), "ColumnReordering Disabled, but ignored: Other column in TreeTable");
+		this.oTable.setEnableColumnReordering(false);
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[0]), false, "Column reordering disabled: Fixed Column");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1]), false, "Column reordering disabled: Non-Fixed Column");
 
-		oTable.setEnableColumnReordering(true);
-		oTreeTable.setEnableColumnReordering(true);
-		oTable.getColumns()[1].setHeaderSpan(2);
-		await nextUIUpdate();
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[0], true), false, "Column reordering disabled, but ignored: Fixed Column");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1], true), true, "Column reordering disabled, but ignored: Non-Fixed Column");
 
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[1]), "Spanning Column");
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[2]), "Spanned Column");
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Tree);
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[0], true), false,
+			"ColumnReordering Disabled, but ignored: First column in tree mode");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1], true), true,
+			"Colum reordering disabled, but ignored: Other column in tree mode");
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Flat);
 
-		oTable.getColumns()[1].setHeaderSpan([2, 1]);
-		oTable.getColumns()[1].addMultiLabel(new TestControl());
-		oTable.getColumns()[1].addMultiLabel(new TestControl());
-		await nextUIUpdate();
+		this.oTable.setEnableColumnReordering(true);
+		aColumns[1].setHeaderSpan(2);
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1]), false, "Spanning Column");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[2]), false, "Spanned Column");
 
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[1]), "Spanning Column (Multi Header)");
-		assert.ok(!ColumnUtils.isColumnMovable(oTable.getColumns()[2]), "Spanned Column (Multi Header)");
+		aColumns[1].setHeaderSpan([2, 1]);
+		aColumns[1].addMultiLabel(new TestControl());
+		aColumns[1].addMultiLabel(new TestControl());
+
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[1]), false, "Spanning Column (Multi Header)");
+		assert.strictEqual(ColumnUtils.isColumnMovable(aColumns[2]), false, "Spanned Column (Multi Header)");
+
+		this.oTable.setFixedColumnCount(0);
+		this.oTable.insertColumn(new Column(), 0);
+		assert.strictEqual(ColumnUtils.isColumnMovable(this.oTable.getColumns()[1]), true, "First visible column. First column is invisible");
+
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Tree);
+		assert.strictEqual(ColumnUtils.isColumnMovable(this.oTable.getColumns()[1]), false,
+			"First visible column in tree mode. First column is invisible");
 	});
 
-	QUnit.test("isColumnMovableTo()", async function(assert) {
-		let oColumn = oTable.getColumns()[2];
-		assert.ok(ColumnUtils.isColumnMovable(oColumn), "Ensure column is movable");
+	QUnit.test("isColumnMovableTo", function(assert) {
+		const aColumns = this.oTable.getColumns();
+		const oColumn = aColumns[2];
 
-		let bExpect;
-		let i;
-
-		oTable.setEnableColumnReordering(false);
-		await nextUIUpdate();
-
-		for (i = -1; i <= oTable.getColumns().length + 2; i++) {
-			bExpect = false;
-			assert.ok(ColumnUtils.isColumnMovableTo(oColumn, i) === bExpect, "Move to index " + i + (bExpect ? "" : " not") + " possible");
+		for (let i = -1; i <= aColumns.length + 2; i++) {
+			assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, i), i >= 1, "Move to index " + i);
 		}
 
-		for (i = -1; i <= oTable.getColumns().length + 2; i++) {
-			bExpect = true;
-			if (i < 1) {
-				bExpect = false;
-			}
-			assert.ok(ColumnUtils.isColumnMovableTo(oColumn, i, true) === bExpect, "Move to index " + i + (bExpect ? "" : " not") + " possible");
+		this.oTable.setEnableColumnReordering(false);
+		for (let i = -1; i <= aColumns.length + 2; i++) {
+			assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, i), false, "Column reordering disabled: Move to index " + i);
+			assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, i, true), i >= 1,
+				"Column reordering disabled, but ignored: Move to index " + i);
 		}
 
-		oTable.setEnableColumnReordering(true);
-		await nextUIUpdate();
+		this.oTable.setEnableColumnReordering(true);
+		aColumns[3].setHeaderSpan(2);
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 3), true, "Move before span");
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 4), false, "Move inside span");
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 5), true, "Move after span");
 
-		for (i = -1; i <= oTable.getColumns().length + 2; i++) {
-			bExpect = true;
-			if (i < 1) {
-				bExpect = false;
-			}
-			assert.ok(ColumnUtils.isColumnMovableTo(oColumn, i) === bExpect, "Move to index " + i + (bExpect ? "" : " not") + " possible");
-		}
+		aColumns[3].setHeaderSpan([2, 1]);
+		aColumns[3].addMultiLabel(new TestControl());
+		aColumns[3].addMultiLabel(new TestControl());
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 3), true, "Move before span (Multi Header)");
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 4), false, "Move inside span (Multi Header)");
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 5), true, "Move after span (Multi Header)");
 
-		oTable.getColumns()[3].setHeaderSpan(2);
-		await nextUIUpdate();
+		aColumns[3].setHeaderSpan(1);
+		aColumns[3].destroyMultiLabels();
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 3), true, "Move before span of 1");
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 4), true, "Move after span of 1");
 
-		for (i = -1; i <= oTable.getColumns().length + 2; i++) {
-			bExpect = true;
-			if (i < 1 || i === 4) {
-				bExpect = false;
-			}
-			assert.ok(ColumnUtils.isColumnMovableTo(oColumn, i) === bExpect, "Move to index " + i + (bExpect ? "" : " not") + " possible");
-		}
+		this.oTable.setFixedColumnCount(0);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Tree);
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 0), false, "Move to index 0 in tree mode");
 
-		oTable.getColumns()[3].setHeaderSpan([2, 1]);
-		oTable.getColumns()[3].addMultiLabel(new TestControl());
-		oTable.getColumns()[3].addMultiLabel(new TestControl());
-		await nextUIUpdate();
+		this.oTable.insertColumn(new Column(), 0);
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 0), false, "Move to index 0 in tree mode with invisible first column");
 
-		for (i = -1; i <= oTable.getColumns().length + 2; i++) {
-			bExpect = true;
-			if (i < 1 || i === 4) {
-				bExpect = false;
-			}
-			assert.ok(ColumnUtils.isColumnMovableTo(oColumn, i) === bExpect, "Move to index " + i + (bExpect ? "" : " not") + " possible");
-		}
-
-		oTable.getColumns()[1].setHeaderSpan(2);
-		oTable.getColumns()[3].setHeaderSpan(1);
-		oTable.getColumns()[3].destroyMultiLabels();
-		await nextUIUpdate();
-
-		oColumn = oTable.getColumns()[4];
-
-		for (i = -1; i <= oTable.getColumns().length + 2; i++) {
-			bExpect = true;
-			if (i < 1 || i === 2) {
-				bExpect = false;
-			}
-			assert.ok(ColumnUtils.isColumnMovableTo(oColumn, i) === bExpect, "Move to index " + i + (bExpect ? "" : " not") + " possible");
-		}
+		this.oTable.insertColumn(new Column(), 0);
+		assert.strictEqual(ColumnUtils.isColumnMovableTo(oColumn, 1), false,
+			"Move to index 1 in tree mode with 2 invisible columns at the beginning");
 	});
 
-	QUnit.test("moveColumnTo() - Do a move", async function(assert) {
+	QUnit.test("moveColumnTo - Do a move", function(assert) {
 		assert.expect(4);
 
-		const oColumn = oTable.getColumns()[2];
+		const oColumn = this.oTable.getColumns()[2];
 		assert.ok(ColumnUtils.isColumnMovable(oColumn), "Ensure column is movable");
 
-		oTable.attachColumnMove(function(oEvent) {
+		this.oTable.attachColumnMove(function(oEvent) {
 			assert.equal(oEvent.getParameter("newPos"), 3, "Correct Index in event parameter");
 			assert.ok(oEvent.getParameter("column") === oColumn, "Correct Column in event parameter");
 		});
 
 		ColumnUtils.moveColumnTo(oColumn, 4);
-		await nextUIUpdate();
-
-		assert.equal(oTable.indexOfColumn(oColumn), 3, "Correct Index after move.");
+		assert.equal(this.oTable.indexOfColumn(oColumn), 3, "Correct Index after move");
 	});
 
-	QUnit.test("moveColumnTo() - Column not movable", async function(assert) {
+	QUnit.test("moveColumnTo - Column not movable", function(assert) {
 		assert.expect(2);
 
-		const oColumn = oTable.getColumns()[0];
-		assert.ok(!ColumnUtils.isColumnMovable(oColumn), "Ensure column is not movable");
+		const oColumn = this.oTable.getColumns()[0];
+		assert.ok(!ColumnUtils.isColumnMovable(oColumn), "Column is not movable");
 
-		oTable.attachColumnMove(function(oEvent) {
+		this.oTable.attachColumnMove(function(oEvent) {
 			assert.ok(false, "No event was triggered");
 		});
 
 		ColumnUtils.moveColumnTo(oColumn, 4);
-		await nextUIUpdate();
-
-		assert.equal(oTable.indexOfColumn(oColumn), 0, "Correct Index after move.");
+		assert.equal(this.oTable.indexOfColumn(oColumn), 0, "Correct Index after move");
 	});
 
-	QUnit.test("moveColumnTo() - Move to current position", async function(assert) {
+	QUnit.test("moveColumnTo - Move to current position", function(assert) {
 		assert.expect(2);
 
-		const oColumn = oTable.getColumns()[4];
-		assert.ok(ColumnUtils.isColumnMovable(oColumn), "Ensure column is movable");
+		const oColumn = this.oTable.getColumns()[4];
+		assert.ok(ColumnUtils.isColumnMovable(oColumn), "Column is movable");
 
-		oTable.attachColumnMove(function(oEvent) {
+		this.oTable.attachColumnMove(function(oEvent) {
 			assert.ok(false, "No event was triggered");
 		});
 
 		ColumnUtils.moveColumnTo(oColumn, 4);
-		await nextUIUpdate();
-
-		assert.equal(oTable.indexOfColumn(oColumn), 4, "Correct Index after move.");
+		assert.equal(this.oTable.indexOfColumn(oColumn), 4, "Correct Index after move.");
 	});
 
-	QUnit.test("moveColumnTo() - Prevent movement", async function(assert) {
+	QUnit.test("moveColumnTo - Prevent movement", function(assert) {
 		assert.expect(4);
 
-		const oColumn = oTable.getColumns()[2];
-		assert.ok(ColumnUtils.isColumnMovable(oColumn), "Ensure column is movable");
+		const oColumn = this.oTable.getColumns()[2];
+		assert.ok(ColumnUtils.isColumnMovable(oColumn), "Column is movable");
 
-		oTable.attachColumnMove(function(oEvent) {
+		this.oTable.attachColumnMove(function(oEvent) {
 			assert.equal(oEvent.getParameter("newPos"), 3, "Correct Index in event parameter");
 			assert.ok(oEvent.getParameter("column") === oColumn, "Correct Column in event parameter");
 			oEvent.preventDefault();
 		});
 
 		ColumnUtils.moveColumnTo(oColumn, 4);
-		await nextUIUpdate();
-
-		assert.equal(oTable.indexOfColumn(oColumn), 2, "Correct Index after move.");
+		assert.equal(this.oTable.indexOfColumn(oColumn), 2, "Correct Index after move.");
 	});
 
 	QUnit.module("Column Widths", {
@@ -1033,131 +1005,5 @@ sap.ui.define([
 
 		aVisibleColumns = ColumnUtils._getVisibleColumnsInSpan(oTable, 5, 5);
 		assert.strictEqual(aVisibleColumns, false, "_getVisibleColumnsInSpan returns false due of exiding index of available columns");
-	});
-
-	QUnit.test("autoResizeColumn", async function(assert) {
-		oTable.removeAllColumns();
-		const oColumnResizeHandler = this.stub();
-		const oModel = new JSONModel([{x: "x"}]);
-
-		const oColumn1 = new Column({
-			width: "3rem",
-			autoResizable: true,
-			label: new TableQUnitUtils.TestControl({text: "Simple Text"}),
-			template: new TableQUnitUtils.TestControl({text: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"})
-		});
-
-		const oColumn2 = new Column({
-			width: "3rem",
-			autoResizable: true,
-			label: new Label({text: "Simple Text"}),
-			template: new Label({text: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", wrapping: false})
-		});
-
-		const oColumn3 = new Column({
-			width: "3rem",
-			autoResizable: true,
-			label: new Label({text: "Simple Text"}),
-			template: new Text({text: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", wrapping: false})
-		});
-
-		const oColumn4 = new Column({
-			width: "3rem",
-			autoResizable: true,
-			label: new Label({text: "Simple Text"}),
-			template: new Link({text: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", href: "https://www.sap.com", wrapping: false})
-		});
-
-		oTable.addColumn(oColumn1);
-		oTable.addColumn(oColumn2);
-		oTable.addColumn(oColumn3);
-		oTable.addColumn(oColumn4);
-
-		oTable.bindRows("/");
-		oTable.setModel(oModel);
-		oTable.attachColumnResize(function(oEvent) {
-			return oColumnResizeHandler.call(oEvent.getParameters());
-		});
-		oTable.placeAt("qunit-fixture");
-		await nextUIUpdate();
-
-		// Create a hidden div element with a text to estimate its width
-		const hiddenDiv = document.createElement("div");
-		hiddenDiv.style.position = "absolute";
-		hiddenDiv.style.visibility = "hidden";
-		hiddenDiv.style.whiteSpace = "nowrap";
-		hiddenDiv.style.fontSize = "14px";
-		hiddenDiv.textContent = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-		document.body.appendChild(hiddenDiv);
-		const iDivWidth = hiddenDiv.offsetWidth;
-
-		assert.ok(oColumn1.getDomRef().offsetWidth < iDivWidth, "Column1 width is " + oColumn1.getDomRef().offsetWidth + "px => text is truncated");
-		assert.ok(oColumn2.getDomRef().offsetWidth < iDivWidth, "Column2 width is " + oColumn2.getDomRef().offsetWidth + "px => text is truncated");
-		assert.ok(oColumn3.getDomRef().offsetWidth < iDivWidth, "Column3 width is " + oColumn3.getDomRef().offsetWidth + "px => text is truncated");
-		assert.ok(oColumn4.getDomRef().offsetWidth < iDivWidth, "Column4 width is " + oColumn4.getDomRef().offsetWidth + "px => text is truncated");
-
-		ColumnUtils.autoResizeColumn(oColumn1);
-		await nextUIUpdate();
-
-		assert.ok(true, "Column has been resized via autoResizeColumn");
-		assert.ok(oColumn1.getDomRef().offsetWidth > iDivWidth,
-			`Column1 width is ${oColumn1.getDomRef().offsetWidth}px => text fits and it is not truncated`);
-		assert.ok(oColumnResizeHandler.calledOnce, "columnResize event handler was called once");
-		assert.deepEqual(oColumnResizeHandler.lastCall.thisValue, {
-			column: oColumn1,
-			id: oTable.getId(),
-			width: oColumn1.getWidth()
-		}, "columnResize event parameters");
-
-		oColumnResizeHandler.resetHistory();
-		ColumnUtils.autoResizeColumn(oColumn2);
-		await nextUIUpdate();
-
-		assert.ok(true, "Column has been resized via autoResizeColumn");
-		assert.ok(oColumn2.getDomRef().offsetWidth > iDivWidth,
-			`Column2 width is ${oColumn2.getDomRef().offsetWidth}px => text fits and it is not truncated`);
-		assert.ok(oColumnResizeHandler.calledOnce, "columnResize event handler was called once");
-		assert.deepEqual(oColumnResizeHandler.lastCall.thisValue, {
-			column: oColumn2,
-			id: oTable.getId(),
-			width: oColumn2.getWidth()
-		}, "columnResize event parameters");
-
-		oColumnResizeHandler.resetHistory();
-		ColumnUtils.autoResizeColumn(oColumn3);
-		await nextUIUpdate();
-
-		assert.ok(true, "Column has been resized via autoResizeColumn");
-		assert.ok(oColumn3.getDomRef().offsetWidth > iDivWidth,
-			`Column3 width is ${oColumn3.getDomRef().offsetWidth}px => text fits and it is not truncated`);
-		assert.ok(oColumnResizeHandler.calledOnce, "columnResize event handler was called once");
-		assert.deepEqual(oColumnResizeHandler.lastCall.thisValue, {
-			column: oColumn3,
-			id: oTable.getId(),
-			width: oColumn3.getWidth()
-		}, "columnResize event parameters");
-
-		oColumnResizeHandler.resetHistory();
-		ColumnUtils.autoResizeColumn(oColumn4);
-		await nextUIUpdate();
-
-		assert.ok(true, "Column has been resized via autoResize");
-		assert.ok(oColumn4.getDomRef().offsetWidth > iDivWidth,
-			`Column4 width is ${oColumn4.getDomRef().offsetWidth}px => text fits and it is not truncated`);
-		assert.ok(oColumnResizeHandler.calledOnce, "columnResize event handler was called once");
-		assert.deepEqual(oColumnResizeHandler.lastCall.thisValue, {
-			column: oColumn4,
-			id: oTable.getId(),
-			width: oColumn4.getWidth()
-		}, "columnResize event parameters");
-
-		oColumnResizeHandler.resetHistory();
-		ColumnUtils.autoResizeColumn(oColumn2);
-		await nextUIUpdate();
-		assert.ok(oColumnResizeHandler.notCalled, "columnResize event handler was not called when trying to auto-resize the same column again");
-
-		// Remove the hidden div from the DOM
-		document.body.removeChild(hiddenDiv);
-		oTable.destroy();
 	});
 });

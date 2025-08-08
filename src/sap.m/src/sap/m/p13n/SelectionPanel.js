@@ -159,7 +159,7 @@ sap.ui.define([
 		BasePanel.prototype.init.apply(this, arguments);
 
 		this.getModel(this.P13N_MODEL).setProperty("/showSelected", false);
-		this.getModel(this.P13N_MODEL).setProperty("/hideDescriptions", false);
+		this.getModel(this.P13N_MODEL).setProperty("/hideDescriptions", true);
 
 		this.getModel(this.LOCALIZATION_MODEL).setProperty("/showSelectedText", this._getResourceText("p13n.SHOW_SELECTED"));
 		this.getModel(this.LOCALIZATION_MODEL).setProperty("/hideDescriptionsText", this._getResourceText("p13n.HIDE_DESCRIPTIONS"));
@@ -184,7 +184,6 @@ sap.ui.define([
 		this._displayColumns();
 		this._updateMovement(this.getEnableReorder());
 		this._oListControl.setMultiSelectMode(this.getMultiSelectMode());
-
 	};
 
 	SelectionPanel.prototype.setMultiSelectMode = function(sMultiSelectMode) {
@@ -280,18 +279,8 @@ sap.ui.define([
 		const bHasRendundantColumns = aP13nData.some((oItem) => oItem[this.REDUNDANT_ITEMS_ATTRIBUTE]);
 
 		if (!bHasRendundantColumns) {
-			const oShowSelectedButton = new Button({
-				press: (oEvt) => {
-					const bShowSelected = this.getModel(this.P13N_MODEL).getProperty("/showSelected");
-					this.getModel(this.P13N_MODEL).setProperty("/showSelected", !bShowSelected);
-					this._triggerFilter();
-					this._updateShowSelectedButton();
-				},
-				text: `{${this.LOCALIZATION_MODEL}>/showSelectedText}`
-			});
-			this._updateShowSelectedButton();
-
-			return oShowSelectedButton;
+			const oShowSelectedContainer = this._getShowSelectedSwitch();
+			return oShowSelectedContainer;
 		} else {
 			const oFilterButton = new Button({
 				icon: "sap-icon://filter",
@@ -341,39 +330,26 @@ sap.ui.define([
 		this.setProperty("showHeader", bShowHeader);
 		return this;
 	};
+
 	/**
 	 * @param {Object} oEvt Event object
 	 * @param {string} sPath Path of model property that should be updated
 	 */
 	SelectionPanel.prototype._triggerFilter = function() {
-			const bShowSelected = this.getModel(this.P13N_MODEL).getProperty("/showSelected");
-			const bHideDescriptions = this.getModel(this.P13N_MODEL).getProperty("/hideDescriptions");
-			this._filterList(bShowSelected, this._sSearch, bHideDescriptions);
-	};
-
-	SelectionPanel.prototype._updateShowSelectedButton = function() {
-		const sShowSelected = this._getResourceText("p13n.SHOW_SELECTED");
-		const sShowAll = this._getResourceText("p13n.SHOW_ALL");
-
 		const bShowSelected = this.getModel(this.P13N_MODEL).getProperty("/showSelected");
-		this.getModel(this.LOCALIZATION_MODEL).setProperty("/showSelectedText", bShowSelected ? sShowAll : sShowSelected);
+		const bHideDescriptions = this.getModel(this.P13N_MODEL).getProperty("/hideDescriptions");
+		this._filterList(bShowSelected, this._sSearch, bHideDescriptions);
 	};
 
-	SelectionPanel.prototype._getFilterPopover = function() {
-		const oExistingPopover = this.getDependents().find((oDependent) => oDependent.isA("sap.m.Popover"));
-		if (oExistingPopover) {
-			return oExistingPopover;
+	SelectionPanel.prototype._getShowSelectedSwitch = function() {
+		if (this._oShowSelectedContainer) {
+			return this._oShowSelectedContainer;
 		}
 
 		const oShowSelectedText = new Label({
 			text: `{${this.LOCALIZATION_MODEL}>/showSelectedText}`
 		});
 		oShowSelectedText.addStyleClass("sapMSelectionPanelFilters");
-
-		const oHideDescriptionsText = new Label({
-			text: `{${this.LOCALIZATION_MODEL}>/hideDescriptionsText}`
-		});
-		oHideDescriptionsText.addStyleClass("sapMSelectionPanelFilters");
 
 		const oShowSelectedButton = new Switch({
 			state: `{${this.P13N_MODEL}>/showSelected}`,
@@ -382,6 +358,30 @@ sap.ui.define([
 			customTextOff: " ",
 			change: this._triggerFilter.bind(this)
 		});
+
+		const oShowSelectedContainer = new HBox({
+			alignItems: FlexAlignItems.Center,
+			items: [
+				oShowSelectedText,
+				oShowSelectedButton
+			]
+		});
+		oShowSelectedContainer.addStyleClass("sapMSelectionPanelFiltersContainer");
+
+		this._oShowSelectedContainer = oShowSelectedContainer;
+		return oShowSelectedContainer;
+	};
+
+	SelectionPanel.prototype._getFilterPopover = function() {
+		const oExistingPopover = this.getDependents().find((oDependent) => oDependent.isA("sap.m.Popover"));
+		if (oExistingPopover) {
+			return oExistingPopover;
+		}
+
+		const oHideDescriptionsText = new Label({
+			text: `{${this.LOCALIZATION_MODEL}>/hideDescriptionsText}`
+		});
+		oHideDescriptionsText.addStyleClass("sapMSelectionPanelFilters");
 
 		const oHideDescriptionsButton = new Switch({
 			state: `{${this.P13N_MODEL}>/hideDescriptions}`,
@@ -400,14 +400,7 @@ sap.ui.define([
 		});
 		oHideDescriptionsContainer.addStyleClass("sapMSelectionPanelFiltersContainer");
 
-		const oShowSelectedContainer = new HBox({
-			alignItems: FlexAlignItems.Center,
-			items: [
-				oShowSelectedText,
-				oShowSelectedButton
-			]
-		});
-		oShowSelectedContainer.addStyleClass("sapMSelectionPanelFiltersContainer");
+		const oShowSelectedContainer = this._getShowSelectedSwitch();
 
 		const oPopoverLayout = new VBox({
 			alignItems: FlexAlignItems.End,
@@ -446,20 +439,27 @@ sap.ui.define([
 	};
 
 	SelectionPanel.prototype._filterList = function(bShowSelected, sSearch, bHideRedundant) {
-		let oSearchFilter = [],
-			oSelectedFilter = [],
-			oRedundantFilter = [];
+		const aFilter = [];
 
-		if (bShowSelected) {
-			oSelectedFilter = new Filter(this.PRESENCE_ATTRIBUTE, "EQ", true);
+		if (bHideRedundant && bShowSelected) {
+			const oFilter1 = new Filter(this.PRESENCE_ATTRIBUTE, "EQ", true);
+			const oFilter2 = new Filter(this.REDUNDANT_ITEMS_ATTRIBUTE, "NE", true);
+			const oRedundantFilter = new Filter({filters: [oFilter1, oFilter2], and: true});
+			aFilter.push(oRedundantFilter);
+		} else if (bShowSelected) {
+			const oSelectedFilter = new Filter(this.PRESENCE_ATTRIBUTE, "EQ", true);
+			aFilter.push(oSelectedFilter);
+		} else if (bHideRedundant) {
+			const oRedundantFilter = new Filter(this.REDUNDANT_ITEMS_ATTRIBUTE, "NE", true);
+			aFilter.push(oRedundantFilter);
 		}
-		if (bHideRedundant) {
-			oRedundantFilter = new Filter(this.REDUNDANT_ITEMS_ATTRIBUTE, "NE", true);
-		}
+
 		if (sSearch) {
-			oSearchFilter = new Filter("label", "Contains", sSearch);
+			const oSearchFilter = new Filter("label", "Contains", sSearch);
+			aFilter.push(oSearchFilter);
 		}
-		this._oListControl.getBinding("items").filter(new Filter([].concat(oSelectedFilter, oSearchFilter, oRedundantFilter), true));
+
+		this._oListControl.getBinding("items").filter(new Filter(aFilter, true));
 	};
 
 	SelectionPanel.prototype._onSearchFieldLiveChange = function(oEvent) {
@@ -468,6 +468,8 @@ sap.ui.define([
 	};
 
 	SelectionPanel.prototype._handleActivated = function(oHoveredItem) {
+		const oModelEntry = this._getModelEntry(oHoveredItem);
+
 		// remove move buttons
 		// 1. if a new item is hovered OR
 		// 1. if the item is not selected
@@ -512,9 +514,11 @@ sap.ui.define([
 		this._oLastSelectedItem = null;
 		// 1. if checkbox is enabled (disabled checkbox might be the case for rta for ActionToolbar) AND
 		// 2. if checkbox is selected
-		// 3. OR if there is not checkbox
+		// 3. this is is only disabled in RTA for visibility actions (remove, reveal)
+		// 4. OR if there is not checkbox
 		if ((oHoveredItem.getMultiSelectControl()?.getEnabled() &&
 			oHoveredItem.getMultiSelectControl()?.getSelected()) ||
+			oModelEntry.enabled === "visibility" ||
 			!oHoveredItem.getMultiSelectControl()) {
 			this._updateEnableOfMoveButtons(oHoveredItem, false);
 			this._addMoveButtons(oHoveredItem);
@@ -591,6 +595,11 @@ sap.ui.define([
 
 		// this is needed for updating the header toolbar of the table
 		this.setShowHeader(this.getShowHeader());
+		const bHasRedundantColumns = aP13nData.some((oItem) => oItem[this.REDUNDANT_ITEMS_ATTRIBUTE]);
+		if (bHasRedundantColumns) {
+			this._triggerFilter();
+		}
+		this.getModel(this.P13N_MODEL).setProperty("/hideDescriptions", bHasRedundantColumns);
 		return this;
 	};
 
@@ -598,7 +607,6 @@ sap.ui.define([
 		BasePanel.prototype.onReset.apply(this, arguments);
 		this._sSearch = "";
 		this.getModel(this.P13N_MODEL).setProperty("/showSelected", false);
-		this._updateShowSelectedButton();
 	};
 
 	SelectionPanel.prototype._updateCount = function() {
@@ -746,10 +754,8 @@ sap.ui.define([
 
 	SelectionPanel.prototype._updateLocalizationTexts = function() {
 		this.getModel(this.LOCALIZATION_MODEL).setProperty("/showSelectedText", this._getResourceText("p13n.SHOW_SELECTED"));
-		this.getModel(this.LOCALIZATION_MODEL).setProperty("/showAllText", this._getResourceText("p13n.SHOW_ALL"));
 		this.getModel(this.LOCALIZATION_MODEL).setProperty("/hideDescriptionsText", this._getResourceText("p13n.HIDE_DESCRIPTIONS"));
 		this.getModel(this.LOCALIZATION_MODEL).setProperty("/fieldColumn", this._getResourceText("p13n.DEFAULT_DESCRIPTION"));
-		this._updateShowSelectedButton();
 	};
 
 	SelectionPanel.prototype.exit = function() {
@@ -758,6 +764,7 @@ sap.ui.define([
 		this._oHoveredItem = null;
 		this._bShowFactory = null;
 		this._sSearch = null;
+		this._oShowSelectedContainer = null;
 	};
 	return SelectionPanel;
 });

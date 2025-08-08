@@ -434,14 +434,39 @@ sap.ui.define([
 			this.oPopup.setAnimations(jQuery.proxy(this._openAnimation, this), jQuery.proxy(this._closeAnimation, this));
 
 			// This is data used to position the popover depending on the placement property
-			this._placements = [PlacementType.Top, PlacementType.Right, PlacementType.Bottom, PlacementType.Left,
-				PlacementType.Vertical, PlacementType.Horizontal, PlacementType.Auto,
-				PlacementType.VerticalPreferedTop, PlacementType.VerticalPreferedBottom,
-				PlacementType.HorizontalPreferedLeft, PlacementType.HorizontalPreferedRight,
-				PlacementType.VerticalPreferredTop, PlacementType.VerticalPreferredBottom,
-				PlacementType.HorizontalPreferredLeft, PlacementType.HorizontalPreferredRight,
-				PlacementType.PreferredRightOrFlip, PlacementType.PreferredLeftOrFlip,
-				PlacementType.PreferredTopOrFlip, PlacementType.PreferredBottomOrFlip];
+			this._placements = [
+				PlacementType.Top,
+				PlacementType.Right,
+				PlacementType.Bottom,
+				PlacementType.Left,
+				PlacementType.Vertical,
+				PlacementType.Horizontal,
+				PlacementType.Auto,
+				/**
+				* @deprecated As of version 1.36
+				*/
+				PlacementType.VerticalPreferedTop,
+				/**
+				* @deprecated As of version 1.36
+				*/
+				PlacementType.VerticalPreferedBottom,
+				/**
+				* @deprecated As of version 1.36
+				*/
+				PlacementType.HorizontalPreferedLeft,
+				/**
+				* @deprecated As of version 1.36
+				*/
+				PlacementType.HorizontalPreferedRight,
+				PlacementType.VerticalPreferredTop,
+				PlacementType.VerticalPreferredBottom,
+				PlacementType.HorizontalPreferredLeft,
+				PlacementType.HorizontalPreferredRight,
+				PlacementType.PreferredRightOrFlip,
+				PlacementType.PreferredLeftOrFlip,
+				PlacementType.PreferredTopOrFlip,
+				PlacementType.PreferredBottomOrFlip
+			];
 
 			this._myPositions = ["center bottom", "begin center", "center top", "end center"];
 			this._atPositions = ["center top", "end center", "center bottom", "begin center"];
@@ -737,6 +762,9 @@ sap.ui.define([
 				oHeader.setTitleAlignment(this.getTitleAlignment());
 			}
 
+			[oHeader, this.getSubHeader(), this.getFooter()].forEach(function (oControl) {
+				oControl?.addStyleClass("sapMIBar-CTX");
+			});
 		};
 
 		/**
@@ -1683,7 +1711,7 @@ sap.ui.define([
 			this._bPosCalced = true;
 
 			//set position of popover to calculated position
-			var iPlacePos = this._placements.indexOf(this._oCalcedPos);
+			var iPlacePos = this._placements.indexOf(this._getCalculatedPlacement());
 			this.oPopup.setPosition(this._myPositions[iPlacePos], this._atPositions[iPlacePos], oParentDomRef, this._calcOffset(this._offsets[iPlacePos]), "fit");
 		};
 
@@ -3010,6 +3038,10 @@ sap.ui.define([
 		 * Helps to prevent temporary appearance of a scrollbar in documentElement during Popover calculations.
 		 */
 		Popover.prototype._preventDocumentElementScrolling = function () {
+			if (this._sDocumentElementOverflow !== undefined) {
+				return;
+			}
+
 			const bDocumentElementHasVerticalScrollbar = document.documentElement.scrollHeight > document.documentElement.clientHeight;
 
 			if (!bDocumentElementHasVerticalScrollbar) {

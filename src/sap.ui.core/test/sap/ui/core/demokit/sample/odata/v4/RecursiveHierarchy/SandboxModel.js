@@ -14,6 +14,9 @@ sap.ui.define([
 			sFilterBase : "/sap/opu/odata4/IWBEP/TEA/default/IWBEP/TEA_BUSI/0001/",
 			mFixture : {},
 			aRegExps : [{
+				regExp : /^GET \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/EMPLOYEES\/\$count.*$/,
+				response : {buildResponse : buildCountResponse}
+			}, {
 				regExp : /^DELETE \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/EMPLOYEES\('([^']*)'\)$/,
 				response : {buildResponse : buildDeleteResponse, code : 204}
 			}, {
@@ -29,11 +32,17 @@ sap.ui.define([
 				regExp : /^PATCH \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/EMPLOYEES\('([^']*)'\)$/,
 				response : {buildResponse : buildPatchResponse, code : 204}
 			}, {
+				regExp : /^PATCH \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/(\$0\.0)$/,
+				response : {buildResponse : buildPatchResponse, code : 204}
+			}, {
 				regExp : /^POST \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/EMPLOYEES$/,
 				response : {buildResponse : buildPostResponse}
 			}, {
 				regExp : /^POST \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/EMPLOYEES\('([^']*)'\)\/com\.sap\.gateway\.default\.iwbep\.tea_busi\.v0001\.__FAKE__AcChangeNextSibling$/,
 				response : {buildResponse : buildChangeNextSiblingResponse}
+			}, {
+				regExp : /^POST \/sap\/opu\/odata4\/IWBEP\/TEA\/default\/IWBEP\/TEA_BUSI\/0001\/EMPLOYEES\('([^']*)'\)\/com\.sap\.gateway\.default\.iwbep\.tea_busi\.v0001\.__FAKE___AcCopy\?\$select=ID$$/,
+				response : {buildResponse : buildCopyResponse}
 			}],
 			sSourceBase : "sap/ui/core/sample/odata/v4/RecursiveHierarchy/data"
 		});
@@ -166,7 +175,9 @@ sap.ui.define([
 	}];
 
 	let aAllNodes; // in preorder, does not contain nodes that are filtered out
+	let sCopyID; // the ID of the copy, needed for patching the parent with Content-ID referencing
 	let mChildrenByParentId; // no entry for leaves! Does not contain nodes that are filtered out
+	let aNewRootIDs; // the IDs for a newly created root node or a copied node
 	let mNodeById; // contains all nodes incl. those filtered out
 	let iRevision;
 	let mRevisionOfAgeById;
@@ -184,6 +195,19 @@ sap.ui.define([
 		if (sId) {
 			adjustDescendantCount(sId, iDiff);
 		}
+	}
+
+	/**
+	 * Adjust the DistanceFromRoot of the given node (and all of its descendants) by the given
+	 * difference.
+	 *
+	 * @param {object} oNode - A node
+	 * @param {number} iDiff - Some difference
+	 */
+	function adjustDistanceFromRoot(oNode, iDiff) {
+		oNode.DistanceFromRoot += iDiff;
+		mChildrenByParentId[oNode.ID]?.forEach(
+			(oChild) => { adjustDistanceFromRoot(oChild, iDiff); });
 	}
 
 	/**
@@ -229,6 +253,36 @@ sap.ui.define([
 			aAllNodes.splice(aAllNodes.indexOf(oNextSibling), 0, ...aSpliced);
 		}
 		// no response required
+	}
+
+	/**
+	 * Builds a response for any POST request on the "Copy" action.
+	 *
+	 * @param {string[]} aMatches - The matches against the RegExp
+	 * @param {object} oResponse - Response object to fill
+	 */
+	function buildCopyResponse(aMatches, oResponse) {
+		const oCopy = copy(mNodeById[aMatches[1]], aNewRootIDs.shift(), /*sNewManagerID*/null);
+		adjustDistanceFromRoot(oCopy, -oCopy.DistanceFromRoot);
+		sCopyID = oCopy.ID;
+
+		// RAP would not respond w/ DescendantCount,DistanceFromRoot,DrillState!
+		const oResultNode = {...oCopy};
+		delete oResultNode.DescendantCount;
+		delete oResultNode.DistanceFromRoot;
+		delete oResultNode.DrillState;
+		oResponse.message = JSON.stringify(oResultNode);
+	}
+
+	/**
+	 * Builds the response for a GET request for the $count of the "EMPLOYEES" collection, but does
+	 * not count nodes that are filtered out.
+	 *
+	 * @param {string[]} _aMatches - The matches against the RegExp
+	 * @param {object} oResponse - Response object to fill
+	 */
+	function buildCountResponse(_aMatches, oResponse) {
+		oResponse.message = String(aAllNodes.length);
 	}
 
 	/**
@@ -302,7 +356,7 @@ sap.ui.define([
 						const iLimitedRank = parseInt(aFilterMatches[2]);
 						const iDistanceFromRoot = parseInt(aFilterMatches[3]);
 						aRows = aRows.filter((oNode, i) => {
-							oNode.LimitedRank = "" + i; // Edm.Int64
+							oNode.LimitedRank = String(i); // Edm.Int64
 							return (bGreater ? i > iLimitedRank : i < iLimitedRank)
 								&& oNode.DistanceFromRoot < iDistanceFromRoot;
 						});
@@ -313,7 +367,7 @@ sap.ui.define([
 						const aIDs = mQueryOptions.$filter.split("%20or%20").map(
 							(sID_Predicate) => sID_Predicate.split("%20eq%20")[1].slice(1, -1));
 						aRows = aRows.filter((oNode, i) => {
-							oNode.LimitedRank = "" + i; // Edm.Int64
+							oNode.LimitedRank = String(i); // Edm.Int64
 							return aIDs.includes(oNode.ID);
 						});
 					}
@@ -423,19 +477,6 @@ sap.ui.define([
 	 * @param {object} oRequest - Request object to get PATCH body from
 	 */
 	function buildPatchResponse(aMatches, _oResponse, oRequest) {
-		/**
-		 * Adjust the DistanceFromRoot of the given node (and all of its descendants) by the given
-		 * difference.
-		 *
-		 * @param {object} oNode - A node
-		 * @param {number} iDiff - Some difference
-		 */
-		function adjustDistanceFromRoot(oNode, iDiff) {
-			oNode.DistanceFromRoot += iDiff;
-			(mChildrenByParentId[oNode.ID] || [])
-				.forEach((oChild) => { adjustDistanceFromRoot(oChild, iDiff); });
-		}
-
 		function findLastIndex(aArray, fnPredicate) {
 			return aArray.reduce((iLast, oItem, i) => (fnPredicate(oItem) ? i : iLast), -1);
 		}
@@ -448,7 +489,9 @@ sap.ui.define([
 		const oBody = JSON.parse(oRequest.requestBody);
 		switch (Object.keys(oBody).length === 1 && Object.keys(oBody)[0]) {
 			case "EMPLOYEE_2_MANAGER@odata.bind": {
-				const oChild = mNodeById[aMatches[1]];
+				const oChild = aMatches[1] === "$0.0"
+					? mNodeById[sCopyID]
+					: mNodeById[aMatches[1]];
 				if (oChild.Name.includes("ERROR")) {
 					throw new Error("This request intentionally failed!");
 				}
@@ -591,7 +634,7 @@ sap.ui.define([
 			if (sLastChildID === undefined) {
 				oNewChild.ID = sParentId + ".1";
 			} else if (sParentId === "0") {
-				oNewChild.ID = "" + (parseLastSegment(sLastChildID) + 1);
+				oNewChild.ID = String(parseLastSegment(sLastChildID) + 1);
 			} else {
 				oNewChild.ID = sParentId + "." + (parseLastSegment(sLastChildID) + 1);
 			}
@@ -600,7 +643,7 @@ sap.ui.define([
 				.filter((oNode) => oNode.MANAGER_ID === null)
 				.length;
 			oNewChild.AGE = 60 + iRootCount;
-			oNewChild.ID = "0ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"[iRootCount];
+			oNewChild.ID = aNewRootIDs.shift();
 		}
 
 		if (oNewChild.ID in mNodeById) {
@@ -630,6 +673,33 @@ sap.ui.define([
 	}
 
 	/**
+	 * Copies the given node and all its descendants recursively and sets the ID and the MANAGER_ID.
+	 *
+	 * @param {object} oNode - A node
+	 * @param {string} sNewID - The new ID for the given node
+	 * @param {string|null} sNewManagerID - The new MANAGER_ID for the given node
+	 * @returns {object} - The copy of the given node
+	 */
+	function copy(oNode, sNewID, sNewManagerID) {
+		const sOldID = oNode.ID;
+		oNode = {...oNode};
+		oNode.ID = sNewID;
+		oNode.MANAGER_ID = sNewManagerID;
+		oNode.Name = "Copy of " + (oNode.Name || sOldID);
+
+		aAllNodes.push(oNode); // Note: preorder (parent before child)
+		mNodeById[sNewID] = oNode;
+		mRevisionOfAgeById[sNewID] = 0;
+
+		mChildrenByParentId[sOldID]?.forEach((oChild, i) => {
+			(mChildrenByParentId[sNewID] ??= []).push(
+				copy(oChild, sNewID + "." + (i + 1), sNewID));
+		});
+
+		return oNode;
+	}
+
+	/**
 	 * Gets the query options as a map from the given URL query part.
 	 *
 	 * @param {string} sQuery - Query part of a URL
@@ -648,6 +718,7 @@ sap.ui.define([
 	function reset() {
 		aAllNodes = aOriginalData.map((oNode) => ({...oNode}));
 		mChildrenByParentId = {};
+		aNewRootIDs = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".split("");
 		mNodeById = {};
 		iRevision = 0;
 		mRevisionOfAgeById = {};
@@ -703,7 +774,7 @@ sap.ui.define([
 			const oResult = {};
 			for (const sSelect of aSelect) {
 				oResult[sSelect] = sSelect === "DescendantCount" || sSelect === "DistanceFromRoot"
-					? "" + oNode[sSelect] // Edm.Int64
+					? String(oNode[sSelect]) // Edm.Int64
 					: oNode[sSelect];
 			}
 			return oResult;
@@ -711,7 +782,7 @@ sap.ui.define([
 
 		const oMessage = {};
 		if ("$count" in mQueryOptions) {
-			oMessage["@odata.count"] = "" + aRows.length;
+			oMessage["@odata.count"] = String(aRows.length);
 		}
 		const iSkip = "$skip" in mQueryOptions ? parseInt(mQueryOptions.$skip) : 0;
 		const iTop = "$top" in mQueryOptions ? parseInt(mQueryOptions.$top) : Infinity;

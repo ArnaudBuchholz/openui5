@@ -10,12 +10,13 @@ sap.ui.define([
 	"sap/ui/Device",
 	"sap/m/ColumnPopoverActionItem",
 	"sap/m/table/columnmenu/QuickAction",
+	"sap/m/table/columnmenu/QuickResize",
 	"sap/m/Button",
 	"sap/ui/core/Lib",
 	"sap/ui/thirdparty/jquery",
 	// jQuery Plugin "aria"
 	"sap/ui/dom/jquery/Aria"
-], function(PluginBase, Localization, Element, InvisibleText, Device, ColumnPopoverActionItem, QuickAction, Button, Library, jQuery) {
+], function(PluginBase, Localization, Element, InvisibleText, Device, ColumnPopoverActionItem, QuickAction, QuickResize, Button, Library, jQuery) {
 	"use strict";
 
 	/**
@@ -127,7 +128,7 @@ sap.ui.define([
 	ColumnResizer.prototype.ontouchstart = function(oEvent) {
 		if (this.getConfig("allowTouchResizing") && jQuery(oEvent.target).closest(this._aResizables)[0]) {
 			this._onmousemove(oEvent);
-		} else if (this._iHoveredColumnIndex == -1 && this._oHandle && this._oHandle.style[sBeginDirection]) {
+		} else if (this._iHoveredColumnIndex == -1 && this._oHandle?.isConnected && this._oHandle.style[sBeginDirection]) {
 			this._onmousemove(oEvent);
 
 			if (this._iHoveredColumnIndex == -1) {
@@ -285,7 +286,11 @@ sap.ui.define([
 			}
 		}
 
-		this._oHandle.style[sBeginDirection] = (iColumnIndex > -1) ? (this._aPositions[iColumnIndex] - this._fContainerX) * iDirectionFactor + "px" : "";
+		if (iColumnIndex > -1) {
+			this._oHandle.style[sBeginDirection] = (this._aPositions[iColumnIndex] - this._fContainerX) * iDirectionFactor + "px";
+		} else {
+			this._oHandle.remove();
+		}
 
 		if (bMobileHandle) {
 			this._oAlternateHandle.style[sBeginDirection] = (--iColumnIndex > -1) ? (this._aPositions[iColumnIndex] - this._fContainerX) * iDirectionFactor + "px" : "";
@@ -307,14 +312,14 @@ sap.ui.define([
 		this._$Container.removeClass(CSS_CLASS + "Resizing");
 
 		if (oSession.iDistanceX || !bDelayHideHandle) {
-			this._oHandle.style[sBeginDirection] = "";
+			this._oHandle.remove();
 		} else {
 			// delay hiding the handle so that in case of double-click mouse event,
 			// the resize handle does not disappear in the initial mousedown and mouseup event
 			// this will also prevent column press event to trigger
-			setTimeout(function() {
-				this._oHandle.style[sBeginDirection] = "";
-			}.bind(this), 300);
+			setTimeout(() => {
+				this._oHandle.remove();
+			}, 300);
 		}
 
 		this._iHoveredColumnIndex = -1;
@@ -503,7 +508,7 @@ sap.ui.define([
 	 * @private
 	 */
 	ColumnResizer.prototype.getColumnResizeQuickAction = function(oColumn, oColumnMenu) {
-		if (!oColumn || !ColumnResizer._isInTouchMode()) {
+		if (!ColumnResizer._isInTouchMode()) {
 			return;
 		}
 
@@ -519,10 +524,33 @@ sap.ui.define([
 	};
 
 	/**
+	 * Returns an instance of <code>sap.m.table.columnmenu.QuickResize</code> that can be used for column resizing.
+	 * @param {sap.m.Column} oColumn Column instance
+	 * @returns {sap.m.table.columnmenu.QuickAction | undefined} Instance of <code>sap.m.table.columnmenu.QuickResize</code>
+	 * @ui5-restricted sap.ui.mdc
+	 * @private
+	 */
+	ColumnResizer.prototype.getColumnResizeInputQuickAction = function(oColumn) {
+		return new QuickResize({
+			width: parseInt(getComputedStyle(oColumn.getDomRef()).width),
+			change: [function(oEvent) {
+				const bExecuteDefault = this.fireColumnResize({
+					column: oColumn,
+					width: oEvent.getParameter("width") + "px"
+				});
+
+				if (bExecuteDefault) {
+					oColumn.setWidth(oEvent.getParameter("width") + "px");
+				}
+			}, this]
+		});
+	};
+
+	/**
 	 * Returns resizer button instance which on press calls the <code>startResizing</code> method.
 	 * @param {sap.m.Column} oColumn Column instance
 	 * @returns {sap.m.ColumnPopoverActionItem | undefined} column resize action item
-	 * @ui5-restricted
+	 * @ui5-restricted sap.ui.mdc
 	 * @private
 	 */
 	ColumnResizer.prototype.getColumnResizeButton = function(oColumn) {
@@ -546,6 +574,7 @@ sap.ui.define([
 	 */
 	PluginBase.setConfigs({
 		"sap.m.Table": {
+			container: "listUl",
 			resizable: ".sapMListTblHeaderCell",
 			cellPaddingStyleClass: "sapMListTblCell",
 			fixAutoWidthColumns: true,

@@ -1,13 +1,13 @@
 version = 1
 SPDX-PackageName = "OpenUI5"
 SPDX-PackageSupplier = "SAP OpenUI5 <openui5@sap.com>"
-SPDX-PackageDownloadLocation = "https://github.com/SAP/openui5"
+SPDX-PackageDownloadLocation = "https://github.com/UI5/openui5"
 SPDX-PackageComment = "The code in this project may include calls to APIs (“API Calls”) of\n SAP or third-party products or services developed outside of this project\n (“External Products”).\n “APIs” means application programming interfaces, as well as their respective\n specifications and implementing code that allows software to communicate with\n other software.\n API Calls to External Products are not licensed under the open source license\n that governs this project. The use of such API Calls and related External\n Products are subject to applicable additional agreements with the relevant\n provider of the External Products. In no event shall the open source license\n that governs this project grant any rights in or to any External Products,or\n alter, expand or supersede any terms of the applicable additional agreements.\n If you have a valid license agreement with SAP for the use of a particular SAP\n External Product, then you may make use of any API Calls included in this\n project’s code for that SAP External Product, subject to the terms of such\n license agreement. If you do not have a valid license agreement for the use of\n a particular SAP External Product, then you may only make use of any API Calls\n in this project for that SAP External Product for your internal, non-productive\n and non-commercial test and evaluation of such API Calls. Nothing herein grants\n you any rights to use or access any SAP External Product, or provide any third\n parties the right to use of access any SAP External Product, through API Calls."
 
 [[annotations]]
 path = "**"
 precedence = "aggregate"
-SPDX-FileCopyrightText = "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors"
+SPDX-FileCopyrightText = "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 #
@@ -64,7 +64,7 @@ SPDX-FileComment = "these files belong to: jQuery UI"
 path = "src/sap.ui.commons/src/sap/ui/commons/Carousel.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "Spencer Tipping"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -84,7 +84,7 @@ SPDX-FileComment = "these files belong to: jQuery 3"
 path = "src/sap.ui.core/src/sap/base/util/isPlainObject.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "OpenJS Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -94,7 +94,7 @@ SPDX-FileComment = "these files contain content from SAP and jQuery 3: isPlainOb
 path = "src/sap.ui.core/src/sap/base/util/_merge.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "OpenJS Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -104,7 +104,7 @@ SPDX-FileComment = "these files contain content from SAP and jQuery 3: _merge.js
 path = "src/sap.ui.core/src/jquery.sap.script.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "OpenJS Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -114,7 +114,7 @@ SPDX-FileComment = "these files contain content from SAP and jQuery 3: jquery.sa
 path = "src/sap.ui.core/src/sap/ui/Device.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2011, John Resig"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -124,7 +124,7 @@ SPDX-FileComment = "these files contain content from SAP and jQuery 1: Device.js
 path = "src/sap.ui.core/src/sap/ui/dom/jquery/Selectors.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2014 jQuery Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -141,7 +141,7 @@ SPDX-FileComment = "these files belong to: jQuery UI 1.10"
 path = "src/sap.ui.core/src/jquery.sap.dom.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2014 jQuery Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -151,7 +151,7 @@ SPDX-FileComment = "these files contain content from SAP and jQuery UI 1.10: jqu
 path = "src/sap.ui.core/src/sap/ui/dom/jquery/zIndex.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2014 jQuery Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -205,7 +205,7 @@ SPDX-FileComment = "these files belong to: jQuery Mobile"
 path = "src/sap.ui.core/src/sap/ui/util/_FeatureDetection.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2012 Wei-Ko Kao"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -232,32 +232,11 @@ SPDX-FileComment = "these files belong to: JUnit Reporter for QUnit"
 path = "src/sap.ui.core/src/sap/ui/qunit/qunit-junit.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "jQuery Foundation and other contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
 SPDX-FileComment = "these files contain content from SAP and JUnit Reporter for QUnit: qunit-junit.js is overall written by SAP, but contains a modified copy of JUnit Reporter for QUnit (qunit-reporter-junit)"
-
-[[annotations]]
-path = "src/sap.ui.core/src/sap/ui/thirdparty/iscroll.js"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2012 Matteo Spinelli"
-SPDX-License-Identifier = "MIT"
-SPDX-FileComment = "these files belong to: cubiq.org - iScroll"
-
-[[annotations]]
-path = "src/sap.ui.core/src/sap/ui/thirdparty/iscroll-lite.js"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2011 Matteo Spinelli"
-SPDX-License-Identifier = "MIT"
-SPDX-FileComment = "these files belong to: cubiq.org - iScroll Lite"
-
-[[annotations]]
-path = "src/sap.ui.core/src/sap/ui/thirdparty/swipe-view.js"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2012 Matteo Spinelli"
-SPDX-License-Identifier = "MIT"
-SPDX-FileComment = "these files belong to: cubiq.org - swipeview"
 
 [[annotations]]
 path = "src/sap.ui.core/src/sap/ui/thirdparty/zyngascroll.js"
@@ -307,13 +286,6 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "1991-2024 Unicode, Inc."
 SPDX-License-Identifier = "LicenseRef-Unicode-3.0"
 SPDX-FileComment = "these files belong to: Unicode Common Locale Data Repository"
-
-[[annotations]]
-path = "src/sap.ui.core/src/sap/ui/thirdparty/mobiscroll/**"
-precedence = "aggregate"
-SPDX-FileCopyrightText = "2010-2013, Acid Media"
-SPDX-License-Identifier = "MIT"
-SPDX-FileComment = "these files belong to: MobiScroll"
 
 [[annotations]]
 path = [
@@ -411,7 +383,7 @@ SPDX-FileComment = "these files belong to: blanket.js"
 path = "src/sap.ui.core/src/sap/base/util/JSTokenizer.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "Douglas Crockford"
 ]
 SPDX-License-Identifier = "Apache-2.0 and LicenseRef-JSONinJSPublicDomain"
@@ -421,7 +393,7 @@ SPDX-FileComment = "these files contain content from SAP and JSON in JS: JSToken
 path = "src/sap.ui.core/src/sap/ui/base/ExpressionParser.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2010 Douglas Crockford"
 ]
 SPDX-License-Identifier = "Apache-2.0"
@@ -469,7 +441,7 @@ SPDX-FileComment = "these files contain content from p-cancelable and @babel/hel
 path = "src/sap.ui.core/src/sap/ui/core/date/Persian.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "Behrang Norouzinia"
 ]
 SPDX-License-Identifier = "Apache-2.0 and MIT"
@@ -486,11 +458,18 @@ SPDX-FileComment = "these files belong to: vkBeautify"
 path = "src/sap.ui.core/src/sap/ui/core/cache/LRUPersistentCache.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "Isaac Z. Schlueter and Contributors"
 ]
 SPDX-License-Identifier = "Apache-2.0 and ISC"
 SPDX-FileComment = "these files contain content from SAP and node-lru-cache: LRUPersistentCache.js is overall written by SAP, but portions ('Least Recently Used' logic) are taken from the node-lru-cache project (see https://github.com/isaacs/node-lru-cache/blob/v2.7.3/README.md) and modified."
+
+[[annotations]]
+path = "src/sap.ui.core/test/sap/ui/core/qunit/testdata/fastnavigation/webc/integration/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SAP SE (and OpenUI5 contributors)"
+SPDX-License-Identifier = "Apache-2.0"
+SPDX-FileComment = "these files belong to: UI5 Web Components"
 
 
 # Library: sap.ui.documentation:
@@ -629,7 +608,7 @@ SPDX-FileComment = "these files belong to: UI5 Web Components"
 path = "lib/jsdoc/ui5/plugin.js"
 precedence = "aggregate"
 SPDX-FileCopyrightText = [
-    "2009-2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
+    "2025 SAP SE or an SAP affiliate company and OpenUI5 contributors",
     "2011-present Michael Mathews micmath@gmail.com and the contributors to JSDoc"
 ]
 SPDX-License-Identifier = "Apache-2.0"

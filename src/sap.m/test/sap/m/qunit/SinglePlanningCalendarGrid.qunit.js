@@ -2,6 +2,7 @@
 sap.ui.define([
 	"sap/ui/qunit/QUnitUtils",
 	"sap/base/i18n/Formatting",
+	"sap/base/i18n/date/CalendarWeekNumbering",
 	"sap/ui/thirdparty/jquery",
 	"sap/m/ResponsivePopover",
 	"sap/m/SinglePlanningCalendarGrid",
@@ -12,10 +13,12 @@ sap.ui.define([
 	'sap/ui/unified/calendar/CalendarDate',
 	"sap/ui/core/date/UI5Date",
 	"sap/ui/unified/DateTypeRange",
-	"sap/ui/qunit/utils/nextUIUpdate"
+	"sap/ui/qunit/utils/nextUIUpdate",
+	"sap/ui/core/CustomData"
 ], function(
 	qutils,
 	Formatting,
+	CalendarWeekNumbering,
 	jQuery,
 	ResponsivePopover,
 	SinglePlanningCalendarGrid,
@@ -26,7 +29,8 @@ sap.ui.define([
 	CalendarDate,
 	UI5Date,
 	DateTypeRange,
-	nextUIUpdate
+	nextUIUpdate,
+	CustomData
 ) {
 	"use strict";
 
@@ -392,6 +396,35 @@ sap.ui.define([
 		await nextUIUpdate(this.clock);
 	});
 
+	QUnit.test("_isNowMarkerInView", function(assert) {
+		// Prepare
+		var oGrid = new SinglePlanningCalendarGrid(),
+			oDateInFuture = UI5Date.getInstance(),
+			oDate = UI5Date.getInstance(),
+			oDSTDateOne = UI5Date.getInstance(2025, 2, 30, 1),
+			oDSTDateTwo = UI5Date.getInstance(2025, 9, 26, 1),
+			oDateInPast = UI5Date.getInstance();
+
+		oDateInFuture.setDate(oDateInFuture.getDate() + 1);
+		oGrid.setStartDate(oDateInFuture);
+
+		//assert
+		assert.strictEqual(oGrid._isNowMarkerInView(oDate), false, "Now marker should not be visible.");
+		// Prepare
+		oDateInPast.setDate(oDateInPast.getDate() - 1);
+		oGrid.setStartDate(oDateInPast);
+		//assert
+		assert.strictEqual(oGrid._isNowMarkerInView(oDate), true, "Now marker should be visible.");
+		//Prepare
+		oGrid.setStartDate(oDSTDateOne);
+		assert.strictEqual(oGrid._isNowMarkerInView(UI5Date.getInstance(2025, 2, 30, 3, 30)), true, "Now marker should be visible.");
+		//Prepare
+		oGrid.setStartDate(oDSTDateTwo);
+		assert.strictEqual(oGrid._isNowMarkerInView(UI5Date.getInstance(2025, 9, 26, 3, 30)), true, "Now marker should be visible.");
+		// cleanup
+		oGrid.destroy();
+	});
+
 	QUnit.test("Formatters pattern is correct", function (assert) {
 		// Prepare
 		var oGrid = new SinglePlanningCalendarGrid();
@@ -417,6 +450,25 @@ sap.ui.define([
 		// assert
 		assert.ok(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(oNonWorking)), "02.06.2018 is a non working day");
 		assert.ok(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(oWeekend)), "07.06.2018 is a non working weekend day");
+		assert.notOk(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(oWorkingWeekend)), "14.06.2018 is a non working weekend day");
+	});
+
+	QUnit.test("Non working days helper method - ranges (start and end date)", function(assert) {
+		// Prepare
+		var oNonWorkingStartDate = UI5Date.getInstance(2018, 6, 2),
+			oNonWorkingEndDate = UI5Date.getInstance(2018, 6, 6),
+			oWorkingWeekend = UI5Date.getInstance(2018, 6, 14),
+			oGrid = new SinglePlanningCalendarGrid({
+			specialDates: [
+				new DateTypeRange({ type: "NonWorking", startDate: oNonWorkingStartDate, endDate: oNonWorkingEndDate }),
+				new DateTypeRange({ type: "Working", startDate: oWorkingWeekend })
+			]
+		});
+
+		// assert
+		assert.ok(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(UI5Date.getInstance(2018, 6, 3))), "03.06.2018 is a non working day");
+		assert.ok(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(oNonWorkingEndDate)), "06.06.2018 is a non working day");
+		assert.ok(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(oNonWorkingStartDate)), "02.06.2018 is a non working day");
 		assert.notOk(oGrid._isNonWorkingDay(CalendarDate.fromLocalJSDate(oWorkingWeekend)), "14.06.2018 is a non working weekend day");
 	});
 
@@ -481,12 +533,51 @@ sap.ui.define([
 		await nextUIUpdate(this.clock);
 	});
 
+	QUnit.test("CalendarAppointment's getDomRef() returns proper DOM element (customData added)", async function(assert) {
+		// Prepare
+		var aAppointments = [
+				new CalendarAppointment("SPC-app-111", {
+					startDate: UI5Date.getInstance(2023, 9, 16, 9, 0),
+					endDate: UI5Date.getInstance(2023, 9, 16, 9, 30),
+					customData: [
+						new CustomData({
+							key: "appointmentType",
+							value: "appointmentValue",
+							writeToDom: true
+						}),
+						new CustomData({
+							key: "appointmentType1",
+							value: "appointmentValue1",
+							writeToDom: false
+						})
+					]
+				})
+			],
+			oStartDate = UI5Date.getInstance(2023, 9, 16),
+			oSPCGrid = new SinglePlanningCalendarGrid({
+				startDate: oStartDate,
+				appointments: aAppointments
+			});
+
+		// arrange
+		oSPCGrid.placeAt("qunit-fixture");
+		await nextUIUpdate(this.clock);
+
+		// assert
+		assert.strictEqual(aAppointments[0].getDomRef().getAttribute("data-appointmentType"), "appointmentValue", "The returned DOM reference of the appointment with index 1 is with correct custom data attribute .");
+		assert.notOk(aAppointments[0].getDomRef().getAttribute("data-appointmentType1") === "appointmentValue1", "The returned DOM reference of the appointment with index 1 is does not contain data attribute, because it's property 'writeToDom' is false.");
+
+		// cleanup
+		oSPCGrid.destroy();
+		await nextUIUpdate(this.clock);
+	});
+
 	QUnit.test("selectedDates: single select via keyboard (Space)", async function (assert){
 		// arrange
 		var iCellIndexInMiddleInWeek = 3,
 			oGrid = new SinglePlanningCalendarGrid({
 				startDate: UI5Date.getInstance(2022,0,1),
-				firstDayOfWeek: 1,
+				calendarWeekNumbering: CalendarWeekNumbering.ISO_8601,
 				dateSelectionMode: SinglePlanningCalendarSelectionMode.SingleSelect
 			});
 
@@ -515,7 +606,7 @@ sap.ui.define([
 		var iCellIndexInMiddleInWeek = 3,
 			oGrid = new SinglePlanningCalendarGrid({
 				startDate: UI5Date.getInstance(2022,0,1),
-				firstDayOfWeek: 1,
+				calendarWeekNumbering: CalendarWeekNumbering.ISO_8601,
 				dateSelectionMode: SinglePlanningCalendarSelectionMode.SingleSelect
 			});
 
@@ -829,4 +920,53 @@ sap.ui.define([
 		// cleanup
 		oGrid.destroy();
 	});
+
+
+	QUnit.module("Misc");
+	var sMyxml = "<mvc:View xmlns:mvc=\"sap.ui.core.mvc\" xmlns:unified=\"sap.ui.unified\" xmlns=\"sap.m\">" +
+	"		<SinglePlanningCalendarGrid" +
+	"			id=\"SPC1\"" +
+	"			startDate=\"{path: '/startDate'}\"" +
+	"			appointments=\"{path: '/appointments'}\">" +
+	"			<appointments>" +
+	"				<unified:CalendarAppointment" +
+	"					title= \"{title}\"" +
+	"					startDate= \"{startDate}\"" +
+	"					endDate= \"{endDate}\">" +
+	"				</unified:CalendarAppointment>" +
+	"			</appointments>" +
+	"		</SinglePlanningCalendarGrid>" +
+	"	</mvc:View>";
+
+	QUnit.test("Appointment dom ref in compact mode is got correctly", function (assert) {
+		var done = assert.async(),
+			that = this;
+		sap.ui.require(["sap/ui/core/mvc/XMLView", "sap/ui/model/json/JSONModel"],
+			function (XMLView, JSONModel) {
+				var oModel = new JSONModel({
+					startDate: new Date(),
+					appointments: [{
+						startDate: new Date(),
+						endDate: new Date(new Date().getTime() + 3600000), // 1 hour later
+						title: "Meeting"
+					}]
+				});
+				XMLView.create({
+					id: "dtt.one.two.three.four---",
+					definition: sMyxml
+				}).then(async function(oView) {
+					oView.setModel(oModel);
+					document.getElementById("qunit-fixture").classList.add("sapUiSizeCompact");
+					try {
+						oView.placeAt("qunit-fixture");
+						await nextUIUpdate(that.clock);
+						assert.equal(1, 1, "Appointment dom ref in compact mode is got correctly and no error is thrown");
+						done();
+					} catch (e) {
+						assert.equal(1, 0, "Throws an error " + e.stack);
+					}
+				});
+		});
+	});
+
 });

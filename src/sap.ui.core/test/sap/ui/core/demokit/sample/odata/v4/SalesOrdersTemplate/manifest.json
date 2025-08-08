@@ -32,12 +32,21 @@
 			"sample" : {
 				"files" : [
 					"Component.js",
+					"Facets.fragment.xml",
 					"FormattedText.fragment.xml",
 					"Helper.js",
+					"Main.controller.js",
 					"Main.view.xml",
+					"manifest.json",
+					"SandboxModel.js",
+					"data/annotations.xml",
+					"data/BusinessPartnerList.json",
+					"data/CurrencyList.json",
+					"data/metadata_bp_role.xml",
+					"data/metadata_tcurc.xml",
+					"data/metadata.xml",
 					"../../../common/Controller.js",
 					"../../../common/ValueHelp.js",
-					"SandboxModel.js",
 					"../../../common/SandboxModelHelper.js"
 				]
 			}
@@ -57,8 +66,7 @@
 				"settings" : {
 					"earlyRequests" : true
 				},
-				"type" : "sap.ui.core.sample.odata.v4.SalesOrdersTemplate.SandboxModel",
-				"uriSettingName" : "serviceUrl"
+				"type" : "sap.ui.core.sample.odata.v4.SalesOrdersTemplate.SandboxModel"
 			}
 		}
 	}

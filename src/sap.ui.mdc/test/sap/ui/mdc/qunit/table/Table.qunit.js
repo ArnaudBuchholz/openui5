@@ -15,7 +15,7 @@ sap.ui.define([
 	"sap/ui/mdc/table/GridTableType",
 	"sap/ui/mdc/table/ResponsiveTableType",
 	"sap/ui/mdc/table/ResponsiveColumnSettings",
-	"sap/ui/mdc/table/menu/GroupHeaderRowContextMenu",
+	"sap/ui/mdc/table/menus/GroupHeaderRowContextMenu",
 	"sap/ui/mdc/table/utils/Personalization",
 	"sap/ui/mdc/FilterBar",
 	"sap/m/Text",
@@ -38,6 +38,7 @@ sap.ui.define([
 	"sap/ui/fl/write/api/ControlPersonalizationWriteAPI",
 	"sap/m/plugins/PluginBase",
 	"sap/m/plugins/ColumnResizer",
+	"sap/m/plugins/ColumnAIAction",
 	"sap/ui/core/message/Message",
 	"sap/ui/core/Theming",
 	"sap/ui/core/theming/Parameters",
@@ -91,6 +92,7 @@ sap.ui.define([
 	ControlPersonalizationWriteAPI,
 	PluginBase,
 	ColumnResizer,
+	ColumnAIAction,
 	Message,
 	Theming,
 	ThemeParameters,
@@ -133,9 +135,9 @@ sap.ui.define([
 		// no rendering required for the tests in this module
 		renderer: null,
 
-		getConditions: function() {return this.getCustomConditions();},
-		validate: function () {return Promise.resolve();},
-		getSearch: function() {return this.getCustomSearch();}
+		getConditions: function() { return this.getCustomConditions(); },
+		validate: function() { return Promise.resolve(); },
+		getSearch: function() { return this.getCustomSearch(); }
 	});
 
 	function wait(iMilliseconds) {
@@ -385,21 +387,28 @@ sap.ui.define([
 		});
 		this.oTable.setModel(oModel, "settings");
 
-		await test(TableType.Table, new ResponsiveTableType({growingMode: "{settings>/resp/growingMode}", popinLayout: "{settings>/resp/popinLayout}"}));
+		await test(TableType.Table, new ResponsiveTableType({
+			growingMode: "{settings>/resp/growingMode}",
+			popinLayout: "{settings>/resp/popinLayout}"
+		}));
 		await this.oTable.initialized();
 		assert.ok(this.oTable._oTable.isA("sap.m.Table"), "New inner table is a sap.m.Table");
 		assert.equal(this.oTable._oTable.getGrowingScrollToLoad(), true, "Inner table has growing scroll to load set to true");
 		assert.equal(this.oTable._oTable.getPopinLayout(), "GridLarge", "Inner table has popin layout 'GridLarge'");
 
-		await test(TableType.ResponsiveTable, new GridTableType({scrollThreshold: "{settings>/grid/scrollThreshold}", selectionLimit: "{settings>/grid/selectionLimit}"}));
+		await test(TableType.ResponsiveTable, new GridTableType({
+			scrollThreshold: "{settings>/grid/scrollThreshold}",
+			selectionLimit: "{settings>/grid/selectionLimit}"
+		}));
 		await this.oTable.initialized();
 		assert.ok(this.oTable._oTable.isA("sap.ui.table.Table"), "New inner table is a sap.ui.table.Table");
 		assert.equal(this.oTable._oTable.getScrollThreshold(), 5, "Inner table has scrollThreshold of 5");
-		assert.equal(this.oTable._oTable.getDependents().find((oDependent) => oDependent.isA("sap.ui.table.plugins.SelectionPlugin")).getLimit(), 100, "Inner table has selection limit 100");
+		assert.equal(this.oTable._oTable.getDependents().find((oDependent) => oDependent.isA("sap.ui.table.plugins.SelectionPlugin")).getLimit(), 100,
+			"Inner table has selection limit 100");
 	});
 
 	QUnit.test("Change type from instance to instance with bindings", async function(assert) {
-		const test = async(oFromType, oToType) => {
+		const test = async (oFromType, oToType) => {
 			this.oTable.destroyType();
 			this.oTable.setType(oFromType);
 			await this.oTable.initialized();
@@ -419,17 +428,24 @@ sap.ui.define([
 		});
 		this.oTable.setModel(oModel, "settings");
 
-		await test(new GridTableType(), new ResponsiveTableType({growingMode: "{settings>/resp/growingMode}", popinLayout: "{settings>/resp/popinLayout}"}));
+		await test(new GridTableType(), new ResponsiveTableType({
+			growingMode: "{settings>/resp/growingMode}",
+			popinLayout: "{settings>/resp/popinLayout}"
+		}));
 		await this.oTable.initialized();
 		assert.ok(this.oTable._oTable.isA("sap.m.Table"), "New inner table is a sap.m.Table");
 		assert.equal(this.oTable._oTable.getGrowingScrollToLoad(), true, "Inner table has growing scroll to load set to true");
 		assert.equal(this.oTable._oTable.getPopinLayout(), "GridLarge", "Inner table has popin layout 'GridLarge'");
 
-		await test(new ResponsiveTableType(), new GridTableType({scrollThreshold: "{settings>/grid/scrollThreshold}", selectionLimit: "{settings>/grid/selectionLimit}"}));
+		await test(new ResponsiveTableType(), new GridTableType({
+			scrollThreshold: "{settings>/grid/scrollThreshold}",
+			selectionLimit: "{settings>/grid/selectionLimit}"
+		}));
 		await this.oTable.initialized();
 		assert.ok(this.oTable._oTable.isA("sap.ui.table.Table"), "New inner table is a sap.ui.table.Table");
 		assert.equal(this.oTable._oTable.getScrollThreshold(), 5, "Inner table has scrollThreshold of 5");
-		assert.equal(this.oTable._oTable.getDependents().find((oDependent) => oDependent.isA("sap.ui.table.plugins.SelectionPlugin")).getLimit(), 100, "Inner table has selection limit 100");
+		assert.equal(this.oTable._oTable.getDependents().find((oDependent) => oDependent.isA("sap.ui.table.plugins.SelectionPlugin")).getLimit(), 100,
+			"Inner table has selection limit 100");
 	});
 
 	QUnit.test("Destroy type", async function(assert) {
@@ -593,7 +609,8 @@ sap.ui.define([
 			assert.equal(aInnerColumns[0].getCreationTemplate(), null, "column0: creationTemplate is correct");
 			assert.equal(aInnerColumns[1].getCreationTemplate().getText(), "Test1", "column1: creationTemplate is correct");
 			assert.equal(aInnerColumns[1].getCreationTemplate().getWrapping(), false, "column1: creationTemplate wrapping is disabled");
-			assert.equal(aInnerColumns[1].getCreationTemplate().getRenderWhitespace(), false, "column1: creationTemplate renderWhitespace is disabled");
+			assert.equal(aInnerColumns[1].getCreationTemplate().getRenderWhitespace(), false,
+				"column1: creationTemplate renderWhitespace is disabled");
 		}.bind(this));
 	});
 
@@ -783,12 +800,12 @@ sap.ui.define([
 						path: "column1",
 						label: "column1",
 						dataType: "String"
-					},{
+					}, {
 						key: "column2",
 						path: "column2",
 						label: "column2",
 						dataType: "String"
-					},{
+					}, {
 						key: "column3",
 						path: "column3",
 						label: "column3",
@@ -1145,7 +1162,8 @@ sap.ui.define([
 				assert.notOk(this.oTable._oTable.getNoData().getEnableVerticalResponsiveness());
 				assert.ok(this.oTable._oTable.getAggregation("_noColumnsMessage"), "No columns illustration message is added");
 				assert.ok(this.oTable._oTable.getAggregation("_noColumnsMessage").getAdditionalContent()[0].isA("sap.m.Button"));
-				assert.equal(this.oTable._oTable.getAggregation("_noColumnsMessage").getAdditionalContent()[0].getIcon(), "sap-icon://action-settings");
+				assert.equal(this.oTable._oTable.getAggregation("_noColumnsMessage").getAdditionalContent()[0].getIcon(),
+					"sap-icon://action-settings");
 				assert.notOk(this.oTable._oTable.getAggregation("_noColumnsMessage").getEnableVerticalResponsiveness());
 
 				this.oTable._oTable.getAggregation("_noColumnsMessage").getAdditionalContent()[0].firePress();
@@ -1426,7 +1444,7 @@ sap.ui.define([
 				{}, {}, {}, {}, {}
 			]
 		});
-		let iSelectionCount = -1;
+		const oSelectionChange = this.spy();
 		let bRowPressFired = false;
 		let oSelectionPlugin = null;
 
@@ -1461,9 +1479,7 @@ sap.ui.define([
 				header: "test",
 				template: new Text()
 			}),
-			selectionChange: () => {
-				iSelectionCount = this.oTable.getSelectedContexts().length;
-			},
+			selectionChange: oSelectionChange,
 			rowPress: () => {
 				bRowPressFired = true;
 			}
@@ -1471,9 +1487,7 @@ sap.ui.define([
 		this.oTable.placeAt("qunit-fixture");
 
 		await this.oTable.initialized();
-		await new Promise((resolve) => {
-			this.oTable._oTable.attachEventOnce("rowsUpdated", resolve);
-		});
+		await TableQUnitUtils.nextEvent("rowsUpdated", this.oTable._oTable);
 
 		oSelectionPlugin = PluginBase.getPlugin(this.oTable._oTable, "sap.ui.table.plugins.SelectionPlugin");
 
@@ -1490,65 +1504,74 @@ sap.ui.define([
 
 		await selectRow(this.oTable._oTable.getRows()[0], true);
 		assert.equal(this.oTable.getSelectedContexts().length, 1, "Item selected");
-		assert.equal(iSelectionCount, 1, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
+		oSelectionChange.resetHistory();
 		await selectRow(this.oTable._oTable.getRows()[1], true);
-		assert.equal(iSelectionCount, 1, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
-		iSelectionCount = -1;
+		oSelectionChange.resetHistory();
 		this.oTable.clearSelection();
-		assert.equal(iSelectionCount, -1, "No selection change event");
 		assert.equal(this.oTable.getSelectedContexts().length, 0, "No rows selected");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
+		oSelectionChange.resetHistory();
 		this.oTable.setSelectionMode("SingleMaster");
 		assert.equal(this.oTable.getSelectionMode(), "SingleMaster", "Selection Mode Single - MDCTable");
 		assert.equal(oSelectionPlugin.getSelectionMode(), "Single", "Selection Mode Single - MultiSelectionPlugin");
 		assert.equal(this.oTable._oTable.getSelectionBehavior(), "RowOnly", "Selection Behavior RowOnly");
 		await nextUIUpdate();
 
+		oSelectionChange.resetHistory();
 		await selectRow(this.oTable._oTable.getRows()[0], true, true);
 		assert.equal(this.oTable.getSelectedContexts().length, 1, "Item selected");
-		assert.equal(iSelectionCount, 1, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
+		oSelectionChange.resetHistory();
 		await selectRow(this.oTable._oTable.getRows()[1], true, true);
-		assert.equal(iSelectionCount, 1, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 		assert.ok(!bRowPressFired, "rowPress event not fired");
 
-		iSelectionCount = -1;
+		oSelectionChange.resetHistory();
 		this.oTable.clearSelection();
-		assert.equal(iSelectionCount, -1, "No selection change event");
 		assert.equal(this.oTable.getSelectedContexts().length, 0, "No rows selected");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
+		oSelectionChange.resetHistory();
 		this.oTable.setSelectionMode("Multi");
 		assert.equal(this.oTable.getSelectionMode(), "Multi", "Selection Mode Multi - MDCTable");
 		assert.equal(oSelectionPlugin.getSelectionMode(), "MultiToggle", "Selection Mode MultiToggle - MultiSelectionPlugin");
 		assert.equal(this.oTable._oTable.getSelectionBehavior(), "RowSelector", "Selection Behavior RowSelector");
 		await nextUIUpdate();
 
+		oSelectionChange.resetHistory();
 		await selectRow(this.oTable._oTable.getRows()[0], true);
 		assert.equal(this.oTable.getSelectedContexts().length, 1, "Item selected");
-		assert.equal(iSelectionCount, 1, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
+		oSelectionChange.resetHistory();
 		await selectRow(this.oTable._oTable.getRows()[1], true);
-		assert.equal(iSelectionCount, 2, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
+		oSelectionChange.resetHistory();
 		await selectRow(this.oTable._oTable.getRows()[2], true);
-		assert.equal(iSelectionCount, 3, "Selection change event");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
-		iSelectionCount = -1;
+		oSelectionChange.resetHistory();
 		this.oTable.clearSelection();
-		assert.equal(iSelectionCount, -1, "No selection change event");
 		assert.equal(this.oTable.getSelectedContexts().length, 0, "No rows selected");
+		assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 
 		// Simulate enable notification scenario via selection over limit
+		oSelectionChange.resetHistory();
 		this.oTable.setSelectionMode("Multi");
 		this.oTable.getType().setSelectionLimit(3);
 		assert.ok(oSelectionPlugin.getEnableNotification(), true);
 
 		await new Promise((resolve) => {
 			oSelectionPlugin.attachEventOnce("selectionChange", () => {
-				assert.equal(iSelectionCount, 3, "Selection change event");
 				assert.equal(this.oTable.getSelectedContexts().length, 3, "Rows selected");
+				assert.equal(oSelectionChange.callCount, 1, "Selection change event");
 				resolve();
 			});
 			// select all existing rows
@@ -1591,9 +1614,7 @@ sap.ui.define([
 			},
 			type: TableType.ResponsiveTable,
 			models: new JSONModel({
-				testPath: [
-					{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
-				]
+				testPath: Array(40).fill({})
 			}),
 			columns: new Column({
 				header: "test",
@@ -1772,7 +1793,8 @@ sap.ui.define([
 			assert.equal(aInnerColumns[0].getCreationTemplate(), null, "column0: creationTemplate is correct");
 			assert.equal(aInnerColumns[1].getCreationTemplate().getText(), "Test", "column1: creationTemplate is correct");
 			assert.equal(aInnerColumns[1].getCreationTemplate().getWrapping(), false, "column1: creationTemplate wrapping is disabled");
-			assert.equal(aInnerColumns[1].getCreationTemplate().getRenderWhitespace(), false, "column1: creationTemplate renderWhitespace is disabled");
+			assert.equal(aInnerColumns[1].getCreationTemplate().getRenderWhitespace(), false,
+				"column1: creationTemplate renderWhitespace is disabled");
 
 			aMDCColumns = oTable2.getColumns();
 			aInnerColumns = oTable2._oTable.getColumns();
@@ -2106,7 +2128,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("noDataText - Table without FilterBar but with internal filters and the table is bound", function(assert) {
-		this.oTable.setFilterConditions({ key: [{ operator: OperatorName.EQ, values: ["Pr"] }] });
+		this.oTable.setFilterConditions({key: [{operator: OperatorName.EQ, values: ["Pr"]}]});
 
 		return TableQUnitUtils.waitForBindingInfo(this.oTable).then(function() {
 			const oRb = Library.getResourceBundleFor("sap.ui.mdc");
@@ -2116,7 +2138,7 @@ sap.ui.define([
 
 	QUnit.test("noDataAggregation - Table without FilterBar but with internal filters and the table is bound", function(assert) {
 		this.oTable.setNoData(new IllustratedMessage());
-		this.oTable.setFilterConditions({ key: [{ operator: OperatorName.EQ, values: ["Pr"] }] });
+		this.oTable.setFilterConditions({key: [{operator: OperatorName.EQ, values: ["Pr"]}]});
 
 		return TableQUnitUtils.waitForBindingInfo(this.oTable).then(function() {
 			const oRb = Library.getResourceBundleFor("sap.ui.mdc");
@@ -2185,7 +2207,7 @@ sap.ui.define([
 		}.bind(this));
 	});
 
-	QUnit.test("noDataAggregation CustomText - Table with custom external filter control with search string, and the table is bound", function(assert) {
+	QUnit.test("noDataAggregation CustomText - Table with custom external filter control with search string, the table is bound", function(assert) {
 		this.oTable.setFilter(new CustomFilterControl({customSearch: "found something?"}));
 		this.oTable.setNoData(new IllustratedMessage({title: "NoData Title", description: "NoData Description"}));
 
@@ -2203,10 +2225,10 @@ sap.ui.define([
 				"sap/m/SegmentedButton", "sap/ui/core/Control"
 			], function(SegmentedButton, Control) {
 				// Test with VariantManagement
-				const oVariant = new VariantManagement(),
-					oVariant2 = new VariantManagement(),
-					oQuickFilter = new SegmentedButton(),
-					oQuickFilter2 = new SegmentedButton();
+				const oVariant = new VariantManagement();
+					const oVariant2 = new VariantManagement();
+					const oQuickFilter = new SegmentedButton();
+					const oQuickFilter2 = new SegmentedButton();
 
 				// Test Variant exists on toolbar
 				this.oTable.setVariant(oVariant);
@@ -2345,12 +2367,14 @@ sap.ui.define([
 			const oColumn = new Column();
 			const fnGetColumnClipboardSettingsSpy = sinon.spy(this.oTable.getPropertyHelper(), "getColumnClipboardSettings");
 			this.oTable.getColumnClipboardSettings(oColumn);
-			assert.ok(fnGetColumnClipboardSettingsSpy.calledWith(oColumn), "Table#getColumnClipboardSettings uses PropertyHelper#getColumnClipboardSettings");
+			assert.ok(fnGetColumnClipboardSettingsSpy.calledWith(oColumn),
+				"Table#getColumnClipboardSettings uses PropertyHelper#getColumnClipboardSettings");
 			fnGetColumnClipboardSettingsSpy.restore();
 
 			const oCopyButton = Element.getElementById(this.oTable.getId() + "-copy");
 			assert.ok(oCopyButton, "Copy button is created");
-			assert.equal(this.oTable._oToolbar.indexOfEnd(oCopyButton), 0, "Copy button is added to the toolbar, as a first element of the end aggreagtion");
+			assert.equal(this.oTable._oToolbar.indexOfEnd(oCopyButton), 0,
+				"Copy button is added to the toolbar, as a first element of the end aggreagtion");
 
 			oClipboardStub.restore();
 			oSecureContextStub.restore();
@@ -2377,7 +2401,8 @@ sap.ui.define([
 		this.oTable.addDependent(oCellSelector);
 
 		return this.oTable._fullyInitialized().then(() => {
-			assert.equal(this.oTable.getCellSelectorPluginOwner(), this.oTable._oTable, "The inner table is set as plugin owner for the CellSelector");
+			assert.equal(this.oTable.getCellSelectorPluginOwner(), this.oTable._oTable,
+				"The inner table is set as plugin owner for the CellSelector");
 			assert.ok(oCellSelector.getEnabled(), "CellSelector Plugin is enabled");
 			assert.ok(oCellSelector.isActive(), "CellSelector is active");
 			assert.ok(oCellSelector.getConfig("isSupported", this.oTable._oTable, oCellSelector), "CellSelector is supported for grid table");
@@ -2387,10 +2412,12 @@ sap.ui.define([
 			this.oTable.addDependent(oCellSelector);
 
 			return this.oTable._fullyInitialized().then(() => {
-				assert.equal(this.oTable.getCellSelectorPluginOwner(), this.oTable._oTable, "The inner table is set as plugin owner for the CellSelector");
+				assert.equal(this.oTable.getCellSelectorPluginOwner(), this.oTable._oTable,
+					"The inner table is set as plugin owner for the CellSelector");
 				assert.ok(oCellSelector.getEnabled(), "CellSelector Plugin is enabled");
 				assert.ok(oCellSelector.isActive(), "CellSelector is active");
-				assert.ok(oCellSelector.getConfig("isSupported", this.oTable._oTable, oCellSelector), "CellSelector is supported for responsive table");
+				assert.ok(oCellSelector.getConfig("isSupported", this.oTable._oTable, oCellSelector),
+					"CellSelector is supported for responsive table");
 
 				this.oTable.removeDependent(oCellSelector);
 			});
@@ -2416,7 +2443,8 @@ sap.ui.define([
 				assert.equal(oTable.getCellSelectorPluginOwner(), this.oTable._oTable, "The inner table is set as plugin owner for the CellSelector");
 				assert.ok(oCellSelector.getEnabled(), "CellSelector Plugin is enabled");
 				assert.ok(oCellSelector.isActive(), "CellSelector is active");
-				assert.ok(oCellSelector.getConfig("isSupported", this.oTable._oTable, oCellSelector), "CellSelector is supported for responsive table");
+				assert.ok(oCellSelector.getConfig("isSupported", this.oTable._oTable, oCellSelector),
+					"CellSelector is supported for responsive table");
 
 				this.oTable.removeDependent(oCellSelector);
 			});
@@ -2528,7 +2556,6 @@ sap.ui.define([
 		}.bind(this));
 	});
 
-
 	QUnit.test("enablePaste with ShowPasteButton set to false", function(assert) {
 		this.oTable.setShowPasteButton(false);
 		assert.ok(this.oTable.getEnablePaste(), "default value of enablePaste=true");
@@ -2623,7 +2650,7 @@ sap.ui.define([
 		const oTable = this.oTable;
 
 		function testScroll(iIndex) {
-			return oTable.scrollToIndex(iIndex).then(function () {
+			return oTable.scrollToIndex(iIndex).then(function() {
 				if (oTable._isOfType(TableType.Table, true) && iIndex === -1) {
 					iIndex = 0;
 				}
@@ -2637,13 +2664,13 @@ sap.ui.define([
 			oScrollStub = sinon.stub(oTable._oTable, "_setFirstVisibleRowIndex");
 		}).then(function() {
 			return testScroll(0);
-		}).then(function () {
+		}).then(function() {
 			return testScroll(5);
-		}).then(function () {
+		}).then(function() {
 			return testScroll(-1);
-		}).then(function () {
+		}).then(function() {
 			return testScroll(10000);
-		}).then(function () {
+		}).then(function() {
 			oTable.setType(TableType.ResponsiveTable);
 			return oTable.initialized();
 		}).then(function() {
@@ -2651,26 +2678,29 @@ sap.ui.define([
 			oScrollStub.resolves();
 		}).then(function() {
 			return testScroll(0);
-		}).then(function () {
+		}).then(function() {
 			return testScroll(5);
-		}).then(function () {
+		}).then(function() {
 			return testScroll(-1);
-		}).then(function () {
+		}).then(function() {
 			return testScroll(10000);
 		});
 	});
 
 	QUnit.test("test focusRow", function(assert) {
-		const done = assert.async(), oTable = this.oTable;
-		let oScrollStub, oFocusStub, n = 0;
+		const done = assert.async(); const
+oTable = this.oTable;
+		let oScrollStub; let oFocusStub; let
+n = 0;
 
 		function testFocusRow(iIndex, bFirstInteractiveElement) {
 			return new Promise(function(resolve) {
-				oTable.focusRow(iIndex, bFirstInteractiveElement).then(function () {
+				oTable.focusRow(iIndex, bFirstInteractiveElement).then(function() {
 					n++;
 					assert.ok(oFocusStub.called, oFocusStub.propName + " was called");
 					assert.equal(oFocusStub.callCount, n, oFocusStub.propName + " was called only once");
-					assert.ok(oFocusStub.calledWith(iIndex, bFirstInteractiveElement), oFocusStub.propName + " was called with the correct parameter");
+					assert.ok(oFocusStub.calledWith(iIndex, bFirstInteractiveElement),
+						oFocusStub.propName + " was called with the correct parameter");
 					resolve();
 				});
 			});
@@ -2684,13 +2714,13 @@ sap.ui.define([
 				resolve();
 			}).then(function() {
 				return testFocusRow(0, true);
-			}).then(function () {
+			}).then(function() {
 				return testFocusRow(5, true);
-			}).then(function () {
+			}).then(function() {
 				return testFocusRow(-1, false);
-			}).then(function () {
+			}).then(function() {
 				return testFocusRow(10000, false);
-			}).then(function () {
+			}).then(function() {
 				oFocusStub.restore();
 				return Promise.resolve();
 			});
@@ -2706,13 +2736,13 @@ sap.ui.define([
 					resolve();
 				}).then(function() {
 					return testFocusRow(0, false);
-				}).then(function () {
+				}).then(function() {
 					return testFocusRow(5, false);
-				}).then(function () {
+				}).then(function() {
 					return testFocusRow(-1, true);
-				}).then(function () {
+				}).then(function() {
 					return testFocusRow(10000, true);
-				}).then(function () {
+				}).then(function() {
 					oFocusStub.restore();
 					oScrollStub.restore();
 					done();
@@ -2866,27 +2896,31 @@ sap.ui.define([
 		return this.oTable.initialized().then(() => {
 			assert.ok(this.oTable._oToolbar.getVisible(), "Toolbar is visible.");
 			assert.notOk(this.oTable.getHideToolbar(), "Property hideToolbar is false.");
-			assert.notOk(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"), "Header is not referenced by ariaLabelledBy.");
+			assert.notOk(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"),
+				"Header is not referenced by ariaLabelledBy.");
 			assert.ok(this.oTable._oToolbar.getVisible(), "Toolbar is visible.");
 
 			this.oTable.setHideToolbar(true);
 			this.oTable.setHeaderVisible(false);
 			assert.ok(this.oTable.getHideToolbar(), "Property hideToolbar is true.");
 			assert.notOk(this.oTable.getHeaderVisible(), "Property headerVisible is false.");
-			assert.ok(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"), "Header is referenced by ariaLabelledBy.");
+			assert.ok(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"),
+				"Header is referenced by ariaLabelledBy.");
 			assert.notOk(this.oTable._oToolbar.getVisible(), "Toolbar is not visible.");
 
 			this.oTable.setHeaderVisible(true);
 			assert.ok(this.oTable.getHideToolbar(), "Property hideToolbar is true.");
 			assert.ok(this.oTable.getHeaderVisible(), "Property headerVisible is true.");
-			assert.ok(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"), "Header is referenced by ariaLabelledBy.");
+			assert.ok(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"),
+				"Header is referenced by ariaLabelledBy.");
 			assert.notOk(this.oTable._oToolbar.getVisible(), "Toolbar is not visible.");
 
 			this.oTable.setHideToolbar(false);
 			this.oTable.setHeaderVisible(false);
 			assert.notOk(this.oTable.getHideToolbar(), "Property hideToolbar is false.");
 			assert.notOk(this.oTable.getHeaderVisible(), "Property headerVisible is false.");
-			assert.notOk(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"), "Header is not referenced by ariaLabelledBy.");
+			assert.notOk(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"),
+				"Header is not referenced by ariaLabelledBy.");
 			assert.ok(this.oTable._oToolbar.getVisible(), "Toolbar is visible.");
 
 			this.oTable.setHideToolbar(true);
@@ -2896,7 +2930,8 @@ sap.ui.define([
 				assert.equal(this.oTable.getType(), TableType.ResponsiveTable, "Table type is ResponsiveTable");
 				assert.ok(this.oTable.getHideToolbar(), "Property hideToolbar is true.");
 				assert.notOk(this.oTable.getHeaderVisible(), "Property headerVisible is false.");
-				assert.ok(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"), "Header is referenced by ariaLabelledBy.");
+				assert.ok(this.oTable._oTable.getAriaLabelledBy().includes(this.oTable.getId() + "-invisibleTitle"),
+					"Header is referenced by ariaLabelledBy.");
 				assert.notOk(this.oTable._oToolbar.getVisible(), "Toolbar is not visible.");
 			});
 		});
@@ -2936,7 +2971,8 @@ sap.ui.define([
 
 		return TableQUnitUtils.waitForBinding(this.oTable).then(function() {
 			assert.notOk(this.oTable._oExportButton.getEnabled(), "Export button is disabled since there are no rows");
-			assert.equal(this.oTable._oExportButton.getEnabled(), MTableUtil.isExportable(this.oTable.getRowBinding()) , "Export button enabled state is in sync with sap/m/table/Util#isExportable");
+			assert.equal(this.oTable._oExportButton.getEnabled(), MTableUtil.isExportable(this.oTable.getRowBinding()),
+				"Export button enabled state is in sync with sap/m/table/Util#isExportable");
 
 			const oUpdateExportButtonSpy = sinon.spy(this.oTable, "_updateExportButton");
 			const oIsExportableSpy = sinon.spy(MTableUtil, "isExportable");
@@ -2950,7 +2986,8 @@ sap.ui.define([
 			assert.ok(oIsExportableSpy.calledOnce, "sap/m/table/Util#isExportable has been invoked");
 			assert.ok(oIsExportableSpy.calledWith(this.oTable.getRowBinding()), "Called with binding");
 			assert.ok(this.oTable._oExportButton.getEnabled(), "Export button enabled, since binding change added a row to the table");
-			assert.equal(this.oTable._oExportButton.getEnabled(), MTableUtil.isExportable(this.oTable.getRowBinding()), "Export button enabled state is in sync with sap/m/table/Util#isExportable");
+			assert.equal(this.oTable._oExportButton.getEnabled(), MTableUtil.isExportable(this.oTable.getRowBinding()),
+				"Export button enabled state is in sync with sap/m/table/Util#isExportable");
 
 			oIsExportableSpy.restore();
 
@@ -2986,7 +3023,7 @@ sap.ui.define([
 		});
 	});
 
-	QUnit.test("_bindingChange", function (assert) {
+	QUnit.test("_bindingChange", function(assert) {
 		sinon.spy(this.oTable, "fireEvent");
 		return this.oTable._fullyInitialized().then(() => {
 			this.oTable._onBindingChange();
@@ -3332,7 +3369,7 @@ sap.ui.define([
 		}
 	};
 
-	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'true'", async function(assert){
+	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'true'", async function(assert) {
 		await this.createTable({
 			autoBindOnInit: true,
 			p13nMode: ["Filter"],
@@ -3343,7 +3380,7 @@ sap.ui.define([
 		fnCheckInbuiltInitialization(this.oTable, true, assert);
 	});
 
-	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'false'", async function(assert){
+	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'false'", async function(assert) {
 		await this.createTable({
 			autoBindOnInit: false,
 			p13nMode: ["Filter"],
@@ -3354,14 +3391,14 @@ sap.ui.define([
 		fnCheckInbuiltInitialization(this.oTable, true, assert);
 	});
 
-	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'true' and inbuilt filtering disabled", async function(assert){
+	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'true' and inbuilt filtering disabled", async function(assert) {
 		await this.createTable({
 			autoBindOnInit: true
 		});
 		fnCheckInbuiltInitialization(this.oTable, false, assert);
 	});
 
-	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'false' and inbuilt filtering enabled", async function(assert){
+	QUnit.test("Check AdaptationFilterBar initialization with autoBindOnInit 'false' and inbuilt filtering enabled", async function(assert) {
 		await this.createTable({
 			autoBindOnInit: false
 		});
@@ -3847,7 +3884,7 @@ sap.ui.define([
 						visible: {
 							path: "stock",
 							type: new BooleanType(),
-							formatter: function (sString) {
+							formatter: function(sString) {
 								return sString === "Test";
 							}
 						}
@@ -3871,7 +3908,8 @@ sap.ui.define([
 					template: new RowActionItem({
 						type: "{type}",
 						visible: true
-					})
+					}),
+					templateShareable: false
 				}
 			});
 			this.oTable.setRowSettings(oRowSettings);
@@ -3887,11 +3925,12 @@ sap.ui.define([
 						visible: {
 							path: "stock",
 							type: new BooleanType(),
-							formatter: function (sString) {
+							formatter: function(sString) {
 								return sString === "Test";
 							}
 						}
-					})
+					}),
+					templateShareable: false
 				}
 			});
 			this.oTable.setRowSettings(oRowSettings);
@@ -3919,7 +3958,6 @@ sap.ui.define([
 
 			oRowSettings.removeAllRowActions();
 			this.oTable.setRowSettings(oRowSettings);
-			// assert.equal(oTableInvalidationSpy.callCount, 0, "MDCTable was not invalidated"); // setting row settings invalidates the table, so probably remove this assertion?
 			this.assertNoInnerTableAction(assert);
 
 			if (sTableType === "GridTable") {
@@ -3950,7 +3988,8 @@ sap.ui.define([
 			assert.ok(oTable._oP13nButton, sTitlePrefix + " - Table settings button exists");
 			assert.equal(oTable._oP13nButton.getAriaHasPopup(), HasPopup.Dialog, "button has correct ariaHasPopup value");
 			assert.ok(oTable._oToolbar.indexOfEnd(oTable._oP13nButton) >= 0, sTitlePrefix + " - Table settings button is contained in the toolbar");
-			assert.equal(oTable._oP13nButton.getVisible(), aModes.length > 0 && !oTable._bHideP13nButton, sTitlePrefix + " - Table settings button is visible");
+			assert.equal(oTable._oP13nButton.getVisible(), aModes.length > 0 && !oTable._bHideP13nButton,
+				sTitlePrefix + " - Table settings button is visible");
 			assert.equal(FESRHelper.getSemanticStepname(oTable._oP13nButton, "press"), "mdc:tbl:p13n", "Correct FESR StepName");
 		},
 		assertAPI: function(assert, oMDCTable) {
@@ -4106,7 +4145,7 @@ sap.ui.define([
 		assert.deepEqual(this.oTable.getCurrentState(), {
 			items: [{key: "test", name: "test"}],
 			sorters: aSortConditions,
-			filter:  {}
+			filter: {}
 		}, "Activate 'Filter'");
 
 		this.oTable.setFilterConditions(oFilterConditions);
@@ -4217,7 +4256,7 @@ sap.ui.define([
 				</Table>
 			</mvc:View>`;
 
-			return createAppEnvironment(sTableView, "Table").then(async function(mCreatedApp){
+			return createAppEnvironment(sTableView, "Table").then(async function(mCreatedApp) {
 				this.oView = mCreatedApp.view;
 				this.oUiComponentContainer = mCreatedApp.container;
 				this.oUiComponentContainer.placeAt("qunit-fixture");
@@ -4457,14 +4496,16 @@ sap.ui.define([
 			assert.ok(fnAnnounceTableUpdate.calledOnce, "MTableUtil.announceTableUpdate is called once.");
 
 			this.oTable.getRowBinding().fireDataReceived();
-			assert.ok(fnAnnounceTableUpdate.calledOnce, "MTableUtil.announceTableUpdate is not called if the dataReceived is not caused by a filterbar search.");
+			assert.ok(fnAnnounceTableUpdate.calledOnce,
+				"MTableUtil.announceTableUpdate is not called if the dataReceived is not caused by a filterbar search.");
 
 			oFilter.fireSearch();
 			assert.ok(true, "Search is triggered.");
 			assert.equal(this.oTable._bAnnounceTableUpdate, true, "Table internal flag _bAnnounceTableUpdate is set to true");
 			this.oTable.getRowBinding()._fireChange();
 			// in some cases OData V4 doesn't trigger a data request, but the binding context changes and the item count has to be announced
-			assert.ok(fnAnnounceTableUpdate.calledTwice, "MTableUtil.announceTableUpdate is called on binding change even if no data request is sent.");
+			assert.ok(fnAnnounceTableUpdate.calledTwice,
+				"MTableUtil.announceTableUpdate is called on binding change even if no data request is sent.");
 			fnAnnounceTableUpdate.restore();
 		}.bind(this));
 	});
@@ -4629,7 +4670,7 @@ sap.ui.define([
 			}, {
 				columnId: "agecol",
 				label: "Age",
-				property: "age",
+				property: ["age"],
 				textAlign: "Begin",
 				type: "String",
 				width: ""
@@ -4663,7 +4704,8 @@ sap.ui.define([
 				this.oFetchExpandAndCollapseConfiguration.restore();
 			}
 		},
-		createTable: async function(mSettings, bExpandCollapseSupported, bExpandFromNodeSupported, bCollapseFromNodeSupported, bIsNodeExpandedSupported) {
+		createTable: async function(mSettings, bExpandCollapseSupported, bExpandFromNodeSupported, bCollapseFromNodeSupported,
+									bIsNodeExpandedSupported) {
 			this.oTable = new Table(Object.assign({
 				type: "TreeTable",
 				delegate: {
@@ -4699,15 +4741,15 @@ sap.ui.define([
 											"name": "Clothing", "categories": [
 												{
 													"name": "Dresses", "categories": [
-														{ "name": "Casual Red Dress", "amount": 16.99, "currency": "EUR", "size": "S" },
-														{ "name": "Short Black Dress", "amount": 47.99, "currency": "EUR", "size": "M" },
-														{ "name": "Long Blue Dinner Dress", "amount": 103.99, "currency": "USD", "size": "L" }
+														{"name": "Casual Red Dress", "amount": 16.99, "currency": "EUR", "size": "S"},
+														{"name": "Short Black Dress", "amount": 47.99, "currency": "EUR", "size": "M"},
+														{"name": "Long Blue Dinner Dress", "amount": 103.99, "currency": "USD", "size": "L"}
 													]
 												},
 												{
 													"name": "Tops", "categories": [
-														{ "name": "Printed Shirt", "amount": 24.99, "currency": "USD", "size": "M" },
-														{ "name": "Tank Top", "amount": 14.99, "currency": "USD", "size": "S" }
+														{"name": "Printed Shirt", "amount": 24.99, "currency": "USD", "size": "M"},
+														{"name": "Tank Top", "amount": 14.99, "currency": "USD", "size": "S"}
 													]
 												}
 											]
@@ -4720,21 +4762,21 @@ sap.ui.define([
 											"name": "Clothing", "categories": [
 												{
 													"name": "Shirts", "categories": [
-														{ "name": "Black T-shirt", "amount": 9.99, "currency": "USD", "size": "XL" },
-														{ "name": "Polo T-shirt", "amount": 47.99, "currency": "USD", "size": "M" },
-														{ "name": "White Shirt", "amount": 103.99, "currency": "USD", "size": "L" }
+														{"name": "Black T-shirt", "amount": 9.99, "currency": "USD", "size": "XL"},
+														{"name": "Polo T-shirt", "amount": 47.99, "currency": "USD", "size": "M"},
+														{"name": "White Shirt", "amount": 103.99, "currency": "USD", "size": "L"}
 													]
 												},
 												{
 													"name": "Pants", "categories": [
-														{ "name": "Blue Jeans", "amount": 78.99, "currency": "USD", "size": "M" },
-														{ "name": "Stretch Pant", "amount": 54.99, "currency": "USD", "size": "S" }
+														{"name": "Blue Jeans", "amount": 78.99, "currency": "USD", "size": "M"},
+														{"name": "Stretch Pant", "amount": 54.99, "currency": "USD", "size": "S"}
 													]
 												},
 												{
 													"name": "Shorts", "categories": [
-														{ "name": "Trouser Short", "amount": 62.99, "currency": "USD", "size": "M" },
-														{ "name": "Slim Short", "amount": 44.99, "currency": "USD", "size": "S" }
+														{"name": "Trouser Short", "amount": 62.99, "currency": "USD", "size": "M"},
+														{"name": "Slim Short", "amount": 44.99, "currency": "USD", "size": "S"}
 													]
 												}
 											]
@@ -4770,7 +4812,8 @@ sap.ui.define([
 				};
 			}
 
-			this.oFetchExpandAndCollapseConfiguration = sinon.stub(oDelegate, "fetchExpandAndCollapseConfiguration").returns(Promise.resolve(oSupport));
+			this.oFetchExpandAndCollapseConfiguration = sinon.stub(oDelegate, "fetchExpandAndCollapseConfiguration")
+															 .returns(Promise.resolve(oSupport));
 
 			await TableQUnitUtils.waitForBinding(this.oTable);
 			await nextUIUpdate();
@@ -4919,7 +4962,7 @@ sap.ui.define([
 		assert.notOk(this.oTable._oCollapseAllButton.getMenu().getItems()[1].getEnabled(), "Collapse Node option is not enabled");
 	});
 
-	QUnit.test("Delegate supports expand/collapse all, but misses methods for expandFromNode or collapseFromNode (MenuButton)", async function (assert) {
+	QUnit.test("Delegate supports expand/collapse all, but misses methods for expand/collapseFromNode (MenuButton)", async function(assert) {
 		// Delegate does not implement expand/collapseFromNode and isNodeExpanded => should render button
 		await this.createTable({
 			selectionMode: "Multi"
@@ -5198,7 +5241,8 @@ sap.ui.define([
 
 	QUnit.test("ContextMenuSetting plugin owner", function(assert) {
 		return this.oTable.initialized(this.oTable).then(() => {
-			assert.equal(this.oTable.getContextMenuSettingPluginOwner(), this.oTable._oTable, "The inner table is set as plugin owner for ContextMenuSetting");
+			assert.equal(this.oTable.getContextMenuSettingPluginOwner(), this.oTable._oTable,
+				"The inner table is set as plugin owner for ContextMenuSetting");
 		});
 	});
 
@@ -5309,6 +5353,17 @@ sap.ui.define([
 					header: "a",
 					propertyKey: "a",
 					required: true
+				}),
+				new Column({
+					id: "column_withoutAIAction",
+					header: "AIColumn",
+					propertyKey: "columnAIAction"
+				}),
+				new Column({
+					id: "column_withAIAction",
+					header: "AIColumn",
+					propertyKey: "columnAIAction",
+					dependents: new ColumnAIAction()
 				})
 			]
 		}, [{
@@ -5422,6 +5477,11 @@ sap.ui.define([
 					minWidth: 1
 				}
 			}
+		}, {
+			key: "columnAIAction",
+			label: "AI Action",
+			dataType: "Edm.String",
+			constraints: {maxLength: 5}
 		}]);
 		await this.oTable.initialized();
 		this.oTable.placeAt("qunit-fixture");
@@ -5472,15 +5532,22 @@ sap.ui.define([
 		assert.notOk(getInnerColumnWidth(aColumns[7]), "There is no width set since visualSettings.widthCalculation=null");
 
 		// complex property with visualSettings.widthCalculation=null
-		assert.equal(getInnerColumnWidth(aColumns[8]), getInnerColumnWidth(aColumns[1]), "Width calculation in complex property with visualSettings.widthCalculation=null is ignored");
+		assert.equal(getInnerColumnWidth(aColumns[8]), getInnerColumnWidth(aColumns[1]),
+			"Width calculation in complex property with visualSettings.widthCalculation=null is ignored");
 
 		assert.equal(getInnerColumnWidth(aColumns[9]), 19 + fPadding + "rem", "String type without maxLength gets maxWidth");
 		assert.equal(getInnerColumnWidth(aColumns[10]), 19 + fPadding + "rem", "String type with big maxLength gets maxWidth");
 
-		assert.ok(measureText(aColumns[11].getHeader()) <= parseFloat(getInnerColumnWidth(aColumns[11])) - fPadding, "The header is not truncated and the column width is as wide as the header");
+		assert.ok(measureText(aColumns[11].getHeader()) <= parseFloat(getInnerColumnWidth(aColumns[11])) - fPadding,
+			"The header is not truncated and the column width is as wide as the header");
 
 		// 12th column. required "*" is added to column
-		assert.ok(check("Yes*", parseFloat(getInnerColumnWidth(aColumns[12])) - fPadding - 0.125 /* subtract padding from marker */), "Heaeder has correct width when using 'required' property");
+		assert.ok(check("Yes*", parseFloat(getInnerColumnWidth(aColumns[12])) - fPadding - 0.125 /* subtract padding from marker */),
+			"Heaeder has correct width when using 'required' property");
+
+		// ai action columns
+		assert.ok(parseFloat(getInnerColumnWidth(aColumns[13])) < parseFloat(getInnerColumnWidth(aColumns[14])),
+			"AIAction column is wider than no AIAction column");
 	});
 
 	QUnit.test("Column widths; TreeTableType", async function(assert) {
@@ -5714,6 +5781,69 @@ sap.ui.define([
 		});
 	});
 
+	QUnit.test("Trigger 'Export' via API", async function(assert) {
+		const done = assert.async();
+
+		this.createTable({
+			columns: [
+				new Column({
+					propertyKey: "name"
+				})
+			],
+			enableExport: false
+		}, [{
+			key: "name",
+			path: "name",
+			label: "name",
+			dataType: "String"
+		}]);
+		this.oTable.placeAt("qunit-fixture");
+		await this.oTable.initialized();
+		await nextUIUpdate();
+
+		const oOnExportSpy = this.spy(this.oTable, "_onExport");
+		const oMessageBoxSpy = sinon.spy(sap.m.MessageBox, "error");
+
+		assert.expect(7);
+
+		const oPromise = this.oTable.triggerExport();
+		try {
+			await oPromise;
+			assert.ok(false, "Promise should be rejected");
+		} catch (oError) {
+			assert.ok(true, "Promise rejected");
+		}
+
+		assert.ok(oOnExportSpy.notCalled, "_onExport not called");
+
+		this.oTable.setEnableExport(true);
+
+		try {
+			await this.oTable.triggerExport();
+			assert.ok(oOnExportSpy.calledOnce, "_onExport called");
+			assert.ok(true, "Promise should not be rejected");
+		} catch (oError) {
+			assert.ok(false, "Promise should not be rejected");
+		}
+
+		this.oTable.removeColumn(this.oTable.getColumns()[0]);
+
+		try {
+			await this.oTable.triggerExport();
+			assert.ok(false, "Promise should be rejected");
+		} catch (oError) {
+			assert.ok(true, "Promise rejected");
+		}
+
+		setTimeout(() => {
+			assert.ok(oMessageBoxSpy.notCalled, "MessageBox.error never called");
+			oMessageBoxSpy.restore();
+			done();
+		}, 300);
+
+		assert.ok(oOnExportSpy.calledTwice, "_onExport called");
+	});
+
 	QUnit.test("Trigger 'Export as' via keyboard shortcut", async function(assert) {
 		this.createTable({
 			enableExport: true
@@ -5802,7 +5932,7 @@ sap.ui.define([
 
 		/* Create fake ExportHandler class because dependency to sapui5.runtime is not possible */
 		const FakeExportHandler = function() {};
-		FakeExportHandler.prototype.isA = function(sClass) {return sClass === "sap.ui.export.ExportHandler";};
+		FakeExportHandler.prototype.isA = function(sClass) { return sClass === "sap.ui.export.ExportHandler"; };
 		FakeExportHandler.prototype.attachBeforeExport = this.stub();
 
 		this.stub(Library, "load").withArgs({name: "sap.ui.export"}).resolves();
@@ -5838,6 +5968,15 @@ sap.ui.define([
 		assert.ok(oHandler.isA("sap.ui.export.ExportHandler"), "Parameter is a sap.ui.export.ExportHandler");
 		assert.equal(oHandler, this.oTable._oExportHandler, "Cached instance has been returned");
 
+		const oPromise = this.oTable._getExportHandler();
+		assert.ok(oPromise instanceof Promise, "Promise was returned");
+
+		await oPromise.then(function() {
+			assert.ok(true, "Promise resolved");
+		}).catch(function() {
+			assert.ok(false, "Promise rejected");
+		});
+
 		Library.load.restore();
 		oFetchExportCapabilities.restore();
 		sap.ui.require.restore();
@@ -5846,19 +5985,34 @@ sap.ui.define([
 	QUnit.test("#_getExportHandler when sap.ui.export is missing", async function(assert) {
 		this.createTable();
 
-		assert.expect(2);
+		assert.expect(5);
 
-		sinon.stub(Library, "load").returns(Promise.reject());
+		sinon.stub(Library, "load").returns(Promise.reject("test"));
+		sinon.stub(Library, "all").returns({
+			hasOwnProperty: sinon.stub().withArgs("sap.ui.export").returns(false)
+		});
 		sinon.stub(MessageBox, "error");
 
 		await this.oTable.initialized();
-		await this.oTable._getExportHandler().catch(() => {
+		await this.oTable._getExportHandler().catch((e) => {
 			assert.ok(MessageBox.error.calledOnce, "MessageBox was called");
+
 			assert.ok(MessageBox.error.calledWith(Library.getResourceBundleFor("sap.ui.mdc").getText("ERROR_MISSING_EXPORT_LIBRARY")),
 				"Called with proper error message");
+			assert.ok(e === "test", "Error thrown correctly");
+		});
+
+		const oPromise = this.oTable._getExportHandler();
+		assert.ok(oPromise instanceof Promise, "Promise was returned");
+
+		await oPromise.then(function() {
+			assert.ok(false, "Promise resolved");
+		}).catch(function() {
+			assert.ok(true, "Promise rejected");
 		});
 
 		Library.load.restore();
+		Library.all.restore();
 		MessageBox.error.restore();
 	});
 
@@ -6053,14 +6207,14 @@ sap.ui.define([
 
 		const aExpectedOutput = [{
 			columnId: "firstNameColumn",
-			property: "firstName",
+			property: ["firstName"],
 			type: "String",
 			label: "First_Name",
 			width: 19,
 			textAlign: "Begin"
 		}, {
 			columnId: "lastNameColumn",
-			property: "lastName",
+			property: ["lastName"],
 			type: "String",
 			label: "Last name",
 			width: 10,
@@ -6068,14 +6222,14 @@ sap.ui.define([
 		}, {
 			columnId: "fullName",
 			label: "First_Name",
-			property: "firstName",
+			property: ["firstName"],
 			textAlign: "Begin",
 			type: "String",
 			width: 19
 		}, {
 			columnId: "fullName-additionalProperty1",
 			label: "Last name",
-			property: "lastName",
+			property: ["lastName"],
 			textAlign: "Begin",
 			type: "String",
 			width: 15
@@ -6089,14 +6243,14 @@ sap.ui.define([
 			width: 15
 		}, {
 			columnId: "ageColumn",
-			property: "age",
+			property: ["age"],
 			type: "Number",
 			label: "Age",
 			width: 8,
 			textAlign: "Right"
 		}, {
 			columnId: "dobColumn",
-			property: "dob",
+			property: ["dob"],
 			type: "Date",
 			label: "Date of Birth",
 			width: 15,
@@ -6107,7 +6261,7 @@ sap.ui.define([
 			columnId: "salaryColumn",
 			displayUnit: true,
 			label: "Salary",
-			property: "salary",
+			property: ["salary"],
 			template: "{0} {1}",
 			textAlign: "Right",
 			unitProperty: "currency",
@@ -6116,14 +6270,14 @@ sap.ui.define([
 		}, {
 			columnId: "noDataColumn1",
 			label: "NoDataColumn1",
-			property: "",
+			property: [""],
 			textAlign: "Begin",
 			type: "String",
 			width: 5
 		}, {
 			columnId: "noDataColumn2",
 			label: "NoDataColumn2",
-			property: "",
+			property: [""],
 			textAlign: "Begin",
 			type: "String",
 			width: ""
@@ -6175,9 +6329,7 @@ sap.ui.define([
 		"sap_horizon_dark",
 		"sap_horizon_hcb",
 		"sap_horizon_hcw",
-		"sap_fiori_3",
-		/** @deprecated As of version 1.120 */
-		"sap_belize"
+		"sap_fiori_3"
 	]) {
 		QUnit.test(sTheme + "; Export button", async function(assert) {
 			let sExpectedButtontype;

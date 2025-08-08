@@ -47,6 +47,10 @@ sap.ui.define([
 	 * This plugin is intended for server-side models and multi-selection mode. Range selections, including Select All, only work properly if the
 	 * count is known. Make sure the model/binding is configured to request the count from the service.
 	 * For ease of use, client-side models and single selection are also supported.
+	 *
+	 * With ODataV4, use the {@link sap.ui.table.plugins.ODataV4MultiSelection ODataV4MultiSelection} plugin or the
+	 * {@link sap.ui.table.plugins.ODataV4SingleSelection ODataV4SingleSelection} plugin instead of this one.
+	 *
 	 * @extends sap.ui.table.plugins.SelectionPlugin
 	 *
 	 * @author SAP SE
@@ -138,6 +142,7 @@ sap.ui.define([
 	MultiSelectionPlugin.prototype.onActivate = function(oTable) {
 		SelectionPlugin.prototype.onActivate.apply(this, arguments);
 		this.oInnerSelectionPlugin = createInnerSelectionPlugin(oTable);
+		this.oInnerSelectionPlugin.setSelectionMode(this.getSelectionMode());
 		this.oInnerSelectionPlugin.attachSelectionChange(this._onSelectionChange, this);
 		attachToBinding(this, oTable.getBinding());
 		oTable.addAggregation("_hiddenDependents", this.oInnerSelectionPlugin);
@@ -159,7 +164,7 @@ sap.ui.define([
 	 */
 	MultiSelectionPlugin.prototype.onDeactivate = function(oTable) {
 		SelectionPlugin.prototype.onDeactivate.apply(this, arguments);
-		oTable.setProperty("selectionMode", SelectionMode.None);
+		oTable.setProperty("selectionMode", library.SelectionMode.None);
 		detachFromBinding(this, oTable.getBinding());
 		this.oInnerSelectionPlugin?.destroy();
 		delete this.oInnerSelectionPlugin;
@@ -259,18 +264,14 @@ sap.ui.define([
 	}
 
 	MultiSelectionPlugin.prototype.setSelectionMode = function(sSelectionMode) {
-		const oTable = this.getParent();
+		this.setProperty("selectionMode", sSelectionMode, true);
 
-		if (oTable) {
-			oTable.setProperty("selectionMode", sSelectionMode, true);
+		if (!this.isActive()) {
+			return this;
 		}
 
-		if (this.oInnerSelectionPlugin) {
-			this.oInnerSelectionPlugin.setSelectionMode(sSelectionMode);
-		}
-
-		this.setProperty("selectionMode", sSelectionMode);
-
+		this.getControl().setProperty("selectionMode", sSelectionMode);
+		this.oInnerSelectionPlugin.setSelectionMode(sSelectionMode);
 		updateHeaderSelectorIcon(this);
 
 		return this;
@@ -323,6 +324,10 @@ sap.ui.define([
 	 * @public
 	 */
 	MultiSelectionPlugin.prototype.selectAll = function(oEventPayload) {
+		if (!this.isActive()) {
+			return Promise.reject(new Error("Plugin is disabled"));
+		}
+
 		if (!this._bLimitDisabled) {
 			return Promise.reject(new Error("Not possible if the limit is enabled"));
 		}
@@ -416,6 +421,10 @@ sap.ui.define([
 		const oTable = this.getControl();
 		const sSelectionMode = this.getSelectionMode();
 
+		if (!this.isActive()) {
+			return Promise.reject(new Error("Plugin is disabled"));
+		}
+
 		if (sSelectionMode === SelectionMode.None) {
 			return Promise.reject(new Error("SelectionMode is '" + SelectionMode.None + "'"));
 		}
@@ -474,6 +483,10 @@ sap.ui.define([
 	MultiSelectionPlugin.prototype.addSelectionInterval = function(iIndexFrom, iIndexTo, oEventPayload) {
 		const oTable = this.getControl();
 		const sSelectionMode = this.getSelectionMode();
+
+		if (!this.isActive()) {
+			return Promise.reject(new Error("Plugin is disabled"));
+		}
 
 		if (sSelectionMode === SelectionMode.None) {
 			return Promise.reject(new Error("SelectionMode is '" + SelectionMode.None + "'"));

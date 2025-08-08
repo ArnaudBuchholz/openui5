@@ -15,10 +15,8 @@ sap.ui.define([
 	"sap/ui/dt/DOMUtil",
 	"sap/ui/dt/ElementUtil",
 	"sap/ui/dt/Overlay",
-	"sap/ui/dt/OverlayRegistry",
 	"sap/ui/dt/Util",
 	"sap/ui/events/KeyCodes",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
 	"sap/ui/fl/apply/api/FlexRuntimeInfoAPI",
 	"sap/ui/fl/initial/api/Version",
 	"sap/ui/fl/write/api/ContextBasedAdaptationsAPI",
@@ -26,9 +24,11 @@ sap.ui.define([
 	"sap/ui/fl/write/api/FeaturesAPI",
 	"sap/ui/fl/write/api/PersistenceWriteAPI",
 	"sap/ui/fl/write/api/ReloadInfoAPI",
-	"sap/ui/fl/write/api/VersionsAPI",
 	"sap/ui/fl/write/api/TranslationAPI",
+	"sap/ui/fl/write/api/VersionsAPI",
 	"sap/ui/fl/Layer",
+	"sap/ui/fl/LayerUtils",
+	"sap/ui/fl/requireAsync",
 	"sap/ui/fl/Utils",
 	"sap/ui/model/json/JSONModel",
 	"sap/ui/performance/Measurement",
@@ -40,6 +40,8 @@ sap.ui.define([
 	"sap/ui/rta/toolbar/FioriLike",
 	"sap/ui/rta/toolbar/Standalone",
 	"sap/ui/rta/util/changeVisualization/ChangeVisualization",
+	"sap/ui/rta/util/guidedTour/content/GeneralTour",
+	"sap/ui/rta/util/guidedTour/GuidedTour",
 	"sap/ui/rta/util/whatsNew/WhatsNew",
 	"sap/ui/rta/util/PluginManager",
 	"sap/ui/rta/util/PopupManager",
@@ -60,10 +62,8 @@ sap.ui.define([
 	DOMUtil,
 	ElementUtil,
 	Overlay,
-	OverlayRegistry,
 	DtUtil,
 	KeyCodes,
-	ManifestUtils,
 	FlexRuntimeInfoAPI,
 	Version,
 	ContextBasedAdaptationsAPI,
@@ -71,9 +71,11 @@ sap.ui.define([
 	FeaturesAPI,
 	PersistenceWriteAPI,
 	ReloadInfoAPI,
-	VersionsAPI,
 	TranslationAPI,
+	VersionsAPI,
 	Layer,
+	LayerUtils,
+	requireAsync,
 	FlexUtils,
 	JSONModel,
 	Measurement,
@@ -85,6 +87,8 @@ sap.ui.define([
 	FioriLikeToolbar,
 	StandaloneToolbar,
 	ChangeVisualization,
+	GeneralTour,
+	GuidedTour,
 	WhatsNew,
 	PluginManager,
 	PopupManager,
@@ -100,6 +104,7 @@ sap.ui.define([
 	const STARTED = "STARTED";
 	const STOPPED = "STOPPED";
 	const FAILED = "FAILED";
+	const sParametersAfterRestartKey = "sap.ui.rta.RuntimeAuthoring.parametersAfterRestart";
 
 	/**
 	 * Constructor for a new sap.ui.rta.RuntimeAuthoring class.
@@ -128,19 +133,15 @@ sap.ui.define([
 				/** Whether the create custom field button should be shown */
 				showToolbars: {
 					type: "boolean",
-					defaultValue: true
-				},
-
-				/** Whether rta is triggered from a dialog button */
-				triggeredFromDialog: {
-					type: "boolean",
-					defaultValue: false
+					defaultValue: true,
+					group: "restoreAfterReload"
 				},
 
 				/** Whether the window unload dialog should be shown */
 				showWindowUnloadDialog: {
 					type: "boolean",
-					defaultValue: true
+					defaultValue: true,
+					group: "restoreAfterReload"
 				},
 
 				/** sap.ui.rta.command.Stack */
@@ -156,7 +157,8 @@ sap.ui.define([
 					defaultValue: {
 						layer: Layer.CUSTOMER,
 						developerMode: true
-					}
+					},
+					group: "restoreAfterReload"
 				},
 
 				/** Defines view state of key user adaptation. Possible values: adaptation, navigation, visualization */
@@ -170,11 +172,18 @@ sap.ui.define([
 				 */
 				metadataScope: {
 					type: "string",
-					defaultValue: "default"
+					defaultValue: "default",
+					group: "restoreAfterReload"
+				},
+
+				hideReset: {
+					type: "boolean",
+					defaultValue: false,
+					group: "restoreAfterReload"
 				}
 			},
 			events: {
-				/** Fired when the runtime authoring is started */
+				/** Fired when runtime authoring is started */
 				start: {
 					parameters: {
 						editablePluginsCount: {
@@ -183,10 +192,10 @@ sap.ui.define([
 					}
 				},
 
-				/** Fired when the runtime authoring is stopped */
+				/** Fired when runtime authoring is stopped */
 				stop: {},
 
-				/** Fired when the runtime authoring failed to start */
+				/** Fired when runtime authoring failed to start */
 				failed: {
 					parameters: {
 						error: {
@@ -220,7 +229,6 @@ sap.ui.define([
 		_bNavigationModeWarningShown: false,
 		// eslint-disable-next-line object-shorthand
 		constructor: function(...aArgs) {
-			// call parent constructor
 			ManagedObject.apply(this, aArgs);
 
 			this._dependents = {};
@@ -244,20 +252,40 @@ sap.ui.define([
 			}
 			this.pServices = this.pServices.then(this.getService.bind(this, "supportTools"));
 
-			this._loadUShellServicesPromise = FlexUtils.getUShellServices(["URLParsing", "AppLifeCycle", "Navigation"])
+			this._loadUShellServicesPromise = FlexUtils.getUShellServices(["AppLifeCycle", "Navigation"])
 			.then(function(mUShellServices) {
 				this._mUShellServices = mUShellServices;
 				ReloadManager.setUShellServices(mUShellServices);
 				return FeaturesAPI.isSeenFeaturesAvailable();
 			}.bind(this))
-			.then(function(isAvailable) {
-				if (isAvailable && !ReloadManager.getDontShowWhatsNewAfterReload()) {
+			.then(function(bIsAvailable) {
+				if (bIsAvailable) {
 					this.addDependent(new WhatsNew({ layer: this.getLayer() }), "whatsNew");
 				}
+				this.addDependent(new GuidedTour(), "guidedTour");
 				return Promise.resolve();
 			}.bind(this));
 		}
 	});
+
+	RuntimeAuthoring.prototype.applySettings = function(...aArgs) {
+		const oSettings = { ...aArgs[0] };
+
+		const mParametersAfterRestart = window.sessionStorage.getItem(sParametersAfterRestartKey);
+		const aSupportedProperties = Object.values(this.getMetadata().getProperties())
+		.filter((oProperty) => oProperty.group === "restoreAfterReload");
+
+		if (mParametersAfterRestart) {
+			const aProperties = JSON.parse(mParametersAfterRestart);
+			aProperties.forEach(function(oProperty) {
+				if (aSupportedProperties.find((oSupportedProperty) => oSupportedProperty.name === oProperty.name)) {
+					oSettings[oProperty.name] = oProperty.value;
+				}
+			});
+			window.sessionStorage.removeItem(sParametersAfterRestartKey);
+		}
+		ManagedObject.prototype.applySettings.apply(this, [oSettings, aArgs[1]]);
+	};
 
 	RuntimeAuthoring.prototype.addDependent = function(oObject, sName, bCreateGetter) {
 		bCreateGetter = typeof bCreateGetter === "undefined" ? true : !!bCreateGetter;
@@ -415,6 +443,16 @@ sap.ui.define([
 				adaptationId: this._oContextBasedAdaptationsModel.getProperty("/displayedAdaptation/id")
 			});
 			if (bReloadTriggered) {
+				// After a reload RuntimeAuthoring should be initialized with the same parameters as before the reload
+				const aProperties = Object.values(this.getMetadata().getProperties())
+				.filter((oProperty) => oProperty.group === "restoreAfterReload")
+				.map((oProperty) => {
+					return {
+						name: oProperty.name,
+						value: oProperty.get(this)
+					};
+				});
+				window.sessionStorage.setItem(sParametersAfterRestartKey, JSON.stringify(aProperties));
 				// FLP Plugin reacts on this error string and doesn't pass the error on the UI
 				throw Error("Reload triggered");
 			}
@@ -462,8 +500,28 @@ sap.ui.define([
 			}
 			setBlockedOnRootElements.call(this, true);
 
-			if (this.getWhatsNew) {
-				this.getWhatsNew().initializeWhatsNewDialog();
+			const aSeenFeatureIds = await FeaturesAPI.getSeenFeatureIds({ layer: this.getLayer() });
+
+			const bGuidedTourAutostart = await shouldAutoStartGuidedTour(this.getRootControlInstance(), this.getLayer(), aSeenFeatureIds);
+
+			// The What's new should only be shown once per session
+			const sWhatsNewReloadFlag = "sap.ui.rta.dontShowWhatsNewAfterReload";
+			const bShowWhatsNew = this.getWhatsNew && !window.sessionStorage.getItem(sWhatsNewReloadFlag);
+
+			if (bGuidedTourAutostart) {
+				const oGuidedTour = this.getGuidedTour();
+				oGuidedTour.attachTourClosed(() => {
+					if (bShowWhatsNew) {
+						// we want to exclude the guided tour feature from the whats new dialog if the tour opens before the dialog
+						const aExcludeGuidedTourFeature = ["GuidedTour"];
+						this.getWhatsNew().initializeWhatsNewDialog(aSeenFeatureIds, aExcludeGuidedTourFeature);
+						window.sessionStorage.setItem(sWhatsNewReloadFlag, true);
+					}
+				});
+				oGuidedTour.autoStart(GeneralTour.getTourContent());
+			} else if (bShowWhatsNew) {
+				this.getWhatsNew().initializeWhatsNewDialog(aSeenFeatureIds);
+				window.sessionStorage.setItem(sWhatsNewReloadFlag, true);
 			}
 
 			// PopupManager sets the toolbar to already open popups' autoCloseAreas
@@ -575,7 +633,11 @@ sap.ui.define([
 					await this._oSerializer.clearCommandStack(/* bRemoveChanges = */true);
 				}
 			}
-			const oReloadInfo = bSkipRestart ? {} : await ReloadManager.checkReloadOnExit({
+			const bSkipRestartViaSessionStorage = window.sessionStorage.getItem("sap.ui.rta.skipReload");
+			if (bSkipRestartViaSessionStorage) {
+				window.sessionStorage.removeItem("sap.ui.rta.skipReload");
+			}
+			const oReloadInfo = (bSkipRestart || bSkipRestartViaSessionStorage) ? {} : await ReloadManager.checkReloadOnExit({
 				layer: this.getLayer(),
 				selector: this.getRootControlInstance(),
 				isDraftAvailable: this._oVersionsModel.getProperty("/draftAvailable"),
@@ -594,7 +656,6 @@ sap.ui.define([
 			if (!bSkipRestart) {
 				ReloadInfoAPI.removeInfoSessionStorage(this.getRootControlInstance());
 				ReloadManager.handleReloadOnExit(oReloadInfo);
-				ReloadManager.removeDontShowWhatsNewAfterReload();
 			}
 			VersionsAPI.clearInstances();
 		} catch (vError) {
@@ -995,15 +1056,70 @@ sap.ui.define([
 		const bIsContextBasedAdaptationAvailable = await FeaturesAPI.isContextBasedAdaptationAvailable(sLayer);
 		const oAppLifeCycleService = await FlexUtils.getUShellService("AppLifeCycle");
 		const bIsHomePage = oAppLifeCycleService?.getCurrentApplication()?.homePage || false;
-		const oManifest = FlexUtils.getAppDescriptor(oRootControl);
-		// context based adaptation is not supported for overview pages
-		const bIsContextBasedAdaptationSupported = oManifest && !ManifestUtils.getOvpEntry(oManifest);
 
 		return {
 			publishAvailable: bIsPublishAvailable,
 			saveAsAvailable: !bIsHomePage && bIsPublishAvailable && bIsSaveAsAvailable,
-			contextBasedAdaptationAvailable: !bIsHomePage && bIsContextBasedAdaptationSupported && bIsContextBasedAdaptationAvailable
+			contextBasedAdaptationAvailable: !bIsHomePage && bIsContextBasedAdaptationAvailable
 		};
+	}
+
+	/**
+	 * Checks if the guided tour should be started automatically.
+	 *
+	 * @param {sap.ui.core.Control} oRootControl - Root control of the application
+	 * @param {string} sLayer - Layer to get the correct connector
+	 * @returns {Promise<boolean>} Resolves to a boolean indicating if the guided tour should be started automatically
+	 * @ui5-restricted sap.ui.rta
+	 */
+	async function shouldAutoStartGuidedTour(oRootControl, sLayer, aSeenFeatureIds) {
+		const aConnectors = FlexUtils.getConnectors();
+		const aProhibitedConnectors = ["LocalStorageConnector", "SessionStorageConnector"];
+		const bHasConnectors = aConnectors.length > 0;
+		const bHasOnlyAllowedConnectors = bHasConnectors
+		&& aConnectors.every((sConnector) => !aProhibitedConnectors.includes(sConnector));
+		const sUIAdaptationTourReloadFlag = "sap.ui.rta.dontShowUIAdaptationTourAfterReload";
+
+		if (
+			!bHasOnlyAllowedConnectors
+			|| LayerUtils.isDeveloperLayer(sLayer)
+			|| window.sessionStorage.getItem(sUIAdaptationTourReloadFlag)
+		) {
+			return false;
+		}
+
+		// We need this check to differentiate between our test systems and real customer systems.
+		const sUserId = await FlexRuntimeInfoAPI.getUserId();
+		if (sUserId === "DEFAULT_USER" || !sUserId) {
+			return false;
+		}
+
+		const aHasOwnChanges = await PersistenceWriteAPI._getFlexObjectsForUser({
+			selector: oRootControl,
+			layer: sLayer,
+			includeManifestChanges: true,
+			includeAnnotationChanges: true
+		});
+
+		const aVersionsFromUser = VersionsAPI.getCreatedVersionsByUser(
+			{
+				layer: sLayer,
+				control: oRootControl
+			},
+			sUserId
+		);
+
+		let bAutostartGuidedTour = true;
+
+		if (!aHasOwnChanges || aHasOwnChanges.length > 0 || aVersionsFromUser.length > 0 || aSeenFeatureIds.length > 0) {
+			bAutostartGuidedTour = false;
+		}
+
+		// UI Adaptation Tour should only be shown once per session
+		if (bAutostartGuidedTour) {
+			window.sessionStorage.setItem(sUIAdaptationTourReloadFlag, true);
+		}
+		return bAutostartGuidedTour;
 	}
 
 	function showTechnicalError(vError) {
@@ -1119,7 +1235,7 @@ sap.ui.define([
 
 	async function saveAndReload() {
 		if (this.canSave()) {
-			const sAction = await Utils.showMessageBox("warning", "MSG_SAVE_AND_RELOAD_DIALOG", {
+			const sAction = await Utils.showMessageBox("information", "MSG_SAVE_AND_RELOAD_DIALOG", {
 				actions: [MessageBox.Action.OK, MessageBox.Action.CANCEL],
 				emphasizedAction: MessageBox.Action.OK
 			});
@@ -1136,7 +1252,7 @@ sap.ui.define([
 		}
 		RuntimeAuthoring.enableRestart(this.getLayer(), this.getRootControlInstance());
 		await this.stop(true, true, true);
-		ReloadManager.reloadPage();
+		ReloadManager.triggerReload({});
 	}
 
 	function saveOnly(oEvent) {
@@ -1251,7 +1367,6 @@ sap.ui.define([
 	function handleDiscard() {
 		const sLayer = this.getLayer();
 		const oReloadInfo = {
-			layer: sLayer,
 			removeDraft: true,
 			selector: this.getRootControlInstance()
 		};
@@ -1463,6 +1578,7 @@ sap.ui.define([
 		}
 
 		const oProperties = {
+			id: "sapUIRta_toolbar",
 			rtaInformation: {
 				flexSettings: this.getFlexSettings(),
 				rootControl: this.getRootControlInstance(),
@@ -1489,10 +1605,15 @@ sap.ui.define([
 		oProperties.saveAndReload = saveAndReload.bind(this);
 
 		let oToolbar;
-		if (Utils.isOriginalFioriToolbarAccessible()) {
-			oToolbar = new FioriToolbar(oProperties);
-		} else if (Utils.getFiori2Renderer()) {
-			oToolbar = new FioriLikeToolbar(oProperties);
+		const bUshellAvailable = !!FlexUtils.getUshellContainer();
+		if (bUshellAvailable) {
+			const oUshellRtaApi = await requireAsync("sap/ushell/api/RTA");
+			oProperties.ushellApi = oUshellRtaApi;
+			if (Utils.isOriginalFioriToolbarAccessible()) {
+				oToolbar = new FioriToolbar(oProperties);
+			} else {
+				oToolbar = new FioriLikeToolbar(oProperties);
+			}
 		} else {
 			oToolbar = new StandaloneToolbar(oProperties);
 		}
@@ -1500,7 +1621,6 @@ sap.ui.define([
 
 		await oToolbar.onFragmentLoaded();
 		const bTranslationAvailable = await FeaturesAPI.isKeyUserTranslationEnabled(this.getLayer());
-		const bWhatsNewFeaturesAvailable = await FeaturesAPI.isSeenFeaturesAvailable();
 		const bAppVariantsAvailable = mButtonsAvailability.saveAsAvailable;
 		const bExtendedOverview = bAppVariantsAvailable && RtaAppVariantFeature.isOverviewExtended();
 		const oUriParameters = new URLSearchParams(window.location.search);
@@ -1529,10 +1649,6 @@ sap.ui.define([
 				visible: bTranslationAvailable,
 				enabled: this.bPersistedDataTranslatable
 			},
-			newFeaturesOverview: {
-				visible: bWhatsNewFeaturesAvailable,
-				enabled: bWhatsNewFeaturesAvailable
-			},
 			appVariantMenu: {
 				visible: bAppVariantsAvailable,
 				enabled: bAppVariantsAvailable,
@@ -1550,7 +1666,7 @@ sap.ui.define([
 				}
 			},
 			restore: {
-				visible: !this._oVersionsModel.getProperty("/versioningEnabled"),
+				visible: !this._oVersionsModel.getProperty("/versioningEnabled") && this.getHideReset() === false,
 				enabled: this.bInitialResetEnabled
 			},
 			contextBasedAdaptation: {
@@ -1576,16 +1692,18 @@ sap.ui.define([
 		this.getToolbar().setModel(this._oToolbarControlsModel, "controls");
 
 		if (bTranslationAvailable) {
-			const aSourceLanguages = await TranslationAPI.getSourceLanguages(
+			TranslationAPI.getSourceLanguages(
 				{selector: this.getRootControlInstance(), layer: this.getLayer()}
-			);
-			this.bPersistedDataTranslatable = aSourceLanguages.length > 0;
-			this._oToolbarControlsModel.setProperty("/translation/enabled", this.bPersistedDataTranslatable);
+			).then(function(aSourceLanguages) {
+				this.bPersistedDataTranslatable = aSourceLanguages.length > 0;
+				this._oToolbarControlsModel.setProperty("/translation/enabled", this.bPersistedDataTranslatable);
+			}.bind(this));
 		}
 
 		if (bAppVariantsAvailable) {
 			const bIsAppVariantSupported = FlexUtils.isVariantByStartupParameter(this.getRootControlInstance()) ?
 				false : await RtaAppVariantFeature.isManifestSupported();
+			this._oToolbarControlsModel.setProperty("/appVariantMenu/enabled", bIsAppVariantSupported);
 			this._oToolbarControlsModel.setProperty("/appVariantMenu/saveAs/enabled", bIsAppVariantSupported);
 			this._oToolbarControlsModel.setProperty("/appVariantMenu/overview/enabled", bIsAppVariantSupported);
 			this._oToolbarControlsModel.setProperty("/appVariantMenu/manageApps/enabled", bIsAppVariantSupported);
@@ -1594,9 +1712,6 @@ sap.ui.define([
 
 	/**
 	 * Delete all changes for current layer and root control's component.
-	 * In case of Base Applications (no App Variants) the manifest Changes and UI Changes are saved
-	 * in different Flex Persistence instances, the changes for both places will be deleted. For App Variants
-	 * all the changes are saved in one place.
 	 *
 	 * @returns {Promise} Resolves when change persistence is reset
 	 */
@@ -1611,9 +1726,7 @@ sap.ui.define([
 			this.getCommandStack().removeAllCommands(true);
 			ReloadInfoAPI.removeInfoSessionStorage(oSelector);
 			const oReloadInfo = {
-				layer: sLayer,
-				ignoreMaxLayerParameter: true,
-				triggerHardReload: true
+				ignoreMaxLayerParameter: true
 			};
 			return ReloadManager.triggerReload(oReloadInfo);
 		}.bind(this))
@@ -1643,77 +1756,6 @@ sap.ui.define([
 	}
 
 	/**
-	 * Triggers a callback when a control gets created and its associated overlay is visible.
-	 *
-	 * @param {string} sNewControlID - ID of the newly created control
-	 * @param {Function} fnCallback - Callback to execute when the conditions are met, the overlay is the only parameter
-	 */
-	function scheduleOnCreatedAndVisible(sNewControlID, fnCallback) {
-		function onGeometryChanged(oEvent) {
-			const oElementOverlay = oEvent.getSource();
-			if (oElementOverlay.getGeometry() && oElementOverlay.getGeometry().visible) {
-				oElementOverlay.detachEvent("geometryChanged", onGeometryChanged);
-				fnCallback(oElementOverlay);
-			}
-		}
-
-		function onGeometryCheck(oElementOverlay) {
-			// the control can be set to visible, but still have no size when we do the check
-			// that's why we also attach to 'geometryChanged' and check if the overlay has a size
-			if (!oElementOverlay.getGeometry() || !oElementOverlay.getGeometry().visible) {
-				oElementOverlay.attachEvent("geometryChanged", onGeometryChanged);
-			} else {
-				fnCallback(oElementOverlay);
-			}
-		}
-
-		scheduleOnCreated.call(this, sNewControlID, function(oNewOverlay) {
-			// the overlay needs to be rendered
-			if (oNewOverlay.isRendered()) {
-				onGeometryCheck(oNewOverlay);
-			} else {
-				oNewOverlay.attachEventOnce("afterRendering", function(oEvent) {
-					onGeometryCheck(oEvent.getSource());
-				});
-			}
-		});
-	}
-
-	/**
-	 * Function to automatically start the rename plugin on a container when it gets created
-	 *
-	 * @param {object} vAction - The create action from designtime metadata
-	 * @param {string} sNewControlID - The id of the newly created container
-	 * @param {string} sNewContainerName - The name of the newly created container
-	 */
-	function scheduleRenameOnCreatedContainer(vAction, sNewControlID, sNewContainerName) {
-		const fnStartEdit = function(oElementOverlay) {
-			oElementOverlay.setSelected(true);
-			this.getPluginManager().getPlugin("rename").startEdit(oElementOverlay);
-		}.bind(this);
-
-		scheduleOnCreatedAndVisible.call(this, sNewControlID, async function(oElementOverlay) {
-			// get container of the new control for rename
-			const sNewContainerID = this.getPluginManager().getPlugin("createContainer").getCreatedContainerId(
-				vAction,
-				oElementOverlay.getElement().getId()
-			);
-			const oContainerElementOverlay = OverlayRegistry.getOverlay(sNewContainerID);
-			if (oContainerElementOverlay) {
-				if (sNewContainerName) {
-					await this.getPluginManager().getPlugin("rename").createRenameCommand(oContainerElementOverlay, sNewContainerName);
-					// The create container and rename must be a single command in the stack
-					this.getCommandStack().compositeLastTwoCommands();
-				} else {
-					fnStartEdit(oContainerElementOverlay);
-				}
-			} else {
-				scheduleOnCreatedAndVisible.call(this, sNewContainerID, fnStartEdit);
-			}
-		}.bind(this));
-	}
-
-	/**
 	 * Function to handle modification of an element
 	 *
 	 * @param {sap.ui.base.Event} oEvent Event object
@@ -1723,8 +1765,6 @@ sap.ui.define([
 		// events are synchronously reset after the handlers are called
 		const oCommand = oEvent.getParameter("command");
 		const sNewControlID = oEvent.getParameter("newControlId");
-		const vAction = oEvent.getParameter("action");
-		const sContainerTitle = oEvent.getParameter("title");
 
 		this._pElementModified = this._pElementModified.then(function() {
 			this.getPluginManager().handleStopCutPaste();
@@ -1738,9 +1778,6 @@ sap.ui.define([
 							fnSelect(oElementOverlay.getElement());
 						}
 					});
-					if (vAction) {
-						scheduleRenameOnCreatedContainer.call(this, vAction, sNewControlID, sContainerTitle);
-					}
 				}
 				return this.getCommandStack().pushAndExecute(oCommand)
 				// Error handling when a command fails is done in the Stack

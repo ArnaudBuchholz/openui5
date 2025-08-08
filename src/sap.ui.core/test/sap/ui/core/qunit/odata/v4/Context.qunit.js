@@ -3038,12 +3038,18 @@ sap.ui.define([
 });
 
 	//*********************************************************************************************
-	QUnit.test("requestSideEffectsInternal: binding with cache", function (assert) {
+[false, true].forEach((bInProgress) => {
+	const sTitle = "requestSideEffectsInternal: binding with cache, refresh in progress: "
+		+ bInProgress;
+
+	QUnit.test(sTitle, function (assert) {
 		var oBinding = {
-				oCache : {},
-				getContext : function () {},
+				oCache : bInProgress ? undefined : {
+					hasChangeListeners : function () { return false; }
+				},
+				getContext : function () { return null; },
 				getPath : function () { return "/TEAMS"; },
-				requestSideEffects : function () {}
+				requestSideEffects : mustBeMocked
 			},
 			oContext = Context.create({/*oModel*/}, oBinding, "/TEAMS('42')"),
 			bSideEffectsRequested = false,
@@ -3058,7 +3064,7 @@ sap.ui.define([
 		// code under test
 		assert.strictEqual(oContext.requestSideEffectsInternal([], "groupId"), undefined);
 
-		this.mock(oBinding).expects("requestSideEffects")
+		this.mock(oBinding).expects("requestSideEffects").exactly(bInProgress ? 0 : 1)
 			.withExactArgs("groupId", ["Name", "TeamBudget"], sinon.match.same(oContext))
 			.returns(oPromise);
 
@@ -3068,11 +3074,12 @@ sap.ui.define([
 			"/TEAMS('42')/TeamBudget"
 		], "groupId");
 
-		assert.strictEqual(oResultPromise.isPending(), true, "a SyncPromise");
+		assert.strictEqual(oResultPromise.isPending(), !bInProgress, "a SyncPromise");
 		return oResultPromise.then(function () {
-			assert.strictEqual(bSideEffectsRequested, true);
+			assert.strictEqual(bSideEffectsRequested, !bInProgress);
 		});
 	});
+});
 
 	//*********************************************************************************************
 [function (oBinding, oTargetBinding, oTargetContext) {
@@ -3082,7 +3089,7 @@ sap.ui.define([
 	// --> please think of "/..." as "/TEAMS('1')"
 	var oParentBinding = {
 			oCache : null,
-			getBoundContext : function () {},
+			getBoundContext : mustBeMocked,
 			getContext : function () { return oTargetContext; },
 			getPath : function () { return "TEAM_2_MANAGER"; }
 		},
@@ -3094,7 +3101,9 @@ sap.ui.define([
 		.returns("Manager_to_Team");
 	this.mock(oTargetBinding).expects("getPath")
 		.returns("/...");
-	this.mock(oTargetBinding.oCache).expects("hasChangeListeners").never();
+	this.mock(oTargetBinding.oCache).expects("hasChangeListeners")
+		.returns(false);
+	this.mock(oTargetBinding).expects("getContext").returns(null);
 }, function (oBinding, oTargetBinding, oTargetContext) {
 	// bubble up through empty path:
 	// oBinding > oIntermediateBinding > oParentBinding > oTargetBinding
@@ -3102,7 +3111,10 @@ sap.ui.define([
 	// oParentBinding has cache, but empty path
 	// --> please think of "/..." as "/TEAMS('1')"
 	var oIntermediateBinding = {
-			getBoundContext : function () {},
+			oCache : {
+				hasChangeListeners : function () { return false; }
+			},
+			getBoundContext : mustBeMocked,
 			getContext : function () { /*return oParentContext;*/ },
 			getPath : function () { return ""; }
 		},
@@ -3112,7 +3124,7 @@ sap.ui.define([
 			oCache : {
 				hasChangeListeners : function () { return true; }
 			},
-			getBoundContext : function () {},
+			getBoundContext : mustBeMocked,
 			getContext : function () { return oTargetContext; },
 			getPath : function () { return ""; }
 		},
@@ -3127,6 +3139,41 @@ sap.ui.define([
 		.returns("/...");
 	this.mock(oTargetBinding.oCache).expects("hasChangeListeners")
 		.returns(true);
+	this.mock(oTargetBinding).expects("getContext").returns(null);
+}, function (oBinding, oTargetBinding, oTargetContext) {
+	// bubble up through empty path:
+	// oBinding > oIntermediateBinding > oParentBinding > oTargetBinding
+	// oIntermediateBinding has cache, but empty path
+	// oParentBinding looks like a refresh in progress, but has empty path
+	// --> please think of "/..." as "/TEAMS('1')"
+	var oIntermediateBinding = {
+			oCache : {
+				hasChangeListeners : function () { return false; }
+			},
+			getBoundContext : mustBeMocked,
+			getContext : function () { /*return oParentContext;*/ },
+			getPath : function () { return ""; }
+		},
+		oIntermediateContext = Context.create({}, oIntermediateBinding,
+			"/.../TEAM_2_MANAGER"),
+		oParentBinding = {
+			oCache : undefined,
+			getBoundContext : mustBeMocked,
+			getContext : function () { return oTargetContext; },
+			getPath : function () { return ""; }
+		},
+		oParentContext = Context.create({}, oParentBinding, "/.../TEAM_2_MANAGER");
+
+	this.mock(oBinding).expects("getContext")
+		.returns(oIntermediateContext);
+	this.mock(oBinding).expects("getPath")
+		.returns("TEAM_2_MANAGER/Manager_to_Team");
+	this.mock(oIntermediateBinding).expects("getContext").returns(oParentContext);
+	this.mock(oTargetBinding).expects("getPath")
+		.returns("/...");
+	this.mock(oTargetBinding.oCache).expects("hasChangeListeners")
+		.returns(true);
+	this.mock(oTargetBinding).expects("getContext").returns(null);
 }, function (oBinding, oTargetBinding, oTargetContext) {
 	// do not bubble up into return value context w/o change listeners (@see BCP: 1980108040):
 	// oBinding > oTargetBinding > oOperationBinding
@@ -3151,7 +3198,8 @@ sap.ui.define([
 		.returns("");
 	this.mock(oTargetBinding).expects("getContext")
 		.returns(oReturnValueContext);
-	this.mock(oTargetBinding.oCache).expects("hasChangeListeners").never();
+	this.mock(oTargetBinding.oCache).expects("hasChangeListeners")
+		.returns(false);
 }, function (oBinding, oTargetBinding, oTargetContext) {
 	// do not bubble up into error case:
 	// oBinding > oTargetBinding > oListBinding
@@ -3174,7 +3222,8 @@ sap.ui.define([
 		.returns("");
 	this.mock(oTargetBinding).expects("getContext")
 		.returns(oListContext);
-	this.mock(oTargetBinding.oCache).expects("hasChangeListeners").never();
+	this.mock(oTargetBinding.oCache).expects("hasChangeListeners")
+		.returns(false);
 }, function (oBinding, oTargetBinding, oTargetContext) {
 	// do not bubble up too far: once a binding with own cache has been found, only empty paths
 	// may be skipped!
@@ -3198,14 +3247,15 @@ sap.ui.define([
 		.returns("");
 	this.mock(oTargetBinding).expects("getContext")
 		.returns(oWrongContext);
-	this.mock(oTargetBinding.oCache).expects("hasChangeListeners").never();
+	this.mock(oTargetBinding.oCache).expects("hasChangeListeners")
+		.returns(false);
 }].forEach(function (fnArrange, i) {
 	QUnit.test("requestSideEffectsInternal: no own cache #" + i, function (assert) {
 		var oBinding = {
 				oCache : null,
-				getBoundContext : function () {},
-				getContext : function () {},
-				getPath : function () {}
+				getBoundContext : mustBeMocked,
+				getContext : mustBeMocked,
+				getPath : mustBeMocked
 			},
 			// this is where we call #requestSideEffectsInternal
 			oContext = Context.create({}, oBinding, "/.../TEAM_2_MANAGER/Manager_to_Team"),
@@ -3218,12 +3268,12 @@ sap.ui.define([
 			}),
 			oTargetBinding = {
 				oCache : {
-					hasChangeListeners : function () {}
+					hasChangeListeners : mustBeMocked
 				},
-				getBoundContext : function () {},
-				getContext : function () {},
-				getPath : function () {},
-				requestSideEffects : function () {} // this is where we bubble to
+				getBoundContext : mustBeMocked,
+				getContext : mustBeMocked,
+				getPath : mustBeMocked,
+				requestSideEffects : mustBeMocked // this is where we bubble to
 			},
 			oTargetContext = Context.create({}, oTargetBinding, "/...");
 
@@ -3249,20 +3299,27 @@ sap.ui.define([
 });
 
 	//*********************************************************************************************
-[false, true].forEach(function (bBinding) {
-	var sTitle = "requestSideEffectsInternal: delegate up"
-			+ (bBinding ? " and request on binding" : "");
+[undefined, false, true].forEach(function (bBinding) {
+	var sTitle = "requestSideEffectsInternal: delegate up";
+
+	if (bBinding === undefined) {
+		sTitle += " with refresh in progress";
+	} else if (bBinding) {
+		sTitle += " and request on binding";
+	}
 
 	QUnit.test(sTitle, function (assert) {
 		var oParentContext = {
 				getPath : function () { return "/SalesOrder('42')"; },
-				requestSideEffectsInternal : function () {}
+				requestSideEffectsInternal : mustBeMocked
 			},
 			oBinding = {
-				oCache : {},
+				oCache : bBinding === undefined ? undefined : {
+					hasChangeListeners : function () { return false; }
+				},
 				getContext : function () { return oParentContext; },
 				getPath : function () { return "SO_2_SOITEM"; },
-				requestSideEffects : function () {}
+				requestSideEffects : mustBeMocked
 			},
 			oContext = Context.create({}, oBinding, "/SalesOrder('42')/SO_2_SOITEM('0010')"),
 			oHelperMock = this.mock(_Helper),
@@ -3281,7 +3338,7 @@ sap.ui.define([
 		this.mock(oParentContext).expects("requestSideEffectsInternal")
 			.withExactArgs(["/SalesOrder('42')/Note"], "groupId")
 			.returns(oPromise1);
-		oHelperMock.expects("getRelativePath").exactly(bBinding ? 1 : 0)
+		oHelperMock.expects("getRelativePath").exactly(bBinding !== false ? 1 : 0)
 			.withExactArgs("/SalesOrder('42')/SO_2_SOITEM('0010')/Currency",
 				"/SalesOrder('42')/SO_2_SOITEM('0010')")
 			.returns("Currency");
@@ -3291,7 +3348,7 @@ sap.ui.define([
 
 		// code under test
 		return oContext.requestSideEffectsInternal(
-			bBinding
+			bBinding !== false
 				? ["/SalesOrder('42')/Note", "/SalesOrder('42')/SO_2_SOITEM('0010')/Currency"]
 				: ["/SalesOrder('42')/Note"],
 			"groupId"
@@ -3305,13 +3362,15 @@ sap.ui.define([
 	QUnit.test("requestSideEffectsInternal: delegate up refreshes binding", function (assert) {
 		var oParentContext = {
 				getPath : function () { return "/SalesOrder('42')"; },
-				requestSideEffectsInternal : function () {}
+				requestSideEffectsInternal : mustBeMocked
 			},
 			oBinding = {
-				oCache : {},
+				oCache : {
+					hasChangeListeners : function () { return false; }
+				},
 				getContext : function () { return oParentContext; },
 				getPath : function () { return "SO_2_SOITEM"; },
-				requestSideEffects : function () {}
+				requestSideEffects : mustBeMocked
 			},
 			sPath = "/SalesOrder('42')/SO_2_SOITEM('0010')",
 			oContext = Context.create({}, oBinding, sPath),
@@ -3350,7 +3409,7 @@ sap.ui.define([
 			function (assert) {
 		var oListBinding = {
 				oCache : null,
-				// getBoundContext : function () {},
+				// getBoundContext : mustBeMocked,
 				getContext : function () { return {}; },
 				getPath : function () { return "TEAM_2_EMPLOYEES"; },
 				toString : function () { return "Foo Bar"; }
@@ -3365,26 +3424,6 @@ sap.ui.define([
 			// code under test
 			oContext.requestSideEffectsInternal(["ID"], "groupId");
 		}, new Error("Not a context binding: " + oListBinding));
-	});
-
-	//*********************************************************************************************
-	QUnit.test("requestSideEffectsInternal without own cache: list binding refresh in progress",
-			function (assert) {
-		var oListBinding = {
-				oCache : undefined, // looks like a refresh in progress
-				// getBoundContext : function () {},
-				getContext : function () { return {}; },
-				getPath : function () { return "TEAM_2_EMPLOYEES"; },
-				toString : mustBeMocked
-			},
-			oMetaModel = {},
-			oModel = {
-				getMetaModel : function () { return oMetaModel; }
-			},
-			oContext = Context.create(oModel, oListBinding, "/TEAMS('1')/TEAM_2_EMPLOYEES('2')");
-
-		// code under test
-		assert.strictEqual(oContext.requestSideEffectsInternal(["ID"], "groupId"), undefined);
 	});
 
 	//*********************************************************************************************
@@ -5086,11 +5125,11 @@ sap.ui.define([
 	});
 
 	//*********************************************************************************************
-[false, true].forEach((bDoNotUpdateAnnotation) => {
+[false, true].forEach((bSilent) => {
 	[false, true].forEach((bDestroyed) => {
 		[false, true].forEach((bDeleted) => {
 			[false, true].forEach((bIsHeaderContext) => {
-				const sTitle = "doSetSelected, update annotation = " + !bDoNotUpdateAnnotation
+				const sTitle = "doSetSelected, silent = " + bSilent
 					+ ", context destroyed while waiting for cache = " + bDestroyed
 					+ ", deleted context = " + bDeleted
 					+ ", context is header context = " + bIsHeaderContext;
@@ -5099,7 +5138,7 @@ sap.ui.define([
 				}
 
 	QUnit.test(sTitle, function (assert) {
-		const fnDone = bDestroyed && !bDoNotUpdateAnnotation ? assert.async(2) : null;
+		const fnDone = bDestroyed && !bSilent ? assert.async(2) : null;
 		const oBinding = {
 			getHeaderContext : mustBeMocked,
 			onKeepAliveChanged : mustBeMocked
@@ -5122,10 +5161,11 @@ sap.ui.define([
 		assert.strictEqual(oContext.isSelected(), false);
 
 		// code under test (nothing happens)
-		assert.strictEqual(oContext.doSetSelected(false, bDoNotUpdateAnnotation), false);
+		assert.strictEqual(oContext.doSetSelected(false, bSilent), false);
 
 		let iKeepAliveChanged = 0;
-		oBindingMock.expects("onKeepAliveChanged").withExactArgs(sinon.match.same(oContext))
+		oBindingMock.expects("onKeepAliveChanged").exactly(bSilent ? 0 : 1)
+			.withExactArgs(sinon.match.same(oContext))
 			.callsFake(function () {
 				assert.strictEqual(oContext.bSelected, true);
 				iKeepAliveChanged += 1;
@@ -5162,17 +5202,17 @@ sap.ui.define([
 				fnProcessor(oCache, "/some/path");
 			}
 		};
-		oContextMock.expects("withCache").exactly(bDoNotUpdateAnnotation ? 0 : 1)
+		oContextMock.expects("withCache").exactly(bSilent ? 0 : 1)
 			.withExactArgs(sinon.match.func, "")
 			.callsFake(withCache.bind(this, true));
 
 		// code under test (false -> true)
-		assert.strictEqual(oContext.doSetSelected(true, bDoNotUpdateAnnotation), true);
+		assert.strictEqual(oContext.doSetSelected(true, bSilent), true);
 
 		assert.strictEqual(oContext.isSelected(), true);
 
 		// code under test (nothing happens)
-		assert.strictEqual(oContext.doSetSelected(true, bDoNotUpdateAnnotation), false);
+		assert.strictEqual(oContext.doSetSelected(true, bSilent), false);
 
 		// code under test
 		assert.strictEqual(oContext.toString(),
@@ -5180,7 +5220,8 @@ sap.ui.define([
 
 		assert.strictEqual(oContext.iSelectionCount, "~iSelectionCount~", "unchanged");
 
-		oBindingMock.expects("onKeepAliveChanged").withExactArgs(sinon.match.same(oContext))
+		oBindingMock.expects("onKeepAliveChanged").exactly(bSilent ? 0 : 1)
+			.withExactArgs(sinon.match.same(oContext))
 			.callsFake(function () {
 				assert.strictEqual(oContext.bSelected, false);
 				iKeepAliveChanged += 1;
@@ -5192,18 +5233,18 @@ sap.ui.define([
 				assert.strictEqual(oContext.bSelected, false);
 				iSelectionChanged += 1;
 			});
-		oContextMock.expects("withCache").exactly(bDoNotUpdateAnnotation ? 0 : 1)
+		oContextMock.expects("withCache").exactly(bSilent ? 0 : 1)
 			.withExactArgs(sinon.match.func, "")
 			.callsFake(withCache.bind(this, false));
 
 		// code under test (true -> false)
-		assert.strictEqual(oContext.doSetSelected(false, bDoNotUpdateAnnotation), true);
+		assert.strictEqual(oContext.doSetSelected(false, bSilent), true);
 
 		assert.strictEqual(oContext.isSelected(), false);
 		assert.strictEqual(oContext.iSelectionCount, bIsHeaderContext ? 0 : "~iSelectionCount~");
 
 		// code under test (nothing happens)
-		assert.strictEqual(oContext.doSetSelected(false, bDoNotUpdateAnnotation), false);
+		assert.strictEqual(oContext.doSetSelected(false, bSilent), false);
 
 		// code under test
 		assert.strictEqual(oContext.toString(),
@@ -5286,7 +5327,6 @@ sap.ui.define([
 		const oContextMock = this.mock(oContext);
 		oContextMock.expects("isDeleted").withExactArgs().returns(false);
 		this.mock(_Helper).expects("isSelected").never();
-		this.mock(_Helper).expects("isDataAggregation").never();
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), true);
@@ -5335,8 +5375,6 @@ sap.ui.define([
 		this.mock(oContext).expects("isSelected").withExactArgs().returns(bSameSelection);
 		this.mock(oBinding).expects("isRelative").exactly(bSameSelection ? 0 : 1)
 			.withExactArgs().returns(false);
-		this.mock(_Helper).expects("isDataAggregation").exactly(bSameSelection ? 0 : 1)
-			.withExactArgs(sinon.match.same(oBinding.mParameters)).returns(false);
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), !bSameSelection);
@@ -5366,15 +5404,12 @@ sap.ui.define([
 
 		oContextMock.expects("isSelected").withExactArgs().returns(true);
 		oBindingMock.expects("isRelative").withExactArgs().returns(false);
-		this.mock(_Helper).expects("isDataAggregation")
-			.withExactArgs(sinon.match.same(oBinding.mParameters)).returns(false);
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), true);
 
 		oContextMock.expects("isSelected").withExactArgs().returns(true);
 		oBindingMock.expects("isRelative").withExactArgs().returns(true);
-		// Note: #isDataAggregation not invoked
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), false);
@@ -5388,7 +5423,6 @@ sap.ui.define([
 			oContext = Context.create({/*oModel*/}, oBinding, "/TEAMS('1')");
 
 		this.mock(oContext).expects("isSelected").never();
-		this.mock(_Helper).expects("isDataAggregation").never();
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), false);
@@ -5415,35 +5449,11 @@ sap.ui.define([
 		this.mock(oHeaderContext).expects("isSelected").withExactArgs().returns(false);
 		this.mock(oContext).expects("isSelected").withExactArgs().returns(true);
 		this.mock(oBinding).expects("isRelative").never();
-		this.mock(_Helper).expects("isDataAggregation")
-			.withExactArgs(sinon.match.same(oBinding.mParameters)).returns(false);
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), true);
 	});
 });
-
-	//*********************************************************************************************
-	QUnit.test("isEffectivelyKeptAlive: data aggregation", function (assert) {
-		var oBinding = {
-				getHeaderContext : mustBeMocked,
-				isRelative : mustBeMocked,
-				mParameters : {}
-			},
-			oContext = Context.create({/*oModel*/}, oBinding, "/TEAMS('1')"),
-			oHeaderContext = Context.create({/*oModel*/}, oBinding, "/TEAMS");
-
-		this.mock(oBinding).expects("getHeaderContext").twice()
-			.withExactArgs().returns(oHeaderContext);
-		this.mock(oHeaderContext).expects("isSelected").withExactArgs().returns(false);
-		this.mock(oContext).expects("isSelected").withExactArgs().returns(true);
-		this.mock(oBinding).expects("isRelative").withExactArgs().returns(false);
-		this.mock(_Helper).expects("isDataAggregation")
-			.withExactArgs(sinon.match.same(oBinding.mParameters)).returns(true);
-
-		// code under test
-		assert.strictEqual(oContext.isEffectivelyKeptAlive(), false);
-	});
 
 	//*********************************************************************************************
 	QUnit.test("isEffectivelyKeptAlive: no key predicate", function (assert) {
@@ -5459,8 +5469,6 @@ sap.ui.define([
 			.withExactArgs().returns(oHeaderContext);
 		this.mock(oHeaderContext).expects("isSelected").withExactArgs().returns(false);
 		this.mock(oContext).expects("isSelected").withExactArgs().returns(true);
-		this.mock(_Helper).expects("isDataAggregation")
-			.withExactArgs(sinon.match.same(oBinding.mParameters)).returns(false);
 
 		// code under test
 		assert.strictEqual(oContext.isEffectivelyKeptAlive(), false);

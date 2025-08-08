@@ -24,6 +24,8 @@ sap.ui.define([
 	"sap/ui/rta/toolbar/versioning/Versioning",
 	"sap/ui/rta/toolbar/AdaptationRenderer",
 	"sap/ui/rta/toolbar/Base",
+	"sap/ui/rta/util/guidedTour/content/GeneralTour",
+	"sap/ui/rta/util/guidedTour/GuidedTour",
 	"sap/ui/rta/util/whatsNew/WhatsNewOverview",
 	"sap/ui/rta/Utils"
 ], function(
@@ -48,6 +50,8 @@ sap.ui.define([
 	Versioning,
 	AdaptationRenderer,
 	Base,
+	GeneralTour,
+	GuidedTour,
 	WhatsNewOverview,
 	Utils
 ) {
@@ -121,8 +125,8 @@ sap.ui.define([
 
 	Adaptation.prototype.exit = function(...aArgs) {
 		window.removeEventListener("resize", this._onResize);
-		this._aIntersectionObservers.forEach(function(oInstersectionObserver) {
-			oInstersectionObserver.disconnect();
+		(this._aIntersectionObservers || []).forEach(function(oIntersectionObserver) {
+			oIntersectionObserver.disconnect();
 		});
 		Base.prototype.exit.apply(this, aArgs);
 	};
@@ -278,8 +282,11 @@ sap.ui.define([
 					overviewForDeveloper: onOverviewForDeveloperPressed.bind(this),
 					restore: this.eventHandler.bind(this, "Restore"),
 					formatSaveAsEnabled,
+					formatManageAppVariants: formatAppVariantsEnabled.bind(this),
+					formatSaveAsAppVariants: formatSaveAsAppVariantsEnabled.bind(this),
 					saveAs: onSaveAsPressed.bind(this),
-					openWhatsNewOverviewDialog
+					openWhatsNewOverviewDialog,
+					openGuidedTour
 				}
 			}).then(function(oMenu) {
 				oMenu.addStyleClass(Utils.getRtaStyleClassName());
@@ -369,6 +376,15 @@ sap.ui.define([
 
 	function formatSaveAsEnabled(bGeneralSaveAsEnabled, sDisplayedVersion) {
 		return bGeneralSaveAsEnabled && sDisplayedVersion !== Version.Number.Draft;
+	}
+
+	function formatAppVariantsEnabled(bAppVariantsMenuEnabled) {
+		return bAppVariantsMenuEnabled ? null : this.getTextResources().getText("TOOLTIP_MANAGE_APPS_TXT_DISABLED");
+	}
+
+	function formatSaveAsAppVariantsEnabled(bAppVariantSaveAsEnabled, sDisplayedVersion) {
+		return (bAppVariantSaveAsEnabled && sDisplayedVersion !== Version.Number.Draft)
+			? null : this.getTextResources().getText("TOOLTIP_SAVE_AS_APP_VARIANT_DISABLED");
 	}
 
 	function onSaveAsPressed() {
@@ -503,6 +519,10 @@ sap.ui.define([
 		WhatsNewOverview.openWhatsNewOverviewDialog();
 	}
 
+	function openGuidedTour() {
+		new GuidedTour().start(GeneralTour.getTourContent());
+	}
+
 	Adaptation.prototype.getControl = function(sName) {
 		var oControl = Element.getElementById(`${this.getId()}_fragment--sapUiRta_${sName}`);
 		// Control is inside the ActionsMenu
@@ -536,6 +556,8 @@ sap.ui.define([
 		oUrlParams.set("feature", (oFeedbackUrlParams.connector === "KeyUserConnector" ? "BTP" : "ABAP"));
 		oUrlParams.set("appId", oFeedbackUrlParams.appId);
 		oUrlParams.set("appVersion", oFeedbackUrlParams.appVersion);
+		// Add product filter for qualtrics colleagues
+		oUrlParams.set("product_filter", "Key%20User%20Adaptation");
 
 		var oFeedbackDialogModel = new JSONModel({
 			url: `${sURL}?${oUrlParams.toString()}`

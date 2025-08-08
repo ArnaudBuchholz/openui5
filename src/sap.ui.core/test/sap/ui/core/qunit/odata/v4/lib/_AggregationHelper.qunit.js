@@ -1221,7 +1221,7 @@ sap.ui.define([
 	});
 
 	//*********************************************************************************************
-[undefined, 1, 2, 3, Number.MAX_SAFE_INTEGER, Infinity].forEach(function (iExpandTo) {
+[undefined, 1, 2, 3, Number.MAX_SAFE_INTEGER, 1E16, Infinity].forEach(function (iExpandTo) {
 	[false, true].forEach(function (bStored) {
 		[false, true].forEach(function (bAllLevels) {
 			[false, true].forEach(function (bExpandLevels) {
@@ -1262,10 +1262,11 @@ sap.ui.define([
 				$DistanceFromRoot : "DistFromRoot",
 				$LimitedDescendantCount : "LtdDescendant_Count"
 			} : {},
-			iExpectedLevels = iExpandTo || 1,
 			aExpectedSelect = iExpandTo > 1 || bExpandLevels
 			? ["ID", "SomeNodeID", "DistFromRoot", "LtdDescendant_Count", "myDrillState"]
 			: ["ID", "SomeNodeID", "myDrillState"],
+			iNormalizedExpandTo
+				= (iExpandTo > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : iExpandTo) || 1,
 			mQueryOptions = {
 				$select : ["ID"],
 				foo : "bar"
@@ -1311,7 +1312,7 @@ sap.ui.define([
 			.withExactArgs("/meta/@com.sap.vocabularies.Hierarchy.v1.RecursiveHierarchyActions#X")
 			.returns(SyncPromise.resolve("~actions~"));
 		oExpectedAggregation = Object.assign({
-			expandTo : iExpandTo || 1,
+			expandTo : iNormalizedExpandTo,
 			hierarchyQualifier : "X",
 			$fetchMetadata : oAggregation.$fetchMetadata, // remember the mock(!)
 			$metaPath : "/meta",
@@ -1328,13 +1329,14 @@ sap.ui.define([
 			{
 				$apply : bAllLevels || iExpandTo >= Number.MAX_SAFE_INTEGER
 					? "com.sap.vocabularies.Hierarchy.v1.TopLevels(HierarchyNodes=$root/Foo"
-					+ ",HierarchyQualifier='X',NodeProperty='SomeNodeID'"
-					+ (bExpandLevels && !bAllLevels ? ",ExpandLevels=~$ExpandLevels~" : "")
-					+ ")"
+						+ ",HierarchyQualifier='X',NodeProperty='SomeNodeID'"
+						+ (bExpandLevels && !bAllLevels ? ",ExpandLevels=~$ExpandLevels~" : "")
+						+ ")"
 					: "com.sap.vocabularies.Hierarchy.v1.TopLevels(HierarchyNodes=$root/Foo"
-					+ ",HierarchyQualifier='X',NodeProperty='SomeNodeID',Levels=" + iExpectedLevels
-					+ (bExpandLevels ? ",ExpandLevels=~$ExpandLevels~" : "")
-					+ ")",
+						+ ",HierarchyQualifier='X',NodeProperty='SomeNodeID',Levels="
+						+ iNormalizedExpandTo
+						+ (bExpandLevels ? ",ExpandLevels=~$ExpandLevels~" : "")
+						+ ")",
 				$select : aExpectedSelect,
 				foo : "bar"
 			});
@@ -1828,6 +1830,58 @@ sap.ui.define([
 			_AggregationHelper.checkTypeof(false, true, "some/path");
 		}, new Error("Not a true value for 'some/path'"));
 	});
+
+	//*********************************************************************************************
+[undefined, false, true].forEach(function (bGrandTotalAtBottomOnly) {
+	[false, true].forEach(function (bGrandTotalLike184) {
+		const sTitle = "handleGrandTotal: (either) grandTotal or groupLevels"
+			+ ", grandTotalAtBottomOnly = " + bGrandTotalAtBottomOnly
+			+ ", grandTotal like 1.84 = " + bGrandTotalLike184;
+
+	QUnit.test(sTitle, function () {
+		const oAggregation = { // filled before by buildApply
+			aggregate : {
+				y : {grandTotal : true}
+			},
+			"grandTotal like 1.84" : bGrandTotalLike184,
+			group : {
+				a : {}
+			},
+			groupLevels : []
+		};
+		if (bGrandTotalAtBottomOnly !== undefined) {
+			oAggregation.grandTotalAtBottomOnly = bGrandTotalAtBottomOnly;
+		}
+
+		const oGrandTotal = {};
+		this.mock(_AggregationHelper).expects("removeUI5grand__")
+			.exactly(bGrandTotalLike184 ? 1 : 0)
+			.withExactArgs(sinon.match.same(oGrandTotal));
+		const aAllProperties = [];
+		this.mock(_AggregationHelper).expects("getAllProperties")
+			.withExactArgs(sinon.match.same(oAggregation)).returns(aAllProperties);
+		this.mock(_AggregationHelper).expects("setAnnotations")
+			.withExactArgs(sinon.match.same(oGrandTotal), true, true, 0,
+				sinon.match.same(aAllProperties));
+		const iTopBottomCallCount = bGrandTotalAtBottomOnly === false ? 1 : 0;
+		const oGrandTotalCopy = {};
+		this.mock(Object).expects("assign").exactly(iTopBottomCallCount)
+			.withExactArgs({}, sinon.match.same(oGrandTotal), {"@$ui5.node.isExpanded" : undefined})
+			.returns(oGrandTotalCopy);
+		const oHelperMock = this.mock(_Helper);
+		oHelperMock.expects("setPrivateAnnotation").exactly(iTopBottomCallCount)
+			.withExactArgs(sinon.match.same(oGrandTotalCopy), "predicate", "($isTotal=true)");
+		oHelperMock.expects("setPrivateAnnotation").exactly(iTopBottomCallCount)
+			.withExactArgs(sinon.match.same(oGrandTotal), "copy",
+				sinon.match.same(oGrandTotalCopy));
+		oHelperMock.expects("setPrivateAnnotation")
+			.withExactArgs(sinon.match.same(oGrandTotal), "predicate", "()");
+
+		// code under test
+		_AggregationHelper.handleGrandTotal(oAggregation, oGrandTotal);
+	});
+	});
+});
 
 	//*********************************************************************************************
 	QUnit.test("hasGrandTotal", function (assert) {

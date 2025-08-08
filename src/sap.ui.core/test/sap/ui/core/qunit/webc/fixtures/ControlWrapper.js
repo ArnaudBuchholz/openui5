@@ -32,6 +32,7 @@ sap.ui.define([
 					<slot></slot>
 					<slot name="valueStateMessage"></slot>
 					<slot name="single"></slot>
+					<div id="focusable" tabindex="0"></div>
 				</div>`;
 			this.#span = document.createElement("span");
 			this.shadowRoot.appendChild(this.#span);
@@ -229,7 +230,12 @@ sap.ui.define([
 				}
 			},
 			events: {
-				pressAction: {}
+				pressAction: {},
+				otherAction: {
+					mapping: {
+						to: "press-action"
+					}
+				}
 			}
 		},
 		// refer to "borderWidth" property above

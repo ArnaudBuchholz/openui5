@@ -3,10 +3,13 @@
 sap.ui.define([
 	"sap/ui/core/Control",
 	"sap/ui/core/Element",
+	"sap/ui/core/Lib",
 	"sap/ui/dt/ElementUtil",
+	"sap/ui/events/KeyCodes",
 	"sap/ui/fl/apply/_internal/flexObjects/FlexObjectFactory",
 	"sap/ui/fl/write/api/PersistenceWriteAPI",
 	"sap/ui/model/json/JSONModel",
+	"sap/ui/qunit/QUnitUtils",
 	"sap/ui/rta/plugin/annotations/AnnotationChangeDialog",
 	"sap/ui/rta/plugin/annotations/AnnotationTypes",
 	"sap/ui/thirdparty/sinon-4",
@@ -14,10 +17,13 @@ sap.ui.define([
 ], function(
 	Control,
 	Element,
+	Lib,
 	ElementUtil,
+	KeyCodes,
 	FlexObjectFactory,
 	PersistenceWriteAPI,
 	JSONModel,
+	QUnitUtils,
 	AnnotationChangeDialog,
 	AnnotationTypes,
 	sinon,
@@ -26,12 +32,13 @@ sap.ui.define([
 	"use strict";
 
 	const sandbox = sinon.createSandbox();
+	const oResourceBundle = Lib.getResourceBundleFor("sap.ui.rta");
 
 	const oTextArrangementTypes = {
-		TextOnly: {EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/TextOnly"},
-		TextFirst: {EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/TextFirst"},
-		IDOnly: {EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/IDOnly"},
-		IDFirst: {EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/IDFirst"}
+		TextOnly: { EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/TextOnly" },
+		TextFirst: { EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/TextFirst" },
+		IDOnly: { EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/IDOnly" },
+		IDFirst: { EnumMember: "com.sap.vocabularies.UI.v1.TextArrangementType/IDFirst" }
 	};
 
 	const oTextArrangementLabels = {
@@ -60,41 +67,119 @@ sap.ui.define([
 		return aAnnotationChanges;
 	}
 
+	function createValueListTestDelegate(sPreSelectedProperty) {
+		return {
+			getAnnotationsChangeInfo: () => {
+				const oReturn = {
+					serviceUrl: "testServiceUrl",
+					properties: [
+						{
+							propertyName: "My First Test Label",
+							annotationPath: "path/to/test/label",
+							currentValue: oTextArrangementTypes.TextOnly,
+							label: "My Special Test"
+						},
+						{
+							propertyName: "My Other Test Label",
+							annotationPath: "path/to/second/test/label",
+							currentValue: oTextArrangementTypes.IDFirst,
+							tooltip: "My Other Test Tooltip"
+						},
+						{
+							propertyName: "My First Test Label",
+							annotationPath: "path/to/first/test/label",
+							currentValue: oTextArrangementTypes.IDFirst,
+							tooltip: "My First Test Tooltip"
+						}
+					],
+					possibleValues: Object.keys(oTextArrangementTypes).map((sKey) => ({
+						key: oTextArrangementTypes[sKey],
+						text: oTextArrangementLabels[sKey]
+					}))
+				};
+				if (sPreSelectedProperty) {
+					oReturn.preSelectedProperty = sPreSelectedProperty;
+				}
+				return Promise.resolve(oReturn);
+			}
+		};
+	}
+
+	function createBooleanTestDelegate() {
+		return {
+			getAnnotationsChangeInfo: () => {
+				return {
+					serviceUrl: "testServiceUrl",
+					properties: [
+						{
+							propertyName: "My Test Label",
+							annotationPath: "path/to/test/label",
+							currentValue: true
+						},
+						{
+							propertyName: "My Other Test Label",
+							annotationPath: "path/to/second/test/label",
+							currentValue: false
+						}
+					]
+				};
+			}
+		};
+	}
+
+	function createStringTestDelegate(sPreSelectedProperty) {
+		return {
+			getAnnotationsChangeInfo: () => {
+				const oReturn = {
+					serviceUrl: "testServiceUrl",
+					properties: [
+						{
+							propertyName: "My Test Label",
+							annotationPath: "path/to/test/label",
+							currentValue: "Hello",
+							label: "My Test Label"
+						},
+						{
+							propertyName: "My Other Test Label",
+							annotationPath: "path/to/second/test/label",
+							currentValue: "World",
+							tooltip: "My Other Test Tooltip"
+						},
+						{
+							propertyName: "Test",
+							annotationPath: "path/to/third/test/label",
+							currentValue: "Bye"
+						},
+						{
+							propertyName: "Other Property",
+							annotationPath: "path/to/other/label",
+							currentValue: "Other"
+						}
+					]
+				};
+				if (sPreSelectedProperty) {
+					oReturn.preSelectedProperty = sPreSelectedProperty;
+				}
+				return oReturn;
+			}
+		};
+	}
+
 	QUnit.module("Basic functionality", {
 		beforeEach() {
+			this.oDialog = new AnnotationChangeDialog();
+			this.oTestControl = new Control("testControl");
 			this.oComponent = RtaQunitUtils.createAndStubAppComponent(sandbox);
 		},
 		afterEach() {
+			this.oDialog.destroy();
 			this.oComponent.destroy();
+			this.oTestControl.destroy();
 			sandbox.restore();
 		}
 	}, function() {
 		QUnit.test("When the dialog is opened", async function(assert) {
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return Promise.resolve({
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: oTextArrangementTypes.TextOnly,
-								label: "My Special Test Label"
-							},
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: oTextArrangementTypes.IDFirst,
-								tooltip: "My Other Test Tooltip"
-							}
-						],
-						possibleValues: Object.keys(oTextArrangementTypes).map((sKey) => ({
-							key: oTextArrangementTypes[sKey],
-							text: oTextArrangementLabels[sKey]
-						}))
-					});
-				}
-			};
+			const oTestDelegate = createValueListTestDelegate();
 			const oActionConfig = {
 				title: "Change Text Arrangement",
 				description: "Select The Preferred Text Arrangement For Each Entry:",
@@ -105,8 +190,7 @@ sap.ui.define([
 			};
 			const oDelegateSpy = sandbox.spy(oTestDelegate, "getAnnotationsChangeInfo");
 			const fnAfterOpen = () => {
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
 
 				// Initial rendering checks
 				assert.strictEqual(
@@ -121,46 +205,23 @@ sap.ui.define([
 				);
 				assert.strictEqual(
 					Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton").getEnabled(),
-					false,
-					"then the save button is disabled"
+					true,
+					"then the save button is enabled"
 				);
-				assert.strictEqual(aFormElements.length, 2, "then for each property a form element is created");
-				assert.strictEqual(
-					aFormElements[0].getLabel().getText(),
-					"My Other Test Label",
-					"then the properties are properly sorted"
-				);
-				assert.strictEqual(
-					aFormElements[1].getLabel().getText(),
-					"My Special Test Label",
-					"then the properties are properly sorted"
-				);
-				assert.strictEqual(
-					aFormElements[0].getLabel().getTooltip(),
-					"My Other Test Tooltip",
-					"then the tooltips are set"
-				);
-				assert.strictEqual(
-					aFormElements[1].getLabel().getTooltip(),
-					null,
-					"then the tooltips are set"
-				);
-				const aVisibleFields = aFormElements[1].getFields().filter((oField) => oField.getVisible());
-				assert.strictEqual(
-					aVisibleFields.length,
-					1,
-					"then only one input field is visible based on the type"
-				);
+				assert.strictEqual(aFormElements.length, 3, "then for each property a form element is created");
+				assert.strictEqual(aFormElements[0].getLabel().getText(), "My First Test Label", "then the properties are properly sorted");
+				assert.strictEqual(aFormElements[1].getLabel().getText(), "My Other Test Label", "then the properties are properly sorted");
+				assert.strictEqual(aFormElements[2].getLabel().getText(), "My Special Test", "then the properties are properly sorted");
+				assert.strictEqual(aFormElements[0].getLabel().getTooltip(), "My First Test Tooltip", "then the tooltips are set");
+				assert.strictEqual(aFormElements[1].getLabel().getTooltip(), "My Other Test Tooltip", "then the tooltips are set");
+				assert.strictEqual(aFormElements[2].getLabel().getTooltip(), null, "then the tooltips are set");
+
+				const aVisibleFields = aFormElements[2].getFields().filter((oField) => oField.getVisible());
+				assert.strictEqual(aVisibleFields.length, 1, "then only one input field is visible based on the type");
+
 				const oSelect = aVisibleFields[0];
-				assert.strictEqual(
-					oSelect.getSelectedKey(),
-					JSON.stringify(oTextArrangementTypes.TextOnly),
-					"then the correct value is set"
-				);
-				assert.ok(
-					oSelect.isA("sap.m.Select"),
-					"then the input field for the value list type is a select"
-				);
+				assert.strictEqual(oSelect.getSelectedKey(), JSON.stringify(oTextArrangementTypes.TextOnly), "the correct value is set");
+				assert.ok(oSelect.isA("sap.m.Select"), "then the input field for the value list type is a select");
 
 				// Switch selected item for a property
 				const oListItem = oSelect.getItems()[1];
@@ -171,8 +232,8 @@ sap.ui.define([
 					true,
 					"then the save button is enabled"
 				);
-				const oSaveButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton");
-				oSaveButton.firePress();
+
+				Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton").firePress();
 			};
 
 			const oModelRefreshSpy = sandbox.spy(JSONModel.prototype, "refresh");
@@ -211,7 +272,7 @@ sap.ui.define([
 							propertyName: "My Test Label",
 							annotationPath: "path/to/test/label",
 							currentValue: oTextArrangementTypes.TextOnly,
-							label: "My Special Test Label"
+							label: "My Special Test"
 						}),
 						possibleValues: Object.keys(oTextArrangementTypes).map((sKey) => ({
 							key: oTextArrangementTypes[sKey],
@@ -229,8 +290,7 @@ sap.ui.define([
 				delegate: oTestDelegate
 			};
 			const fnAfterOpen = () => {
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
 				assert.strictEqual(aFormElements.length, 111, "then only 111 form elements are created");
 				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
 				oCancelButton.firePress();
@@ -239,29 +299,7 @@ sap.ui.define([
 		});
 
 		QUnit.test("When the dialog is closed via cancel or no changes are made", async function(assert) {
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return {
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: oTextArrangementTypes.IDFirst
-							},
-							{
-								propertyName: "My Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: oTextArrangementTypes.TextOnly
-							}
-						],
-						possibleValues: Object.keys(oTextArrangementTypes).map((sKey) => ({
-							key: oTextArrangementTypes[sKey],
-							text: oTextArrangementLabels[sKey]
-						}))
-					};
-				}
-			};
+			const oTestDelegate = createValueListTestDelegate();
 			const oActionConfig = {
 				type: AnnotationTypes.ValueListType,
 				annotation: "testAnnotation",
@@ -272,8 +310,7 @@ sap.ui.define([
 				const oSearchField = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertiesFilter");
 				oSearchField.setValue("Other");
 				oSearchField.fireLiveChange({ newValue: "Other" });
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
 				const [oSelect] = aFormElements[0].getFields().filter((oField) => oField.getVisible());
 				const oListItem = oSelect.getItems()[1];
 				oSelect.setSelectedItem(oListItem);
@@ -282,10 +319,9 @@ sap.ui.define([
 				oCancelButton.firePress();
 			};
 			const fnAfterSecondOpen = () => {
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
-				assert.strictEqual(aFormElements.length, 2, "then both properties are displayed");
-				const [oSelect] = aFormElements[1].getFields().filter((oField) => oField.getVisible());
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
+				assert.strictEqual(aFormElements.length, 3, "then all properties are displayed");
+				const [oSelect] = aFormElements[2].getFields().filter((oField) => oField.getVisible());
 				assert.strictEqual(
 					oSelect.getSelectedKey(),
 					JSON.stringify(oTextArrangementTypes.TextOnly),
@@ -300,8 +336,8 @@ sap.ui.define([
 				oSelect.fireChange({ selectedItem: oFirstListItem });
 				assert.strictEqual(
 					Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton").getEnabled(),
-					false,
-					"then the save button is disabled"
+					true,
+					"then the save button is enabled"
 				);
 				const oSaveButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton");
 				oSaveButton.firePress();
@@ -330,31 +366,28 @@ sap.ui.define([
 			oDialog.destroy();
 		});
 
-		QUnit.test("When the dialog is opened with a preselected annotationPath", async function(assert) {
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return {
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My First Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: oTextArrangementTypes.TextOnly
-							},
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: oTextArrangementTypes.IDFirst
-							}
-						],
-						possibleValues: Object.keys(oTextArrangementTypes).map((sKey) => ({
-							key: oTextArrangementTypes[sKey],
-							text: oTextArrangementLabels[sKey]
-						})),
-						preSelectedProperty: "path/to/second/test/label"
-					};
-				}
+		QUnit.test("When the dialog is closed via Escape", async function(assert) {
+			const oTestDelegate = createValueListTestDelegate();
+			const oActionConfig = {
+				type: AnnotationTypes.ValueListType,
+				annotation: "testAnnotation",
+				delegate: oTestDelegate
 			};
+
+			const fnAfterOpen = (oEvent) => {
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
+				const [oSelect] = aFormElements[0].getFields();
+				const oListItem = oSelect.getItems()[1];
+				oSelect.setSelectedItem(oListItem);
+				oSelect.fireChange({ selectedItem: oListItem });
+				QUnitUtils.triggerKeydown(oEvent.getSource().getFocusDomRef(), KeyCodes.ESCAPE);
+			};
+			const aChanges = await openDialog(sandbox, oActionConfig, fnAfterOpen);
+			assert.strictEqual(aChanges.length, 0, "then the handler resolves correctly and no changes are returned");
+		});
+
+		QUnit.test("When the dialog is opened with a preselected annotationPath", async function(assert) {
+			const oTestDelegate = createValueListTestDelegate("path/to/second/test/label");
 			const oActionConfig = {
 				title: "Change Text Arrangement",
 				type: AnnotationTypes.ValueListType,
@@ -375,19 +408,11 @@ sap.ui.define([
 				const oSearchField = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertiesFilter");
 				oSearchField.setValue("");
 				oSearchField.fireLiveChange({ newValue: "" });
-				assert.strictEqual(
-					oList.getFormElements().length,
-					2,
-					"then the filter can be removed by the user"
-				);
+				assert.strictEqual(oList.getFormElements().length, 3, "then the filter can be removed by the user");
 
 				oSearchField.setValue("first");
 				oSearchField.fireLiveChange({ newValue: "first" });
-				assert.strictEqual(
-					oList.getFormElements().length,
-					1,
-					"then a different filter value can be set by the user"
-				);
+				assert.strictEqual(oList.getFormElements().length, 1, "then a different filter value can be set by the user");
 
 				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
 				oCancelButton.firePress();
@@ -395,40 +420,19 @@ sap.ui.define([
 			await openDialog(sandbox, oActionConfig, fnAfterOpen);
 		});
 
-		QUnit.test("When the dialog is opened with existing changeAnnotation changes", async function(assert) {
+		QUnit.test("When the dialog is opened with an existing changeAnnotation change, that is not yet applied", async function(assert) {
 			const oAnnotationChange = FlexObjectFactory.createFromFileContent({
 				changeType: "changeAnnotation",
 				content: {
-					annotationPath: "path/to/test/label"
+					annotationPath: "path/to/test/label",
+					value: oTextArrangementTypes.TextFirst
 				},
 				fileType: "annotation_change"
 			});
 			sandbox.stub(PersistenceWriteAPI, "_getAnnotationChanges").returns([
 				oAnnotationChange
 			]);
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return {
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: oTextArrangementTypes.TextOnly
-							},
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: oTextArrangementTypes.IDFirst
-							}
-						],
-						possibleValues: Object.keys(oTextArrangementTypes).map((sKey) => ({
-							key: oTextArrangementTypes[sKey],
-							text: oTextArrangementLabels[sKey]
-						}))
-					};
-				}
-			};
+			const oTestDelegate = createValueListTestDelegate();
 			const oActionConfig = {
 				title: "Change Text Arrangement",
 				description: "Select The Preferred Text Arrangement For Each Entry:",
@@ -437,25 +441,36 @@ sap.ui.define([
 			};
 			const fnAfterOpen = () => {
 				const oToggleAllPropertiesSwitch = Element.getElementById("sapUiRtaChangeAnnotationDialog_toggleShowAllPropertiesSwitch");
+				// Show changed properties only for preexisting changes
 				oToggleAllPropertiesSwitch.fireChange({ state: true});
 				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				assert.strictEqual(oList.getFormElements().length, 1, "then only one form element is displayed");
 				assert.strictEqual(
-					aFormElements.length,
-					1,
-					"then only one form element is displayed"
-				);
-				assert.strictEqual(
-					aFormElements[0].getBindingContext().getObject().annotationPath,
+					oList.getFormElements()[0].getBindingContext().getObject().annotationPath,
 					oAnnotationChange.getContent().annotationPath,
 					"then only the property for which a change exists is displayed"
 				);
-				oToggleAllPropertiesSwitch.fireChange({ state: false });
-				assert.strictEqual(
-					oList.getFormElements().length,
-					2,
-					"then on second toggle press all properties are displayed again"
+				assert.deepEqual(
+					JSON.parse(oList.getFormElements()[0].getFields()[0].getSelectedKey()),
+					oTextArrangementTypes.TextFirst,
+					"the value is set correctly"
 				);
+
+				// Show all properties
+				oToggleAllPropertiesSwitch.fireChange({ state: false });
+				assert.strictEqual(oList.getFormElements().length, 3, "then on second toggle press all properties are displayed again");
+
+				// Make dirty changes and toggle again
+				const [oSelect1, oSelect2] = oList.getFormElements().map((oFormElement) => oFormElement.getFields()[0]);
+				const oListItem1 = oSelect1.getItems()[1];
+				oSelect1.setSelectedItem(oListItem1);
+				oSelect1.fireChange({ selectedItem: oListItem1 });
+				const oListItem2 = oSelect2.getItems()[1];
+				oSelect2.setSelectedItem(oListItem2);
+				oSelect2.fireChange({ selectedItem: oListItem2 });
+				oToggleAllPropertiesSwitch.fireChange({ state: true });
+				assert.strictEqual(oList.getFormElements().length, 3, "then the newly dirty property is displayed as well");
+
 				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
 				oCancelButton.firePress();
 			};
@@ -463,49 +478,19 @@ sap.ui.define([
 		});
 
 		QUnit.test("When the action type is boolean", async function(assert) {
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return {
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: true
-							},
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: false
-							}
-						]
-					};
-				}
-			};
+			const oTestDelegate = createBooleanTestDelegate();
 			const oActionConfig = {
 				title: "Change Some Boolean Prop",
 				type: AnnotationTypes.BooleanType,
 				delegate: oTestDelegate
 			};
 			const fnAfterOpen = () => {
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
 				const aVisibleFields = aFormElements[0].getFields().filter((oField) => oField.getVisible());
-				assert.strictEqual(
-					aVisibleFields.length,
-					1,
-					"then only one input field is visible based on the type"
-				);
+				assert.strictEqual(aVisibleFields.length, 1, "then only one input field is visible based on the type");
 				const oCheckBox = aVisibleFields[0];
-				assert.strictEqual(
-					oCheckBox.getState(),
-					false,
-					"then the correct value is set"
-				);
-				assert.ok(
-					oCheckBox.isA("sap.m.Switch"),
-					"then the input field for the boolean type is a switch"
-				);
+				assert.strictEqual(oCheckBox.getState(), false, "then the correct value is set");
+				assert.ok(oCheckBox.isA("sap.m.Switch"), "then the input field for the boolean type is a switch");
 
 				oCheckBox.setState(true);
 				oCheckBox.fireChange({ state: true });
@@ -514,68 +499,33 @@ sap.ui.define([
 			};
 			const aChanges = await openDialog(sandbox, oActionConfig, fnAfterOpen);
 			assert.strictEqual(aChanges.length, 1, "One change was returned");
-			assert.strictEqual(
-				aChanges[0].content.annotationPath,
-				"path/to/second/test/label",
-				"then the correct path was returned"
-			);
-			assert.strictEqual(
-				aChanges[0].content.value,
-				true,
-				"then the correct value was returned"
-			);
+			assert.strictEqual(aChanges[0].content.annotationPath, "path/to/second/test/label", "then the correct path was returned");
+			assert.strictEqual(aChanges[0].content.value, true, "then the correct value was returned");
 		});
 
 		QUnit.test("When the action type is string", async function(assert) {
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return {
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: "Hello",
-								tooltip: "My Test Tooltip"
-							},
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: "World",
-								label: "My special Test Label"
-							}
-						]
-					};
-				}
-			};
+			const oTestDelegate = createStringTestDelegate();
 			const oActionConfig = {
 				title: "Change Some String Prop",
 				type: AnnotationTypes.StringType,
 				delegate: oTestDelegate
 			};
 			const fnAfterOpen = () => {
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
 				const aVisibleFields = aFormElements[1].getFields().filter((oField) => oField.getVisible());
-				assert.strictEqual(
-					aVisibleFields.length,
-					1,
-					"then only one input field is visible based on the type"
-				);
+				assert.strictEqual(aVisibleFields.length, 1, "then only one input field is visible based on the type");
+
 				const oInput = aVisibleFields[0];
-				assert.strictEqual(
-					oInput.getValue(),
-					"Hello",
-					"then the correct value is set"
-				);
-				assert.ok(
-					oInput.isA("sap.m.Input"),
-					"then the input field for the string type is an input"
-				);
+				assert.strictEqual(oInput.getValue(), "Hello", "then the correct value is set");
+				assert.ok(oInput.isA("sap.m.Input"), "then the input field for the string type is an input");
 
 				oInput.setValue("Bye");
-				oInput.fireChange({ value: "Bye" });
+				oInput.fireLiveChange({ newValue: "Bye" });
 				const oSaveButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton");
+				assert.ok(
+					oSaveButton.getEnabled(),
+					"then the save button enabled state is updated on live change"
+				);
 				oSaveButton.firePress();
 			};
 			const aChanges = await openDialog(sandbox, oActionConfig, fnAfterOpen);
@@ -585,32 +535,29 @@ sap.ui.define([
 			assert.strictEqual(aChanges[0].content.text, "Bye", "then the correct text was returned");
 		});
 
-		QUnit.test("when the dialog is opened with singleRename and a different label on the control", async function(assert) {
-			const oTestDelegate = {
-				getAnnotationsChangeInfo: () => {
-					return {
-						serviceUrl: "testServiceUrl",
-						properties: [
-							{
-								propertyName: "My Test Label",
-								annotationPath: "path/to/test/label",
-								currentValue: "Hello"
-							},
-							{
-								propertyName: "My Other Test Label",
-								annotationPath: "path/to/second/test/label",
-								currentValue: "World"
-							}
-						],
-						preSelectedProperty: "path/to/test/label"
-					};
+		QUnit.test("when the dialog is opened with singleRename, different label on the control and a not yet applied change", async function(assert) {
+			const sAnnotationChangeLabel = "My Annotation Label";
+			const oAnnotationChange = FlexObjectFactory.createFromFileContent({
+				changeType: "changeAnnotation",
+				content: {
+					annotationPath: "path/to/test/label"
+				},
+				fileType: "annotation_change",
+				texts: {
+					annotationText: {
+						value: sAnnotationChangeLabel
+					}
 				}
-			};
+			});
+			sandbox.stub(PersistenceWriteAPI, "_getAnnotationChanges").returns([
+				oAnnotationChange
+			]);
+			const oTestDelegate = createStringTestDelegate("path/to/test/label");
 			const oActionConfig = {
 				title: "Change Some String Prop",
 				type: AnnotationTypes.StringType,
 				delegate: oTestDelegate,
-				control: new Control("testControl"),
+				control: this.oTestControl,
 				singleRename: true,
 				controlBasedRenameChangeType: "myRename"
 			};
@@ -619,11 +566,111 @@ sap.ui.define([
 			const fnAfterOpen = () => {
 				const oHBox = Element.getElementById("sapUiRtaChangeAnnotationDialog_filterHBox");
 				assert.strictEqual(oHBox.getVisible(), false, "then the filter is hidden");
-				const oList = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList");
-				const aFormElements = oList.getFormElements();
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
+				const oInput = aFormElements[0].getFields().filter((oField) => oField.getVisible())[0];
+				assert.strictEqual(oInput.getValue(), sAnnotationChangeLabel, "then the correct value is set");
+				assert.strictEqual(
+					aFormElements[0].getLabel().getText(),
+					oResourceBundle.getText("ANNOTATION_CHANGE_DIALOG_SINGLE_RENAME_LABEL"),
+					"then the dedicated single rename label is displayed"
+				);
+
+				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
+				oCancelButton.firePress();
+			};
+			await openDialog(sandbox, oActionConfig, fnAfterOpen);
+		});
+
+		QUnit.test("when the dialog is opened with singleRename and a different label on the control", async function(assert) {
+			const oTestDelegate = createStringTestDelegate("path/to/third/test/label");
+			const oActionConfig = {
+				title: "Change Some String Prop",
+				type: AnnotationTypes.StringType,
+				delegate: oTestDelegate,
+				control: this.oTestControl,
+				singleRename: true,
+				controlBasedRenameChangeType: "myRename"
+			};
+			const sControlSpecificLabel = "My Control Specific Label";
+			sandbox.stub(ElementUtil, "getLabelForElement").returns(sControlSpecificLabel);
+			const fnAfterOpen = () => {
+				const oHBox = Element.getElementById("sapUiRtaChangeAnnotationDialog_filterHBox");
+				assert.strictEqual(oHBox.getVisible(), false, "then the filter is hidden");
+
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
+				assert.strictEqual(aFormElements.length, 1, "then only one form element is displayed");
+
 				const oInput = aFormElements[0].getFields().filter((oField) => oField.getVisible())[0];
 				assert.strictEqual(oInput.getValue(), sControlSpecificLabel, "then the correct value is set");
 
+				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
+				oCancelButton.firePress();
+			};
+			await openDialog(sandbox, oActionConfig, fnAfterOpen);
+		});
+
+		QUnit.test("when the dialog is opened with a preselected property, that does not exist", async function(assert) {
+			const oTestDelegate = createStringTestDelegate("path/to/does/not/exist");
+			const oActionConfig = {
+				title: "Change Some String Prop",
+				type: AnnotationTypes.StringType,
+				delegate: oTestDelegate
+			};
+			const fnAfterOpen = () => {
+				const aFormElements = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyList").getFormElements();
+				assert.strictEqual(aFormElements.length, 4, "then all properties are shown");
+
+				const oSearchField = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertiesFilter");
+				assert.strictEqual(oSearchField.getValue(), "", "then no filter is set");
+
+				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
+				oCancelButton.firePress();
+			};
+			await openDialog(sandbox, oActionConfig, fnAfterOpen);
+		});
+
+		QUnit.test("when the dialog is opened with no properties", async function(assert) {
+			const oTestDelegate = {
+				getAnnotationsChangeInfo: () => {
+					return Promise.resolve({
+						serviceUrl: "testServiceUrl",
+						properties: [],
+						possibleValues: []
+					});
+				}
+			};
+			const oActionConfig = {
+				title: "Change Text Arrangement",
+				description: "No properties available.",
+				type: AnnotationTypes.ValueListType,
+				control: { id: "testControl" },
+				annotation: "testAnnotation",
+				delegate: oTestDelegate
+			};
+			const fnAfterOpen = () => {
+				const oDialog = Element.getElementById("sapUiRtaChangeAnnotationDialog");
+				const oIllustratedMessage = oDialog.getContent()[0].getItems().filter(function(oItem) {
+					return oItem.isA("sap.m.IllustratedMessage");
+				})[0];
+				assert.ok(oIllustratedMessage, "then the IllustratedMessage is displayed");
+				assert.strictEqual(
+					oIllustratedMessage.getTitle(),
+					oResourceBundle.getText("ANNOTATION_CHANGE_DIALOG_NO_PROPERTIES_TITLE"),
+					"then the Illustrated Message title is correct"
+				);
+				assert.strictEqual(
+					oIllustratedMessage.getDescription(),
+					oResourceBundle.getText("ANNOTATION_CHANGE_DIALOG_NO_PROPERTIES_DESCRIPTION"),
+					"then the Illustrated Message description is correct"
+				);
+				const oForm = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertyListForm");
+				assert.notOk(oForm.getVisible(), "then the property list form is hidden");
+				const oSaveButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_saveButton");
+				assert.notOk(oSaveButton.getVisible(), "then the save button is hidden");
+				const oSearchField = Element.getElementById("sapUiRtaChangeAnnotationDialog_propertiesFilter");
+				assert.notOk(oSearchField.getEnabled(), "then the search field is disabled");
+				const oSwitch = Element.getElementById("sapUiRtaChangeAnnotationDialog_toggleShowAllPropertiesSwitch");
+				assert.notOk(oSwitch.getEnabled(), "then the switch is disabled");
 				const oCancelButton = Element.getElementById("sapUiRtaChangeAnnotationDialog_cancelButton");
 				oCancelButton.firePress();
 			};

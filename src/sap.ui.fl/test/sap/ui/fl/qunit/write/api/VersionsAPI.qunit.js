@@ -4,10 +4,10 @@ sap.ui.define([
 	"sap/ui/core/Control",
 	"sap/ui/fl/apply/_internal/flexState/FlexObjectState",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/initial/_internal/FlexInfoSession",
 	"sap/ui/fl/initial/api/Version",
-	"sap/ui/fl/registry/Settings",
+	"sap/ui/fl/initial/_internal/Settings",
 	"sap/ui/fl/write/_internal/flexState/FlexObjectManager",
 	"sap/ui/fl/write/_internal/Storage",
 	"sap/ui/fl/write/_internal/Versions",
@@ -67,11 +67,8 @@ sap.ui.define([
 
 	function stubSettings(sandbox) {
 		sandbox.stub(Settings, "getInstance").resolves({
-			isVersioningEnabled() {
-				return true;
-			},
-			isSystemWithTransports() {
-				return false;
+			getVersioning() {
+				return {ALL: true};
 			}
 		});
 	}
@@ -838,6 +835,34 @@ sap.ui.define([
 				assert.deepEqual(oPublishStub.getCall(0).args[0].reference, sReference, "the reference was passed");
 				assert.deepEqual(oPublishStub.getCall(0).args[0].version, "abc", "the version was passed");
 			});
+		});
+
+		QUnit.test("when getCreatedVersionsByUser is called", function(assert) {
+			const mPropertyBag = {
+				control: new Control(),
+				layer: Layer.CUSTOMER
+			};
+			const sUser = "testUser";
+			const aMockVersions = [
+				{ version: "1", activatedBy: "testUser" },
+				{ version: "2", activatedBy: "otherUser" },
+				{ version: "3", activatedBy: "testUser" }
+			];
+			const oModelStub = {
+				getProperty: sinon.stub().withArgs("/versions").returns(aMockVersions)
+			};
+			sandbox.stub(Versions, "getVersionsModel").returns(oModelStub);
+
+			const aUserCreatedVersions = VersionsAPI.getCreatedVersionsByUser(mPropertyBag, sUser);
+
+			assert.deepEqual(
+				aUserCreatedVersions,
+				[
+					{ version: "1", activatedBy: "testUser" },
+					{ version: "3", activatedBy: "testUser" }
+				],
+				"then only versions created by 'testUser' are returned"
+			);
 		});
 	});
 });

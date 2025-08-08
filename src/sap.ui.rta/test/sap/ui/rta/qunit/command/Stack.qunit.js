@@ -76,45 +76,40 @@ sap.ui.define([
 			sandbox.restore();
 		}
 	}, function() {
-		QUnit.test("when 2 Changes get executed at the same time", function(assert) {
-			const done = assert.async();
+		QUnit.test("when 2 Changes get executed", async function(assert) {
+			const oAddSpy = sandbox.spy(PersistenceWriteAPI, "add");
 
-			let iCounter = 0;
-			const aInputs = [this.oInput1, this.oInput2];
-			this.oCommandStack.attachCommandExecuted(function(oEvent) {
-				assert.deepEqual(
-					oEvent.getParameter("command").getElement(),
-					aInputs[iCounter],
-					"then both commands get executed in the correct order"
-				);
-				iCounter++;
-
-				if (iCounter === 2) {
-					done();
-				}
-			});
-
-			// Create commands
-			return CommandFactory.getCommandFor(this.oInput1, "Remove", {
+			const oRemoveCommand = await CommandFactory.getCommandFor(this.oInput1, "Remove", {
 				removedElement: this.oInput1
-			}, this.oInputDesignTimeMetadata)
-			.then(function(oRemoveCommand) {
-				return this.oCommandStack.pushAndExecute(oRemoveCommand);
-			}.bind(this))
-			.then(CommandFactory.getCommandFor.bind(this, this.oInput2, "Remove", {
+			}, this.oInputDesignTimeMetadata);
+			const oRemoveCommandExecuteSpy = sandbox.spy(oRemoveCommand, "execute");
+			await this.oCommandStack.pushAndExecute(oRemoveCommand);
+			assert.ok(oAddSpy.calledOnce, "then the add function was called once");
+			assert.ok(oAddSpy.calledBefore(oRemoveCommandExecuteSpy), "then the add function was called before the execute function");
+			assert.ok(oRemoveCommandExecuteSpy.calledOnce, "then the execute function was called once");
+			assert.ok(oAddSpy.calledWith({
+				flexObjects: [oRemoveCommand.getPreparedChange()],
+				selector: oRemoveCommand.getAppComponent()
+			}), "then the PersistenceWriteAPI add function was called with the right parameters");
+
+			const oRemoveCommand2 = await CommandFactory.getCommandFor(this.oInput2, "Remove", {
 				removedElement: this.oInput2
-			}, this.oInputDesignTimeMetadata))
-			.then(function(oRemoveCommand) {
-				this.oCommandStack.pushAndExecute(oRemoveCommand);
-			}.bind(this))
-			.catch(function(oError) {
-				assert.ok(false, `catch must never be called - Error: ${oError}`);
-			});
+			}, this.oInputDesignTimeMetadata);
+			const oRemoveCommand2ExecuteSpy = sandbox.spy(oRemoveCommand2, "execute");
+			assert.ok(oAddSpy.calledBefore(oRemoveCommand2ExecuteSpy), "then the add function was called before the execute function");
+			await this.oCommandStack.pushAndExecute(oRemoveCommand2);
+			assert.ok(oRemoveCommand2ExecuteSpy.calledOnce, "then the execute function was called once");
+			assert.strictEqual(oAddSpy.callCount, 2, "then the add function was called again");
+			assert.ok(oAddSpy.calledWith({
+				flexObjects: [oRemoveCommand2.getPreparedChange()],
+				selector: oRemoveCommand2.getAppComponent()
+			}), "then the PersistenceWriteAPI add function was called with the right parameters");
 		});
 
 		QUnit.test("when execute is called and command.execute fails", function(assert) {
 			const fnDone = assert.async();
 			const oRtaResourceBundle = Lib.getResourceBundleFor("sap.ui.rta");
+			const oRemoveSpy = sandbox.spy(PersistenceWriteAPI, "remove");
 			sandbox.stub(MessageBox, "error").callsFake(function(sMessage, mOptions) {
 				assert.strictEqual(
 					sMessage,
@@ -130,14 +125,21 @@ sap.ui.define([
 			}, this.oInputDesignTimeMetadata)
 			.then(function(oRemoveCommand) {
 				sandbox.stub(oRemoveCommand, "execute").rejects(new Error("My Error"));
-				this.oCommandStack.pushAndExecute(oRemoveCommand);
+				this.oCommandStack.pushAndExecute(oRemoveCommand).catch(() => {
+					assert.ok(oRemoveSpy.calledWith({
+						flexObjects: [oRemoveCommand.getPreparedChange()],
+						selector: oRemoveCommand.getAppComponent()
+					}), "then the PersistenceWriteAPI remove function was called with the right parameters");
+				});
 			}.bind(this));
 		});
 
 		QUnit.test("when execute is called and command.execute fails, and the error was in a AddXMLAtExtensionPoint command", function(assert) {
 			const fnDone = assert.async();
 			const oRtaResourceBundle = Lib.getResourceBundleFor("sap.ui.rta");
+			const oRemoveStub = sandbox.stub(PersistenceWriteAPI, "remove").resolves();
 			sandbox.stub(MessageBox, "error").callsFake(function(sMessage, mOptions) {
+				assert.ok(oRemoveStub.calledOnce, "then the remove function was called once");
 				assert.strictEqual(
 					sMessage,
 					"My Error",
@@ -148,92 +150,36 @@ sap.ui.define([
 			});
 			// Create commands
 			const oAddXmlAtExtensionPointCommand = new AddXMLAtExtensionPointCommand();
+			sandbox.stub(oAddXmlAtExtensionPointCommand, "getAppComponent").returns(this.oComponent);
 			sandbox.stub(oAddXmlAtExtensionPointCommand, "execute").rejects(new Error("My Error"));
-			this.oCommandStack.pushAndExecute(oAddXmlAtExtensionPointCommand);
+			this.oCommandStack.pushAndExecute(oAddXmlAtExtensionPointCommand).catch(() => assert.ok(true, "error expected"));
 		});
 
-		QUnit.test("when 2 Changes get executed and one gets an error after execution", function(assert) {
-			const done = assert.async();
+		QUnit.test("when 2 Changes get executed and one gets an error after execution", async function(assert) {
 			sandbox.stub(MessageBox, "error");
-			let iCounter = 0;
-			const aInputs = [this.oInput1, this.oInput2];
-			this.oCommandStack.attachCommandExecuted(function(oEvent) {
-				const bFirstCommand = oEvent.getParameter("command").getElement() === aInputs[0];
-				assert.ok(bFirstCommand, `then command number ${iCounter + 1} gets executed`);
-				iCounter++;
 
-				if (iCounter === 2) {
-					assert.ok(false, "then catch has not be called");
-					done();
-				}
-			});
-
-			// Create commands
-			return CommandFactory.getCommandFor(this.oInput1, "Remove", {
+			const oRemoveCommand = await CommandFactory.getCommandFor(this.oInput1, "Remove", {
 				removedElement: this.oInput1
-			}, this.oInputDesignTimeMetadata)
-			.then(function(oRemoveCommand) {
-				return this.oCommandStack.pushAndExecute(oRemoveCommand);
-			}.bind(this))
-			.then(CommandFactory.getCommandFor.bind(this, this.oInput2, "Remove", {
+			}, this.oInputDesignTimeMetadata);
+			const oRemoveCommandExecuteSpy = sandbox.spy(oRemoveCommand, "execute");
+			await this.oCommandStack.pushAndExecute(oRemoveCommand);
+			const oRemoveCommand2 = await CommandFactory.getCommandFor(this.oInput2, "Remove", {
 				removedElement: this.oInput2
-			}, this.oInputDesignTimeMetadata))
-			.then(function(oRemoveCommand) {
-				// force an error
-				sandbox.stub(this.oCommandStack, "getSubCommands").returns(undefined);
-				return this.oCommandStack.pushAndExecute(oRemoveCommand);
-			}.bind(this))
-			.catch(function(oError) {
+			}, this.oInputDesignTimeMetadata);
+			// force an error
+			sandbox.stub(oRemoveCommand2, "execute").rejects(new Error("My Error"));
+			const oRemoveSpy = sandbox.spy(PersistenceWriteAPI, "remove");
+			try {
+				await this.oCommandStack.pushAndExecute(oRemoveCommand2);
+			} catch (oError) {
 				assert.ok(true, `catch has be called during execution of second command - Error: ${oError}`);
-				assert.equal(this.oCommandStack._toBeExecuted, -1, "the Variable '_toBeExecuted' is not descreased a second time");
-				done();
-			}.bind(this));
-		});
-
-		QUnit.test("execute / undo / redo with CommandExecutionHandler", function(assert) {
-			const oCommandExecutionHandlerStub = sandbox.stub().resolves();
-			this.oCommandStack.addCommandExecutionHandler(oCommandExecutionHandlerStub);
-			const oFireExecutedStub = sandbox.stub(this.oCommandStack, "fireCommandExecuted");
-			const oFireModifiedStub = sandbox.stub(this.oCommandStack, "fireModified");
-
-			let oCommand;
-			return CommandFactory.getCommandFor(this.oInput1, "Remove", {
-				removedElement: this.oInput1
-			}, this.oInputDesignTimeMetadata)
-
-			.then(function(oRemoveCommand) {
-				oCommand = oRemoveCommand;
-				sandbox.stub(oCommand, "execute").resolves();
-				sandbox.stub(oCommand, "undo").resolves();
-				return this.oCommandStack.pushAndExecute(oCommand);
-			}.bind(this))
-			.then(function() {
-				assert.ok(
-					oCommandExecutionHandlerStub.calledBefore(oFireExecutedStub),
-					"the executed event waits for the command execution handler"
-				);
-				assert.ok(
-					oCommandExecutionHandlerStub.calledBefore(oFireModifiedStub),
-					"the modified event waits for the command execution handler"
-				);
-				assert.strictEqual(oFireModifiedStub.callCount, 1, "the modified event was fired once");
-				assert.strictEqual(oFireExecutedStub.callCount, 1, "the executed event was fired once");
-			})
-			.then(function() {
-				return this.oCommandStack.undo();
-			}.bind(this))
-			.then(function() {
-				assert.ok(
-					oCommandExecutionHandlerStub.calledBefore(oFireExecutedStub),
-					"the executed event waits for the command execution handler"
-				);
-				assert.ok(
-					oCommandExecutionHandlerStub.calledBefore(oFireModifiedStub),
-					"the modified event waits for the command execution handler"
-				);
-				assert.strictEqual(oFireModifiedStub.callCount, 2, "the modified event was fired once again");
-				assert.strictEqual(oFireExecutedStub.callCount, 2, "the executed event was fired once again");
-			});
+				assert.equal(this.oCommandStack._toBeExecuted, -1, "the Variable '_toBeExecuted' is not decreased a second time");
+				assert.ok(oRemoveSpy.calledWith({
+					flexObjects: [oRemoveCommand2.getPreparedChange()],
+					selector: oRemoveCommand2.getAppComponent()
+				}), "then the PersistenceWriteAPI remove function was called for the second command");
+				assert.ok(oRemoveCommandExecuteSpy.calledOnce, "then the execute function was called for the first command");
+			}
 		});
 
 		QUnit.test("stack with a 'remove' command and its change gets discarded by another command", async function(assert) {
@@ -416,17 +362,16 @@ sap.ui.define([
 			sandbox.restore();
 		}
 	}, function() {
-		QUnit.test("when calling function 'initializeWithChanges' with the array...", function(assert) {
+		QUnit.test("when calling function 'initializeWithChanges' with the array...", async function(assert) {
 			const aChanges = [RtaQunitUtils.createUIChange(this.oChangeDefinition1), RtaQunitUtils.createUIChange(this.oChangeDefinition2)];
 			sandbox.stub(PersistenceWriteAPI, "_getUIChanges").resolves(aChanges);
 
-			return CommandStack.initializeWithChanges(this.oControl, ["fileName1", "fileName2"]).then(function(oStack) {
-				const aCommands = oStack.getCommands();
-				assert.ok(oStack, "an instance of the CommandStack has been created");
-				assert.equal(aCommands.length, 2, "the CommandStack contains two commands");
-				assert.equal(aCommands[0]._oPreparedChange, aChanges[1], "the first command contains the last change");
-				assert.equal(aCommands[1]._oPreparedChange, aChanges[0], "the last command contains the first change");
-			});
+			const oStack = await CommandStack.initializeWithChanges(this.oControl, ["fileName1", "fileName2"]);
+			const aCommands = oStack.getCommands();
+			assert.ok(oStack, "an instance of the CommandStack has been created");
+			assert.equal(aCommands.length, 2, "the CommandStack contains two commands");
+			assert.equal(aCommands[0]._oPreparedChange, aChanges[1], "the first command contains the last change");
+			assert.equal(aCommands[1]._oPreparedChange, aChanges[0], "the last command contains the first change");
 		});
 
 		QUnit.test("when calling function 'initializeWithChanges' with the array containing changes from a composite command...", function(assert) {

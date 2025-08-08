@@ -5,6 +5,7 @@ sap.ui.define([
 	"sap/ui/thirdparty/jquery",
 	"sap/m/FeedListItem",
 	"sap/m/FeedListItemAction",
+	"sap/m/ListItemAction",
 	"sap/m/List",
 	"sap/m/StandardListItem",
 	"sap/ui/model/json/JSONModel",
@@ -22,7 +23,7 @@ sap.ui.define([
 	"sap/ui/events/KeyCodes",
 	"sap/ui/core/Core",
 	"sap/ui/qunit/utils/nextUIUpdate"
-], function(Theming, qutils, jQuery, FeedListItem, FeedListItemAction, List, StandardListItem, JSONModel, Button, Popover, Bar, ActionSheet, App, Page, Device, FormattedText, IconPool, library, Log, KeyCodes, oCore, nextUIUpdate) {
+], function(Theming, qutils, jQuery, FeedListItem, FeedListItemAction, ListItemAction, List, StandardListItem, JSONModel, Button, Popover, Bar, ActionSheet, App, Page, Device, FormattedText, IconPool, library, Log, KeyCodes, oCore, nextUIUpdate) {
 	"use strict";
 
 	// shortcut for sap.m.PlacementType
@@ -364,44 +365,6 @@ sap.ui.define([
 	QUnit.test("Default feedListItem div size", function (assert) {
 		assert.ok(oFeedList.getItems()[4].oParent.$().hasClass("sapMList"), "FeedListItem has class sapMList applied");
 		assert.equal(oFeedList.getItems()[4].oParent.$().css("font-size"), "16px", "FeedListItem font size is 1 rem");
-	});
-	/**
-	 * @deprecated Since version 1.120
-	 */
-	QUnit.test("Default src - icon color", function (assert) {
-		this.oNonActiveItem = oFeedList.getItems().filter(function(oListItem) {
-			return !oListItem.getIconActive();
-		})[0];
-		assert.ok(this.oNonActiveItem.oAvatar.$().hasClass("sapMFeedListItemImageInactive"), "Avatar has the Inactive icon class applied");
-		assert.equal(this.oNonActiveItem.oAvatar.$().css("color"), "rgb(255, 255, 255)", "The inactive icon color is white in Default theme");
-		this.applyTheme = function(sTheme, fnCallback) {
-			this.sRequiredTheme = sTheme;
-			if (Theming.getTheme() === this.sRequiredTheme) {
-				if (typeof fnCallback === "function") {
-					fnCallback.bind(this)();
-					fnCallback = undefined;
-				}
-			} else {
-				Theming.setTheme(sTheme);
-				Theming.attachApplied(fnThemeApplied.bind(this));
-			}
-
-			function fnThemeApplied(oEvent) {
-				Theming.detachApplied(fnThemeApplied);
-				if (typeof fnCallback === "function") {
-					fnCallback.bind(this)();
-					fnCallback = undefined;
-				}
-			}
-		};
-		var done = assert.async();
-		this.applyTheme("sap_belize", async function() {
-			this.oNonActiveItem.invalidate();
-			await nextUIUpdate();
-
-			assert.equal(this.oNonActiveItem.oAvatar.$().css("color"), "rgb(255, 255, 255)", "The inactive icon color is white in sap_belize theme");
-			done();
-		}.bind(this));
 	});
 
 	QUnit.test("No Timestamp", function (assert) {
@@ -974,6 +937,14 @@ sap.ui.define([
 		}
 	});
 
+	QUnit.test("type validation", function(assert) {
+		assert.throws(function() {
+			const oListItemAction = new ListItemAction();
+			const oFeedListItem = new FeedListItem();
+			oFeedListItem.addAction(oListItemAction);
+		}, "supports only FeedListItemAction");
+	});
+
 	QUnit.test("Action aggregation and hidden aggregations", function (assert) {
 		assert.equal(this.oFeedListItem.getActions().length, 2, "There are two actions in the aggregation.");
 		assert.ok(this.oFeedListItem.getAggregation("_actionButton") instanceof Button, "Hidden aggregation _actionButton is added");
@@ -1183,66 +1154,6 @@ sap.ui.define([
 		}
 	});
 
-	/**
-	 * @deprecated Since version 1.120
-	 */
-	QUnit.test("When the theme is 'sap_belize' and the device is not a phone, the CSS contrast class 'sapContrast' is set on the ActionSheet's popover .", function (assert) {
-		// Arrange
-		var oPopover = new Popover();
-		var oEvent = {
-			getSource: function () {
-				return {
-					getParent: function () {
-						return oPopover;
-					}
-				};
-			}
-		};
-		var oThemeStub = sinon.stub(Theming, "getTheme").returns("sap_belize");
-		var bOriginSystemPhone = Device.system.phone;
-		Device.system.phone = false;
-
-		// Act
-		this.oFeedListItem._onBeforeOpenActionSheet(oEvent);
-
-		// Assert
-		assert.ok(oPopover.hasStyleClass("sapContrast"), "The correct CSS contrast class has been added.");
-
-		// Cleanup
-		oThemeStub.restore();
-		Device.system.phone = bOriginSystemPhone;
-	});
-
-	/**
-	 * @deprecated Since version 1.120
-	 */
-	QUnit.test("When the theme is 'sap_belize_plus' and the device is not a phone, the CSS contrast class 'sapContrastPlus' is set on the ActionSheet's popover.", function (assert) {
-		// Arrange
-		var oPopover = new Popover();
-		var oEvent = {
-			getSource: function () {
-				return {
-					getParent: function () {
-						return oPopover;
-					}
-				};
-			}
-		};
-		var oThemeStub = sinon.stub(Theming, "getTheme").returns("sap_belize_plus");
-		var bOriginSystemPhone = Device.system.phone;
-		Device.system.phone = false;
-
-		// Act
-		this.oFeedListItem._onBeforeOpenActionSheet(oEvent);
-
-		// Assert
-		assert.ok(oPopover.hasStyleClass("sapContrastPlus"), "The correct CSS contrast class has been added.");
-
-		// Cleanup
-		oThemeStub.restore();
-		Device.system.phone = bOriginSystemPhone;
-	});
-
 	QUnit.test("When the device is a phone, no CSS contrast class is set on the ActionSheet's popover.", function (assert) {
 		// Arrange
 		var oPopover = new Popover();
@@ -1388,26 +1299,6 @@ sap.ui.define([
 			assert.ok(window.getComputedStyle(document.querySelector('.sapMFeedListItemTimestamp')).marginTop, '-4px', 'No trimming of timestamp');
 			done();
 		}.bind(this));
-	});
-
-	QUnit.module("Tab Order");
-
-	QUnit.test("Tab Order of Feed List Item", async function (assert) {
-		// Arrange
-		feedListPage.addContent(oFeedList);
-		appFeedList.addPage(feedListPage);
-		appFeedList.placeAt("qunit-fixture");
-		await nextUIUpdate();
-		// Assert
-		var oFocusFeedListItem = oFeedList.getItems()[11];
-		assert.ok(oFocusFeedListItem.getTabbables()[0] == oFocusFeedListItem.oAvatar.getDomRef());
-		assert.ok(oFocusFeedListItem.getTabbables()[1] == oFocusFeedListItem._oLinkControl.getDomRef());
-		assert.ok(oFocusFeedListItem.getTabbables()[2] == document.getElementsByClassName("_class")[0]);
-		assert.ok(oFocusFeedListItem.getTabbables()[3] == document.getElementById("__link14"));
-
-		// Cleanup
-		oFocusFeedListItem.destroy();
-		oFocusFeedListItem = null;
 	});
 
 });

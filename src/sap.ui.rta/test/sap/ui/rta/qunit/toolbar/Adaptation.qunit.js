@@ -9,6 +9,7 @@ sap.ui.define([
 	"sap/ui/fl/apply/api/FlexRuntimeInfoAPI",
 	"sap/ui/fl/initial/api/Version",
 	"sap/ui/fl/write/api/ContextBasedAdaptationsAPI",
+	"sap/ui/fl/write/api/FeaturesAPI",
 	"sap/ui/fl/write/api/VersionsAPI",
 	"sap/ui/fl/Layer",
 	"sap/ui/layout/VerticalLayout",
@@ -32,6 +33,7 @@ sap.ui.define([
 	FlexRuntimeInfoAPI,
 	Version,
 	ContextBasedAdaptationsAPI,
+	FeaturesAPI,
 	VersionsAPI,
 	Layer,
 	VerticalLayout,
@@ -70,6 +72,12 @@ sap.ui.define([
 			this.oToolbar = this.oRta.getToolbar();
 			this.oRta._oContextBasedAdaptationsModel = oAdaptationsModel;
 		}.bind(this));
+	}
+
+	function cleanUpCreateAndStartRTA() {
+		this.oContainer.destroy();
+		this.oComponent.destroy();
+		this.oRta.destroy();
 	}
 
 	QUnit.module("Given Versions Model binding & formatter", {
@@ -168,6 +176,16 @@ sap.ui.define([
 			this.oToolbar.getControl("hardReloadButton").firePress();
 
 			this.oToolbar.destroy();
+		});
+
+		QUnit.test("when there is an exception in the init", function(assert) {
+			sandbox.stub(BaseToolbar.prototype, "buildContent").rejects("error");
+			sandbox.spy(BaseToolbar.prototype, "exit");
+			this.oToolbar = new Adaptation({
+				textResources: this.oTextResources
+			});
+			this.oToolbar.destroy();
+			assert.ok(BaseToolbar.prototype.exit.calledOnce, "then the exit function is called");
 		});
 	});
 
@@ -638,6 +656,72 @@ sap.ui.define([
 			sandbox.restore();
 		}
 	}, function() {
+		[{
+			description: "Given a toolbar is created, current version is 'Draft' and 'Save As' app variant is enabled",
+			versionNumber: Version.Number.Draft,
+			appVariantMenu: {
+				saveAs: {
+					visible: true,
+					enabled: true
+				}
+			}
+		},
+		{
+			description: "Given a toolbar is created, current version is 'Draft' and 'Save As' app variant is not enabled",
+			versionNumber: Version.Number.Draft,
+			appVariantMenu: {
+				saveAs: {
+					visible: true,
+					enabled: false
+				}
+			}
+		},
+		{
+			description: "Given a toolbar is created, current version is not 'Draft' and 'Save As' app variant is not enabled",
+			versionNumber: Version.Number.Original,
+			appVariantMenu: {
+				saveAs: {
+					visible: true,
+					enabled: false
+				}
+			}
+		},
+		{
+			description: "Given a toolbar is created, current version is not 'Draft' and 'Save As' app variant is enabled",
+			versionNumber: Version.Number.Original,
+			appVariantMenu: {
+				saveAs: {
+					visible: true,
+					enabled: true
+				}
+			}
+		}].forEach(function(oTestSetup) {
+			QUnit.test(oTestSetup.description, async function(assert) {
+				const oVersionsModel = new JSONModel({
+					versioningEnabled: true,
+					backendDraft: true,
+					displayedVersion: oTestSetup.versionNumber
+				});
+				this.oToolbar.setModel(oVersionsModel, "versions");
+
+				this.oControlsModel.setProperty("/appVariantMenu/saveAs/visible", oTestSetup.appVariantMenu.saveAs.visible);
+				this.oControlsModel.setProperty("/appVariantMenu/saveAs/enabled", oTestSetup.appVariantMenu.saveAs.enabled);
+				this.oControlsModel.setProperty("/appVariantMenu/overview/visible", true);
+				this.oControlsModel.setProperty("/appVariantMenu/manageApps/visible", true);
+
+				this.oToolbar.animation = false;
+				await this.oToolbar.show();
+				await RtaQunitUtils.showActionsMenu(this.oToolbar);
+				const oSaveAsButton = this.oToolbar.getControl("saveAs");
+				const bIsSaveAsEnabled = Version.Number.Draft !== oTestSetup.versionNumber && oTestSetup.appVariantMenu.saveAs.enabled;
+				assert.strictEqual(oSaveAsButton.getEnabled(), bIsSaveAsEnabled, `saveAs has enabled stauts ${bIsSaveAsEnabled}`);
+				assert.deepEqual(
+					oSaveAsButton.getTooltip(),
+					bIsSaveAsEnabled ? null : "Only active versions can be saved as app variants. Please activate your draft.",
+					`then ${bIsSaveAsEnabled ? "no" : "a"} tooltip is set for saveAs`);
+			});
+		});
+
 		QUnit.test("Given a toolbar is created and app variants parameter in the model are switched back and forth", function(assert) {
 			this.oControlsModel.setProperty("/appVariantMenu/saveAs/visible", false);
 			this.oControlsModel.setProperty("/appVariantMenu/overview/visible", false);
@@ -659,6 +743,10 @@ sap.ui.define([
 				var oOverviewButton = this.oToolbar.getControl("appVariantOverview");
 
 				assert.notOk(oSaveAsButton.getVisible(), "saveAs is not visible");
+				assert.deepEqual(
+					oSaveAsButton.getTooltip(),
+					"Only active versions can be saved as app variants. Please activate your draft.",
+					"then the correct tooltip is set for saveAs");
 				assert.notOk(oOverviewButton.getVisible(), "appVariantOverview is not visible");
 				assert.notOk(oManageAppsButton.getVisible(), "manageApps is not visible");
 
@@ -669,6 +757,10 @@ sap.ui.define([
 				this.oControlsModel.setProperty("/appVariantMenu/manageApps/enabled", false);
 				assert.ok(oSaveAsButton.getVisible(), "saveAs is visible");
 				assert.notOk(oSaveAsButton.getEnabled(), "saveAs is not enabled");
+				assert.deepEqual(
+					oSaveAsButton.getTooltip(),
+					"Only active versions can be saved as app variants. Please activate your draft.",
+					"then the correct tooltip is set for saveAs");
 				assert.notOk(oOverviewButton.getVisible(), "AppVariantOverview is not visible");
 				assert.ok(oManageAppsButton.getVisible(), "manageApps is visible");
 				assert.notOk(oManageAppsButton.getEnabled(), "manageApps is not enabled");
@@ -680,6 +772,10 @@ sap.ui.define([
 				this.oControlsModel.setProperty("/appVariantMenu/manageApps/enabled", true);
 				assert.ok(oSaveAsButton.getVisible(), "saveAs is visible");
 				assert.ok(oSaveAsButton.getEnabled(), "saveAs is enabled");
+				assert.deepEqual(
+					oSaveAsButton.getTooltip(),
+					null,
+					"then no tooltip is set for saveAs");
 				assert.notOk(oOverviewButton.getVisible(), "AppVariantOverview is not visible");
 				assert.ok(oManageAppsButton.getVisible(), "manageApps is visible");
 				assert.ok(oManageAppsButton.getEnabled(), "manageApps is enabled");
@@ -701,6 +797,10 @@ sap.ui.define([
 				this.oControlsModel.setProperty("/appVariantMenu/manageApps/enabled", false);
 				assert.ok(oSaveAsButton.getVisible(), "saveAs is visible");
 				assert.ok(oSaveAsButton.getEnabled(), "saveAs is enabled");
+				assert.deepEqual(
+					oSaveAsButton.getTooltip(),
+					null,
+					"then no tooltip is set for saveAs");
 				assert.ok(oOverviewButton.getVisible(), "AppVariantOverview is visible");
 				assert.ok(oOverviewButton.getEnabled(), "AppVariantOverview is enabled");
 				assert.notOk(oManageAppsButton.getVisible(), "manageApps is not visible");
@@ -715,6 +815,48 @@ sap.ui.define([
 				assert.strictEqual(oGetOverviewStub.callCount, 3, "the overview function was called");
 				assert.strictEqual(oGetOverviewStub.lastCall.args[0], false, "the first agrument is false");
 				assert.strictEqual(oGetOverviewStub.lastCall.args[1], Layer.CUSTOMER, "the second agrument is the current layer");
+			}.bind(this));
+		});
+
+		QUnit.test("Given a toolbar is created and app variants parameter in the model are set to false", function(assert) {
+			sandbox.stub(AppVariantFeature, "isSaveAsAvailable").resolves(true);
+			sandbox.stub(AppVariantFeature, "isManifestSupported").resolves(false);
+			sandbox.stub(FeaturesAPI, "isPublishAvailable").resolves(true);
+
+			return createAndStartRTA.call(this)
+			.then(function() {
+				return RtaQunitUtils.showActionsMenu(this.oToolbar);
+			}.bind(this))
+			.then(function() {
+				const oAppVariantMenuControl = this.oToolbar.getControl("appVariantMenu");
+				assert.notOk(oAppVariantMenuControl.getEnabled(), "then the app variant menu is not enabled");
+				assert.strictEqual(
+					oAppVariantMenuControl.getTooltip(),
+					"App variants are not supported for this app.",
+					"then the app variant menu tooltip is correct"
+				);
+				cleanUpCreateAndStartRTA.call(this);
+			}.bind(this));
+		});
+
+		QUnit.test("Given a toolbar is created and app variants parameter in the model are set to true", function(assert) {
+			sandbox.stub(AppVariantFeature, "isSaveAsAvailable").resolves(true);
+			sandbox.stub(AppVariantFeature, "isManifestSupported").resolves(true);
+			sandbox.stub(FeaturesAPI, "isPublishAvailable").resolves(true);
+
+			return createAndStartRTA.call(this)
+			.then(function() {
+				return RtaQunitUtils.showActionsMenu(this.oToolbar);
+			}.bind(this))
+			.then(function() {
+				const oAppVariantMenuControl = this.oToolbar.getControl("appVariantMenu");
+				assert.ok(oAppVariantMenuControl.getEnabled(), "then the app variant menu is enabled");
+				assert.strictEqual(
+					oAppVariantMenuControl.getTooltip(),
+					null,
+					"then the app variant menu does not have a tooltip"
+				);
+				cleanUpCreateAndStartRTA.call(this);
 			}.bind(this));
 		});
 	});
@@ -893,6 +1035,11 @@ sap.ui.define([
 					oIframeURL.searchParams.get("appVersion"),
 					"someAppVersion",
 					"then the proper app version is passed"
+				);
+				assert.strictEqual(
+					oIframeURL.searchParams.get("product_filter"),
+					"Key%20User%20Adaptation",
+					"then the proper product filter is passed"
 				);
 			}.bind(this));
 		});

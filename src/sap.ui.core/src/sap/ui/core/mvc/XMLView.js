@@ -15,6 +15,7 @@ sap.ui.define([
 	"sap/base/util/LoaderExtensions",
 	"sap/base/util/merge",
 	"sap/ui/base/ManagedObject",
+	"sap/ui/base/OwnStatics",
 	"sap/ui/core/Core",
 	"sap/ui/core/Control",
 	"sap/ui/core/RenderManager",
@@ -38,6 +39,7 @@ sap.ui.define([
 		LoaderExtensions,
 		merge,
 		ManagedObject,
+		OwnStatics,
 		Core,
 		Control,
 		RenderManager,
@@ -50,6 +52,8 @@ sap.ui.define([
 		jQuery
 	) {
 	"use strict";
+
+	const { runWithPreprocessors } = OwnStatics.get(ManagedObject);
 
 	// actual constants
 	var RenderPrefixes = RenderManager.RenderPrefixes,
@@ -562,6 +566,7 @@ sap.ui.define([
 		function processView(xContent) {
 			that._xContent = xContent;
 
+			/** @deprecated since 1.120.0 */
 			if (View._supportInfo) {
 				View._supportInfo({context: that._xContent, env: {caller:"view", viewinfo: merge({}, that), settings: merge({}, mSettings || {}), type: "xmlview"}});
 			}
@@ -734,7 +739,7 @@ sap.ui.define([
 		// XMLView special logic for asynchronous template parsing, when component loading is async but
 		// instance creation is sync.
 		function fnRunWithPreprocessor(fn) {
-			return ManagedObject.runWithPreprocessors(fn, {
+			return runWithPreprocessors(fn, {
 				settings: that._fnSettingsPreprocessor
 			});
 		}

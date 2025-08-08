@@ -119,6 +119,16 @@ sap.ui.define([
 		rm.close("td");
 	};
 
+	// wrap actions with a cell
+	ColumnListItemRenderer.renderActions = function(rm, oLI) {
+		this.openStartGridCell(rm, oLI, "td", oLI.getId() + "-Actions", "sapMListTblActionsCol").openEnd();
+
+		// let the list item base render the actions
+		ListItemBaseRenderer.renderActions.apply(this, arguments);
+
+		rm.close("td");
+	};
+
 	// ColumnListItem does not respect counter property of the LIB
 	ColumnListItemRenderer.renderCounter = function(rm, oLI) {
 	};
@@ -325,6 +335,13 @@ sap.ui.define([
 				oColumn.addDependent(oHeader);
 				oLI._addClonedHeader(oHeader);
 				rm.renderControl(oHeader);
+				const oColumnAction = oColumn.getAggregation("_action");
+				if (oColumnAction) {
+					const oColumnActionClone = oColumnAction.clone();
+					oColumn.addDependent(oColumnActionClone);
+					oLI._addClonedHeader(oColumnActionClone);
+					rm.renderControl(oColumnActionClone);
+				}
 				rm.openStart("span").class("sapMListTblSubCntSpr");
 				rm.attr("data-popin-colon", Library.getResourceBundleFor("sap.m").getText("TABLE_POPIN_LABEL_COLON"));
 				rm.openEnd().close("span");

@@ -4,33 +4,33 @@
 
 // Provides object sap.ui.fl.apply._internal.preprocessors.RegistrationDelegator
 sap.ui.define([
-	"sap/ui/core/mvc/Controller",
+	"sap/ui/core/mvc/ControllerExtensionProvider",
 	"sap/ui/core/mvc/XMLView",
 	"sap/ui/core/ComponentHooks",
 	"sap/ui/core/ExtensionPoint",
 	"sap/ui/fl/apply/_internal/changes/descriptor/Preprocessor",
 	"sap/ui/fl/apply/_internal/flexState/communication/FLPAboutInfo",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
 	"sap/ui/fl/apply/_internal/preprocessors/ComponentLifecycleHooks",
 	"sap/ui/fl/apply/api/DelegateMediatorAPI",
 	"sap/ui/fl/changeHandler/ChangeAnnotation",
 	"sap/ui/fl/initial/_internal/changeHandlers/ChangeHandlerRegistration",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/base/DesignTime",
 	// the lower 2 are set as a callback in the "register...Processors" which are not detected as dependencies from the preload-building
 	"sap/ui/fl/apply/_internal/preprocessors/ControllerExtension",
 	"sap/ui/fl/apply/_internal/preprocessors/XmlPreprocessor"
 ], function(
-	MvcController,
+	MvcControllerExtensionProvider,
 	XMLView,
 	ComponentHooks,
 	ExtensionPoint,
 	Preprocessor,
 	FLPAboutInfo,
-	ManifestUtils,
 	ComponentLifecycleHooks,
 	DelegateMediatorAPI,
 	ChangeAnnotation,
 	ChangeHandlerRegistration,
+	ManifestUtils,
 	DesignTime
 ) {
 	"use strict";
@@ -69,7 +69,7 @@ sap.ui.define([
 	}
 
 	function registerExtensionProvider() {
-		MvcController.registerExtensionProvider("sap/ui/fl/apply/_internal/preprocessors/ControllerExtension");
+		MvcControllerExtensionProvider.registerExtensionProvider("sap/ui/fl/apply/_internal/preprocessors/ControllerExtension");
 	}
 
 	function registerXMLPreprocessor() {

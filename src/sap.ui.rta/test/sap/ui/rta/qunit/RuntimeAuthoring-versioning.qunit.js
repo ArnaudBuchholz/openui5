@@ -6,7 +6,7 @@ sap.ui.define([
 	"sap/m/MessageToast",
 	"sap/ui/fl/initial/api/Version",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/initial/_internal/FlexInfoSession",
 	"sap/ui/fl/write/_internal/Versions",
 	"sap/ui/fl/write/api/PersistenceWriteAPI",
@@ -69,6 +69,11 @@ sap.ui.define([
 				});
 			}
 		});
+		const oApiStub = sandbox.stub().returns("");
+		RtaQunitUtils.stubSapUiRequire(sandbox, [{
+			name: "sap/ushell/api/RTA",
+			stub: { getLogo: oApiStub }
+		}]);
 	}
 
 	QUnit.module("Given that RuntimeAuthoring gets a switch version event from the toolbar in the FLP", {
@@ -467,7 +472,6 @@ sap.ui.define([
 			sandbox.stub(PersistenceWriteAPI, "hasDirtyChanges").returns(true);
 			sandbox.stub(this.oRta, "canSave").returns(true);
 			sandbox.stub(ReloadManager, "handleReloadOnExit");
-			sandbox.stub(ReloadManager, "removeDontShowWhatsNewAfterReload");
 			sandbox.stub(ReloadInfoAPI, "removeInfoSessionStorage");
 			const oMessageBoxStub = sandbox.stub(Utils, "showMessageBox").resolves();
 			const oSerializeStub = sandbox.stub(this.oRta, "_serializeToLrep").resolves();

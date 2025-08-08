@@ -251,7 +251,7 @@ function(
 				/**
 				 * If set to true, this control remembers and retains the selection of the items after a binding update has been performed (e.g. sorting, filtering).
 				 * <b>Note:</b> This feature works only if two-way data binding for the <code>selected</code> property of the item is not used. It also needs to be turned off if the binding context of the item does not always point to the same entry in the model, for example, if the order of the data in the <code>JSONModel</code> is changed.
-				 * <b>Note:</b> This feature leverages the built-in selection mechanism of the corresponding binding context when the OData V4 model is used. Therefore, all binding-relevant limitations apply in this context as well. For more details, see the {@link sap.ui.model.odata.v4.Context#setSelected setSelected}, the {@link sap.ui.model.odata.v4.ODataModel#bindList bindList}, and the {@link sap.ui.model.odata.v4.ODataMetaModel#requestValueListInfo requestValueListInfo} API documentation. Do not enable this feature when <code>$$SharedRequests</code> or <code>$$clearSelectionOnFilter</code> is active.
+				 * <b>Note:</b> This feature leverages the built-in selection mechanism of the corresponding binding context if the OData V4 model is used. Therefore, all binding-relevant limitations apply in this context as well. For more details, see the {@link sap.ui.model.odata.v4.Context#setSelected setSelected}, the {@link sap.ui.model.odata.v4.ODataModel#bindList bindList}, and the {@link sap.ui.model.odata.v4.ODataMetaModel#requestValueListInfo requestValueListInfo} API documentation. Do not enable this feature if <code>$$sharedRequest</code> or <code>$$clearSelectionOnFilter</code> is active.
 				 * <b>Note:</b> If this property is set to <code>false</code>, a possible binding context update of items (for example, filtering or sorting the list binding) would clear the selection of the items.
 				 * @since 1.16.6
 				 */
@@ -299,7 +299,18 @@ function(
 				 *
 				 * @since 1.93
 				 */
-				multiSelectMode : {type: "sap.m.MultiSelectMode", group: "Behavior", defaultValue: MultiSelectMode.Default}
+				multiSelectMode : {type: "sap.m.MultiSelectMode", group: "Behavior", defaultValue: MultiSelectMode.Default},
+
+				/**
+				 * Defines the maximum number of item actions.
+				 *
+				 * If the number of item actions exceeds the <code>itemActionCount</code> property value, an overflow button will appear, providing access to the additional actions.
+				 *
+				 * <b>Note:</b> Only values between <code>0-2</code> enables the use of the new <code>actions</code> aggregation. When enabled, the {@link sap.m.ListMode Delete} mode and the {@link sap.m.ListType Detail} list item type have no effect. Instead, dedicated actions of {@link sap.m.ListItemActionType type} <code>Delete</code> or <code>Edit</code> should be used.
+				 *
+				 * @since 1.137
+				 */
+				itemActionCount : {type : "int", group: "Misc", defaultValue: -1}
 			},
 			defaultAggregation : "items",
 			aggregations : {
@@ -576,6 +587,25 @@ function(
 					parameters : {
 						/**
 						 * Item in which the context menu was opened.
+						 */
+						listItem : {type : "sap.m.ListItemBase"}
+					}
+				},
+
+				/**
+				 * Fired when an item action is pressed.
+				 * @since 1.137
+				 */
+				itemActionPress: {
+					parameters: {
+
+						/**
+						 * The list item action that fired the event
+						 */
+						itemAction : {type : "sap.m.ListItemAction"},
+
+						/**
+						 * The list item in which the action was performed
 						 */
 						listItem : {type : "sap.m.ListItemBase"}
 					}
@@ -1796,6 +1826,17 @@ function(
 		}
 	};
 
+	ListBase.prototype._getItemActionCount = function() {
+		return Math.min(2, Math.max(-1, this.getItemActionCount()));
+	};
+
+	ListBase.prototype._onItemActionPress = function(oItem, oAction) {
+		this.fireItemActionPress({
+			listItem: oItem,
+			action: oAction
+		});
+	};
+
 	/**
 	 * After swipe content is shown on the right hand side of the list item
 	 * we will block the touch events and this method defines this touch blocker area.
@@ -2927,7 +2968,9 @@ function(
 		var iItemTop = Math.round(oTargetItemDomRef.getBoundingClientRect().top);
 		if (iGHRectBottom > iItemTop || iTHRectBottom > iItemTop || iInfoTBarContainerRectBottom > iItemTop || iHeaderToolbarRectBottom > iItemTop) {
 			window.requestAnimationFrame(function () {
-				oScrollDelegate.scrollToElement(oTargetItemDomRef, 0, [0, -iGHRectHeight - iTHRectHeight - iInfoTBarContainerRectHeight - iHeaderToolbarRectHeight - iStickyFocusOffset], true);
+				if (oTargetItemDomRef.isConnected) {
+					oScrollDelegate.scrollToElement(oTargetItemDomRef, 0, [0, -iGHRectHeight - iTHRectHeight - iInfoTBarContainerRectHeight - iHeaderToolbarRectHeight - iStickyFocusOffset], true);
+				}
 			});
 		}
 	};

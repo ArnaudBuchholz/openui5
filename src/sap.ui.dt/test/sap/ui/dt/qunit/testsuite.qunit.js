@@ -164,6 +164,11 @@ sap.ui.define(function() {
 					only: ["sap/ui/dt/util/ZIndexManager"]
 				}
 			},
+			"util/_createPromise": {
+				coverage: {
+					only: ["sap/ui/dt/util/_createPromise"]
+				}
+			},
 
 			// -------------------------------------------------------------------------------
 			// Plugin tests:
@@ -262,44 +267,6 @@ sap.ui.define(function() {
 					resourceroots: {
 						"dt.control": "test-resources/sap/ui/dt/qunit/testdata/controls/",
 						"sap.ui.testLibrary": "test-resources/sap/ui/dt/qunit/testdata/"
-					}
-				},
-				coverage: {
-					only: ["sap/ui/dt/enablement"]
-				}
-			},
-			"enablement/report/QUnitReport": {
-				group: "Enablement",
-				coverage: {
-					only: ["sap/ui/dt/enablement"]
-				}
-			},
-			"enablement/report/Table": {
-				group: "Enablement",
-				ui5: {
-					resourceroots: {
-						"dt.control": "test-resources/sap/ui/dt/qunit/testdata/controls/",
-						"sap.ui.testLibrary": "test-resources/sap/ui/dt/qunit/testdata/"
-					}
-				},
-				coverage: {
-					only: ["sap/ui/dt/test"]
-				}
-			},
-			"enablement/report/Statistic": {
-				group: "Enablement",
-				coverage: {
-					only: ["sap/ui/dt/enablement"]
-				}
-			},
-			"controlEnablementReport/LibraryScanner": {
-				group: "Enablement",
-				module: "./../controlEnablementReport/test/LibraryScanner.qunit",
-				ui5: {
-					resourceroots: {
-						"dt.control": "test-resources/sap/ui/dt/qunit/testdata/controls/",
-						"sap.ui.testLibrary": "test-resources/sap/ui/dt/qunit/testdata/",
-						controlEnablementReport: "test-resources/sap/ui/dt/controlEnablementReport/"
 					}
 				},
 				coverage: {

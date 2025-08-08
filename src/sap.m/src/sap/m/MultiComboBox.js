@@ -646,7 +646,7 @@ function(
 
 		//Open popover with items if in readonly mode and has Nmore indicator
 		if (!this.getEditable() && oTokenizer.getHiddenTokensCount() && oEvent.target === this.getFocusDomRef()) {
-			oTokenizer._togglePopup(oTokenizer.getTokensPopup());
+			oTokenizer._togglePopup();
 		}
 
 	};
@@ -873,7 +873,7 @@ function(
 	 * @private
 	 */
 	MultiComboBox.prototype.onkeydown = function(oEvent) {
-		if (this.areHotKeysPressed(oEvent) && this.isOpen()) {
+		if (this.areHotKeysPressed(oEvent) && this.isOpen()){
 			// Override the ComboBoxBase onkeydown method to prevent the default behavior
 			// of the ComboBoxBase when the hotkeys are pressed
 			// The default behavior would execute SuggestionsPopover handleKeyboardNavigation method
@@ -1247,11 +1247,8 @@ function(
 		this.setProperty("hasSelection", !!this.getSelectedItems().length);
 
 		if (!this._bAlreadySelected) {
-			this._sInitialValueStateText = this.getValueStateText();
-		}
-
-		if (this.getValueState() !== ValueState.Error) {
 			this._sInitialValueState = this.getValueState();
+			this._sInitialValueStateText = this.getValueStateText();
 		}
 
 		if (this.getShowClearIcon()) {
@@ -2082,7 +2079,7 @@ function(
 			oPicker = this.getPicker();
 			oPicker.open();
 		} else {
-			oTokenizer._togglePopup(oTokenizer.getTokensPopup());
+			oTokenizer._togglePopup();
 		}
 
 		if (this.isPickerDialog()) {
@@ -2120,7 +2117,6 @@ function(
 		var oTokenizer = new Tokenizer({
 			renderMode: TokenizerRenderMode.Narrow
 		}).attachTokenDelete(this._handleTokenDelete, this);
-
 		oTokenizer.getTokensPopup()
 			.attachAfterOpen(function () {
 				if (oTokenizer.hasOneTruncatedToken()) {
@@ -2259,6 +2255,7 @@ function(
 	 */
 	MultiComboBox.prototype.onAfterRendering = function() {
 		var oTokenizer = this.getAggregation("tokenizer");
+		var oTokenizerOpener = Element.getElementById(oTokenizer.getProperty("opener"))?.getDomRef();
 		var oTokenToFocus;
 
 		ComboBoxBase.prototype.onAfterRendering.apply(this, arguments);
@@ -2276,6 +2273,10 @@ function(
 			}
 
 			this.bShouldRestoreTokenizerFocus = false;
+		}
+
+		if (oTokenizerOpener !== this.getDomRef()) {
+			oTokenizer.setProperty("opener", this.getId(), true);
 		}
 	};
 

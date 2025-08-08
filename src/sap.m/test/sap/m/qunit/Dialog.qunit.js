@@ -1043,10 +1043,6 @@ sap.ui.define([
 		assert.ok(oDialog.getDomRef(), "Dialog is rendered");
 		assert.equal(oDialog.getBeginButton(), oBBtn, "Getter of beginButton should return the button itself");
 		assert.equal(oDialog.getEndButton(), oEBtn, "Getter of endButton should return the button itself");
-		/**
-		 * @deprecated As of version 1.120
-		 */
-		assert.equal(oBBtn.$().width(), oEBtn.$().width(), "BeginButton and EndButton are with equal width");
 
 		// add button to "buttons" aggregation while begin/endButton are set
 		aButtons.forEach(function (oButton) {
@@ -1105,20 +1101,36 @@ sap.ui.define([
 		oDialog.destroy();
 	});
 
-	QUnit.test("Set role", function (assert) {
+	QUnit.test("ACC role 'dialog'", function (assert) {
 		// Arrange
 		var oDialog = new Dialog();
-		oDialog.setProperty("role", DialogRoleType.AlertDialog);
 
 		// Act
 		oDialog.open();
 
 		// Assert
-		assert.strictEqual(oDialog.$().attr("role"), DialogRoleType.AlertDialog, "Should be able to set the role of the dialog.");
+		assert.strictEqual(oDialog.$().attr("role"), DialogRoleType.Dialog.toLowerCase(), "Role of the dialog is correct.");
 
 		// Clean up
 		oDialog.destroy();
 	});
+
+	QUnit.test("ACC role 'alertdialog'", function (assert) {
+
+		// Arrange
+		var oDialogWarning = new Dialog();
+		oDialogWarning.setState(ValueState.Warning);
+
+		// Act
+		oDialogWarning.open();
+
+		// Assert
+		assert.strictEqual(oDialogWarning.$().attr("role"), DialogRoleType.AlertDialog.toLowerCase(), "Role of the dialog is correct.");
+
+		// Clean up
+		oDialogWarning.destroy();
+	});
+
 
 	QUnit.test("Set closeOnNavigation", function (assert) {
 		// Arrange

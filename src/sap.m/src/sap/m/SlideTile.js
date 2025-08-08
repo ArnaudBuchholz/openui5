@@ -14,7 +14,8 @@ sap.ui.define([
 	"sap/ui/thirdparty/jquery",
 	"sap/ui/core/InvisibleText",
 	"sap/ui/core/Lib",
-	"sap/m/Button"
+	"sap/m/Button",
+	"sap/ui/Device"
 ],
 	function(
 		library,
@@ -28,7 +29,8 @@ sap.ui.define([
 		jQuery,
 		InvisibleText,
 		CoreLib,
-		Button
+		Button,
+		Device
 	) {
 	"use strict";
 
@@ -82,6 +84,7 @@ sap.ui.define([
 				sizeBehavior: {type: "sap.m.TileSizeBehavior", defaultValue: TileSizeBehavior.Responsive},
 				/**
 				 * Width of the control.
+				 * If the tiles within the SlideTile are in ArticleMode and have a frameType of Stretch, and if the SlideTile's width exceeds 799px, the image in the tile appears on the right side
 				 * @since 1.72
 				 */
 				width: {type: "sap.ui.core.CSSSize", group: "Appearance"},
@@ -262,6 +265,16 @@ sap.ui.define([
 		//Sets the aria-describedby attribute and uses the _invisibleText id in it
 		if (this.getDomRef()) {
 			this.getDomRef().setAttribute("aria-describedby",this.getAggregation("_invisibleText").getId());
+		}
+
+		var bIsScreenLarge = this.getDomRef()?.offsetWidth >= 800;
+		this.toggleStyleClass("sapMSTLargeScreen",bIsScreenLarge);
+		this.toggleStyleClass("sapMSTPhone",Device.system.phone);
+		if (bIsScreenLarge) {
+			this.getTiles().forEach((oTile) => oTile._setHeaderContentBackgroundImage());
+		}
+		if (this.getDomRef()?.offsetHeight < 180) {
+			this.addStyleClass("sapMSTSmallScreen");
 		}
 	};
 

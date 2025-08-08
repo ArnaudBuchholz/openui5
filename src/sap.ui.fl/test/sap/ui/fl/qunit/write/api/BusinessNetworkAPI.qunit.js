@@ -4,10 +4,13 @@ sap.ui.define([
 	"sap/ui/core/Control",
 	"sap/ui/fl/apply/_internal/controlVariants/Utils",
 	"sap/ui/fl/apply/_internal/flexObjects/FlexObjectFactory",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
+	"sap/ui/fl/initial/_internal/FlexInfoSession",
 	"sap/ui/fl/write/_internal/flexState/FlexObjectManager",
 	"sap/ui/fl/write/_internal/Storage",
 	"sap/ui/fl/write/api/BusinessNetworkAPI",
+	"sap/ui/fl/write/api/ChangesWriteAPI",
+	"sap/ui/fl/write/api/FeaturesAPI",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils",
 	"sap/ui/thirdparty/sinon-4"
@@ -16,9 +19,12 @@ sap.ui.define([
 	ControlVariantsUtils,
 	FlexObjectFactory,
 	ManifestUtils,
+	FlexInfoSession,
 	FlexObjectManager,
 	Storage,
 	BusinessNetworkAPI,
+	ChangesWriteAPI,
+	FeaturesAPI,
 	Layer,
 	Utils,
 	sinon
@@ -119,6 +125,50 @@ sap.ui.define([
 			const sResponse = await BusinessNetworkAPI.save(oControl);
 			assert.strictEqual(sResponse, "saveReturn", "then the save response is returned");
 			assert.ok(FlexObjectManager.addDirtyFlexObjects.calledOnce, "then the dirty objects are added");
+		});
+
+		QUnit.test("when disablePersonalization is called with a valid reference", function(assert) {
+			const sReference = "sap.ui.rta.test";
+			window.sessionStorage.setItem(`sap.ui.fl.info.${sReference}`, JSON.stringify({maxLayer: "CUSTOMER"}));
+			BusinessNetworkAPI.disablePersonalization(sReference);
+
+			const oFlexInfoSession = FlexInfoSession.getByReference(sReference);
+			assert.strictEqual(oFlexInfoSession.maxLayer, Layer.CUSTOMER, "then the max layer is set to CUSTOMER");
+			assert.ok(oFlexInfoSession.saveChangeKeepSession, "then saveChangeKeepSession is set to true");
+			assert.ok(window.sessionStorage.getItem("sap.ui.rta.skipReload"), "then skipReload is set in sessionStorage");
+		});
+
+		QUnit.test("when disablePersonalization is called with an invalid reference", function(assert) {
+			assert.throws(
+				() => BusinessNetworkAPI.disablePersonalization("invalidRef"),
+				/Error: Invalid reference provided: invalidRef/,
+				"then an error is thrown with a meaningful message"
+			);
+		});
+
+		QUnit.test("when deleteVariants is called", async function(assert) {
+			const aExpectedDeletedObjects = ["variant1", "variant2", "DeletedObject1", "DeletedObject2"];
+			sandbox.stub(ChangesWriteAPI, "deleteVariantsAndRelatedObjects")
+			.withArgs({
+				variantManagementControl: "DummyVMControl",
+				variants: ["variant1", "variant2"],
+				layer: Layer.CUSTOMER,
+				forceDelete: true
+			})
+			.returns(aExpectedDeletedObjects);
+			sandbox.stub(FeaturesAPI, "isVersioningEnabled").resolves(false);
+			const oSaveFlexObjectsStub = sandbox.stub(FlexObjectManager, "saveFlexObjects")
+			.withArgs({
+				selector: "DummyVMControl",
+				flexObjects: aExpectedDeletedObjects,
+				includeCtrlVariants: true
+			});
+			const aDeletedObjects = await BusinessNetworkAPI.deleteVariants({
+				vmControl: "DummyVMControl",
+				variants: ["variant1", "variant2"]
+			});
+			assert.deepEqual(aDeletedObjects, aExpectedDeletedObjects, "then the deleted objects are returned");
+			assert.ok(oSaveFlexObjectsStub, "then the saveFlexObjects function is called once with the correct parameters");
 		});
 	});
 

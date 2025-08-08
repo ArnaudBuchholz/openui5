@@ -2,10 +2,14 @@
  * ${copyright}
  */
 
+/* eslint-disable valid-jsdoc */
+
 sap.ui.define([
-	"../ValueHelp.delegate"
+	"../ValueHelp.delegate",
+	'sap/ui/mdc/enums/RequestShowContainerReason'
 ], function(
-	BaseValueHelpDelegate
+	BaseValueHelpDelegate,
+	RequestShowContainerReason
 ) {
 	"use strict";
 
@@ -16,6 +20,21 @@ sap.ui.define([
 
 	const ValueHelpDelegate = Object.assign({}, BaseValueHelpDelegate);
 
+	ValueHelpDelegate.requestShowContainer = function (oValueHelp, oContainer, sRequestShowContainerReason) {
+		const {shouldOpenOnClick} = oValueHelp.getPayload();
+
+		if ([shouldOpenOnClick && RequestShowContainerReason.Tap, RequestShowContainerReason.Filter].includes(sRequestShowContainerReason)) {
+			return true;
+		}
+
+
+
+		return BaseValueHelpDelegate.requestShowContainer.apply(this, arguments);
+	};
+
+	/**
+	 * @deprecated As of version 1.137
+	 */
 	ValueHelpDelegate.shouldOpenOnClick = function (oValueHelp, oContainer) {
 		/**
 		 *  @deprecated since 1.121.0
@@ -26,6 +45,9 @@ sap.ui.define([
 		return oValueHelp.getPayload()?.shouldOpenOnClick;
 	};
 
+	/**
+	 * @deprecated As of version 1.137
+	 */
 	ValueHelpDelegate.shouldOpenOnFocus = function (oValueHelp, oContainer) {
 		/**
 		 *  @deprecated since 1.121.0
@@ -37,6 +59,9 @@ sap.ui.define([
 	};
 
 
+	/**
+	 * @deprecated As of version 1.137
+	 */
 	ValueHelpDelegate.showTypeahead = function (oValueHelp, oContent) {
 		//return true;
 		return new Promise((resolve) => {

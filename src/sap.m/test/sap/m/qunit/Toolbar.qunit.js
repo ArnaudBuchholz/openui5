@@ -8,6 +8,7 @@ sap.ui.define([
 	"sap/m/ToolbarSeparator",
 	"sap/m/Button",
 	"sap/m/SegmentedButton",
+	"sap/m/SegmentedButtonItem",
 	"sap/m/Select",
 	"sap/ui/core/Item",
 	"sap/m/Title",
@@ -34,6 +35,7 @@ sap.ui.define([
 	ToolbarSeparator,
 	Button,
 	SegmentedButton,
+	SegmentedButtonItem,
 	Select,
 	Item,
 	Title,
@@ -822,6 +824,62 @@ sap.ui.define([
 		oTB.destroy();
 	});
 
+	QUnit.test("tests up/down arrow key navigation of aggregated control", function(assert) {
+		var SelectWrapper = Control.extend("custom.SelectWrapper", {
+				metadata: {
+					interfaces: [ "sap.m.IToolbarInteractiveControl" ],
+					aggregations: { _select: { type: "sap.m.Select", multiple: false, visibility: "hidden" } }
+				},
+				init: function () {
+					this.setAggregation("_select", new Select({items: [new Item({text: "Item 1"}), new Item({text: "Item 2"})]}));
+				},
+				_getToolbarInteractive: function() { return true; },
+				renderer: function (oRm, oControl) {
+					oRm.openStart("div", oControl);
+					oRm.openEnd();
+					oRm.renderControl(oControl.getAggregation("_select"));
+					oRm.close("div");
+				}
+			}),
+			oSelectWrapper = new SelectWrapper(),
+			oSelect = oSelectWrapper.getAggregation("_select"),
+			oTB = createToolbar({
+				Toolbar : {
+					content : [oSelectWrapper]
+				}
+			}),
+			oArrowUpEvent = new KeyboardEvent("keydown", { keyCode: KeyCodes.ARROW_UP }),
+			oArrowDownEvent = new KeyboardEvent("keydown", { keyCode: KeyCodes.ARROW_DOWN }),
+			oDefaultBehaviorSpy = sinon.spy(oTB, "_shouldAllowDefaultBehavior");
+
+		// Focus the first element manually
+		oSelect.focus();
+		oDefaultBehaviorSpy.resetHistory();
+
+		// Act: move forward
+		oTB._moveFocus("forward", oArrowUpEvent);
+
+		// Check
+		assert.strictEqual(document.activeElement, oSelect.getFocusDomRef(), "The focus is still on the select");
+		assert.ok(oDefaultBehaviorSpy.calledOnce, "Default behavior is allowed on arrow up");
+		assert.ok(oDefaultBehaviorSpy.returned(true), "Default behavior is allowed on arrow up");
+		assert.ok(oDefaultBehaviorSpy.getCall(0).args[1].isA("custom.SelectWrapper"), "The default behavior is called with the correct control type");
+
+		oDefaultBehaviorSpy.resetHistory();
+
+		// Act: move backward
+		oTB._moveFocus("backward", oArrowDownEvent);
+
+		// Check
+		assert.strictEqual(document.activeElement, oSelect.getFocusDomRef(), "The focus is still on the select");
+		assert.ok(oDefaultBehaviorSpy.calledOnce, "Default behavior is allowed on arrow down");
+		assert.ok(oDefaultBehaviorSpy.returned(true), "Default behavior is allowed on arrow down");
+		assert.ok(oDefaultBehaviorSpy.getCall(0).args[1].isA("custom.SelectWrapper"), "The default behavior is called with the correct control type");
+
+		// Cleanup
+		oTB.destroy();
+	});
+
 	QUnit.test("inactive toolbar should not fire press on SPACE key", function(assert) {
 		var oLabel = new Label({text : "text"});
 		var fnPressSpy = this.spy();
@@ -1129,14 +1187,14 @@ sap.ui.define([
 		var oTB = createToolbar();
 
 		var oSB = new SegmentedButton({
-			buttons : [
-				new Button({
+			items : [
+				new SegmentedButtonItem({
 					text: "button 1"
 				}),
-				new Button({
+				new SegmentedButtonItem({
 					text: "button 2"
 				}),
-				new Button({
+				new SegmentedButtonItem({
 					text: "button 3"
 				})
 			]
@@ -1167,7 +1225,7 @@ sap.ui.define([
 		oTB._moveFocus("forward", oArrowDownEvent);
 
 		// Assert
-		assert.strictEqual(oDefaultBehaviorSpy.getCalls()[0].args[0], oSB, "_shouldAllowDefaultBehavior is called with SegmentedButton");
-		assert.strictEqual(oDefaultBehaviorSpy.getCalls()[1].args[0], oSelect, "_shouldAllowDefaultBehavior is called with Select");
+		assert.strictEqual(oDefaultBehaviorSpy.getCalls()[0].args[1], oSB, "_shouldAllowDefaultBehavior is called with SegmentedButton");
+		assert.strictEqual(oDefaultBehaviorSpy.getCalls()[1].args[1], oSelect, "_shouldAllowDefaultBehavior is called with Select");
 	});
 });

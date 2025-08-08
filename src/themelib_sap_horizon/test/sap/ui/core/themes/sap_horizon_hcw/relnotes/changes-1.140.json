@@ -1,0 +1,12 @@
+{
+  "1.140.0": {
+    "date": "August 2025",
+    "notes": [
+      {
+        "id": "c7195a7fbbe274318716ccd27ecc072406786d8b",
+        "type": "FIX",
+        "text": " sap.m.IconTabBar: Unnecessary bold on tab text is now removed"
+      }
+    ]
+  }
+}

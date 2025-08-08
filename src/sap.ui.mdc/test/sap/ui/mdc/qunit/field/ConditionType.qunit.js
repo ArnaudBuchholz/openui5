@@ -22,6 +22,7 @@ sap.ui.define([
 	"sap/ui/model/odata/type/String",
 	"sap/ui/model/odata/type/DateTimeWithTimezone",
 	"sap/ui/model/odata/type/DateTimeOffset",
+	"sap/ui/core/Lib",
 	"sap/base/strings/whitespaceReplacer",
 	"sap/base/util/deepEqual"
 ], (
@@ -45,11 +46,13 @@ sap.ui.define([
 	StringType,
 	DateTimeWithTimezoneType,
 	DateTimeOffsetType,
+	Library,
 	whitespaceReplacer,
 	deepEqual
 ) => {
 	"use strict";
 
+	const oResourceBundle = Library.getResourceBundleFor("sap.ui.mdc");
 	let oConditionType;
 	let oValueType;
 
@@ -157,6 +160,15 @@ sap.ui.define([
 		const oCondition = Condition.createCondition(OperatorName.Contains, ["Test"]);
 		const sResult = oConditionType.formatValue(oCondition);
 		assert.equal(sResult, "Test", "Result of formatting");
+
+	});
+
+	QUnit.test("Formatting: Empty - simple String", (assert) => {
+
+		const oCondition = Condition.createCondition(OperatorName.Empty, []);
+		const sResult = oConditionType.formatValue(oCondition);
+		const sText = "<" + oResourceBundle.getText("operators.Empty.tokenText", undefined, true) + ">";
+		assert.equal(sResult, sText, "Result of formatting");
 
 	});
 
@@ -306,7 +318,8 @@ sap.ui.define([
 
 	QUnit.test("Parsing: <empty> - string", (assert) => {
 
-		const oCondition = oConditionType.parseValue("<empty>");
+		const sText = "<" + oResourceBundle.getText("operators.Empty.tokenText", undefined, true) + ">";
+		const oCondition = oConditionType.parseValue(sText);
 		assert.ok(oCondition, "Result returned");
 		assert.equal(typeof oCondition, "object", "Result is object");
 		assert.equal(oCondition.operator, OperatorName.Empty, "Operator");
@@ -498,6 +511,16 @@ sap.ui.define([
 
 	});
 
+	QUnit.test("Formatting: Empty - date", (assert) => {
+
+		oConditionType.oFormatOptions.operators = []; // fake setting directly
+		const oCondition = Condition.createCondition(OperatorName.Empty, []);
+		const sResult = oConditionType.formatValue(oCondition);
+		const sText = oResourceBundle.getText("operators.Empty.tokenText.date", undefined, true);
+		assert.equal(sResult, sText, "Result of formatting");
+
+	});
+
 	QUnit.test("Parsing: EQ - date", (assert) => {
 
 		const oCondition = oConditionType.parseValue("2020-02-03");
@@ -525,6 +548,19 @@ sap.ui.define([
 		assert.ok(oException, "exception fired");
 		assert.ok(oValueType.parseValue.calledWith("X", "string"), "parseValue of ValueType called with currentValue");
 		assert.ok(oOriginalType.parseValue.calledWith("X", "string"), "parseValue of originalDateType called with currentValue");
+
+	});
+
+	QUnit.test("Parsing: Empty - date", (assert) => {
+
+		oConditionType.oFormatOptions.operators = []; // fake setting directly
+		const sText = oResourceBundle.getText("operators.Empty.tokenText.date", undefined, true);
+		const oCondition = oConditionType.parseValue(sText);
+		assert.ok(oCondition, "Result returned");
+		assert.equal(typeof oCondition, "object", "Result is object");
+		assert.equal(oCondition.operator, OperatorName.Empty, "Operator");
+		assert.ok(Array.isArray(oCondition.values), "values are array");
+		assert.equal(oCondition.values.length, 0, "Values length");
 
 	});
 
@@ -806,7 +842,8 @@ sap.ui.define([
 			control: "Control",
 			caseSensitive: true,
 			exactMatch: true,
-			exception: FormatException
+			exception: FormatException,
+			emptyAllowed: false
 		};
 		let sResult = oConditionType.formatValue(oCondition);
 		assert.equal(sResult, "SyncCall", "Result of formatting");
@@ -1007,6 +1044,7 @@ sap.ui.define([
 	QUnit.test("Parsing: key and description -> key and Description", (assert) => {
 
 		oConditionType.oFormatOptions.display = FieldDisplay.ValueDescription; // fake setting directly
+		oConditionType.oFormatOptions.emptyAllowed = true; // fake setting directly
 
 		let oPromise = oConditionType.parseValue("I2 (X)");
 		assert.ok(oPromise instanceof Promise, "Promise returned");
@@ -1033,7 +1071,8 @@ sap.ui.define([
 				control: "Control",
 				exactMatch: false,
 				caseSensitive: undefined,
-				exception: ParseException
+				exception: ParseException,
+				emptyAllowed: true
 			};
 			assert.ok(oValueHelp.getItemForValue.calledWith(oConfig), "getItemForValue called");
 
@@ -1393,7 +1432,8 @@ sap.ui.define([
 			control: "Control",
 			caseSensitive: true,
 			exactMatch: true,
-			exception: ParseException
+			exception: ParseException,
+			emptyAllowed: false
 		};
 
 		const oCondition = oConditionType.parseValue("=X");
@@ -1483,7 +1523,8 @@ sap.ui.define([
 			control: "Control",
 			caseSensitive: undefined,
 			exactMatch: false,
-			exception: ParseException
+			exception: ParseException,
+			emptyAllowed: false
 		};
 
 		let oException;
@@ -3016,6 +3057,7 @@ sap.ui.define([
 	QUnit.test("Formatting: key -> description (from help)", (assert) => {
 
 		oConditionType.oFormatOptions.valueHelpID = "VH1"; // fake setting directly
+		oConditionType.oFormatOptions.emptyAllowed = true; // fake setting directly
 		const oCondition = Condition.createCondition(OperatorName.EQ, [1], undefined, undefined, ConditionValidated.Validated);
 		const oConfig = { // to compare
 			value: 1,
@@ -3029,7 +3071,8 @@ sap.ui.define([
 			control: "Control",
 			caseSensitive: true,
 			exactMatch: true,
-			exception: FormatException
+			exception: FormatException,
+			emptyAllowed: true
 		};
 
 		const oPromise = oConditionType.formatValue(oCondition);
@@ -3057,7 +3100,8 @@ sap.ui.define([
 			control: "Control",
 			exactMatch: false,
 			caseSensitive: undefined,
-			exception: ParseException
+			exception: ParseException,
+			emptyAllowed: false
 		};
 
 		const oPromise =  oConditionType.parseValue("2023-07-31");
@@ -3093,7 +3137,8 @@ sap.ui.define([
 			control: "Control",
 			exactMatch: false,
 			caseSensitive: undefined,
-			exception: ParseException
+			exception: ParseException,
+			emptyAllowed: false
 		};
 
 		const oPromise =  oConditionType.parseValue("1");
@@ -3129,7 +3174,8 @@ sap.ui.define([
 			control: "Control",
 			exactMatch: false,
 			caseSensitive: undefined,
-			exception: ParseException
+			exception: ParseException,
+			emptyAllowed: false
 		};
 
 		const oPromise =  oConditionType.parseValue("1 (2023-07-31)");

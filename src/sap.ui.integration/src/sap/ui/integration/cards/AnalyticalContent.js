@@ -185,8 +185,8 @@ sap.ui.define([
 				this.hideNoDataMessage();
 			} else {
 				this.showNoDataMessage({
-					illustrationType: IllustratedMessageType.NoEntries,
-					title: this.getCardInstance().getTranslatedText("CARD_NO_ITEMS_ERROR_LISTS")
+					illustrationType: IllustratedMessageType.NoData,
+					title: Library.getResourceBundleFor("sap.ui.integration").getText("CARD_NO_ITEMS_ERROR_LISTS")
 				});
 			}
 		}

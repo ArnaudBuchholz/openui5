@@ -4,6 +4,7 @@
 
 sap.ui.define([
 	"sap/base/Log",
+	"sap/ui/dt/OverlayRegistry",
 	"sap/ui/dt/Util",
 	"sap/ui/fl/Utils",
 	"sap/ui/rta/plugin/Plugin",
@@ -11,6 +12,7 @@ sap.ui.define([
 
 ], function(
 	BaseLog,
+	OverlayRegistry,
 	DtUtil,
 	FlUtils,
 	Plugin,
@@ -287,6 +289,7 @@ sap.ui.define([
 
 					aMenuItems.push({
 						id: bSingleAction ? sPluginId : sPluginId + iIndex,
+						additionalInfo: this._getAdditionalInfo(oResponsibleElementOverlay, oSettingsAction),
 						rank: bSingleAction ? iRank : iRank + iIndex,
 						text: this.getActionText(oResponsibleElementOverlay, oSettingsAction, sPluginId),
 						icon: getActionIcon(oSettingsAction),

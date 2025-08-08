@@ -4,6 +4,7 @@ sap.ui.define([
 	"sap/ui/base/BindingParser",
 	"sap/ui/base/DataType",
 	"sap/ui/base/ManagedObject",
+	"sap/ui/base/OwnStatics",
 	"sap/ui/core/Element",
 	"sap/ui/model/json/JSONModel",
 	"sap/ui/model/Context",
@@ -20,8 +21,12 @@ sap.ui.define([
 	"sap/base/util/ObjectPath",
 	"sap/base/future",
 	"sap/base/Log"
-], function(BindingInfo, BindingParser, DataType, ManagedObject, Element, JSONModel, Context, ManagedObjectModel, StringType, UnitType, Control, Component, UIComponent, Sorter, ManagedObjectMetadata, escapeRegExp, isEmptyObject, ObjectPath, future, Log) {
+], function(BindingInfo, BindingParser, DataType, ManagedObject, OwnStatics, Element, JSONModel, Context, ManagedObjectModel, StringType, UnitType, Control, Component, UIComponent, Sorter, ManagedObjectMetadata, escapeRegExp, isEmptyObject, ObjectPath, future, Log) {
 	"use strict";
+
+	const { runWithOwner } = OwnStatics.get(ManagedObject);
+
+
 	var mObjects = {};
 
 	var MyEnum = {
@@ -59,6 +64,7 @@ sap.ui.define([
 				intArray : {type: "int[]", group: "Appearance", defaultValue: []},
 				booleanArray : {type: "boolean[]", group: "Appearance", defaultValue: []},
 				objectValue : {type: "object", group: "Misc", defaultValue: null},
+				anyValue : {type: "any", group: "Misc", defaultValue: null},
 				_hiddenValue: { type: "string", defaultValue: "", visibility: "hidden"},
 				byValueArray: { type: "object[]", defaultValue: [], byValue: true}
 			},
@@ -281,21 +287,21 @@ sap.ui.define([
 		assert.deepEqual(obj1.getOwnModels(), {}, "No models are defined. Empty object is returned.");
 	});
 
-	QUnit.test("[legacy] ManagedObject.bindingParser is available/correctly set", function(assert) {
+	QUnit.test("[legacy] BindingInfo.parse is available/correctly set", function(assert) {
 		// Before fixing this call would produce an error ("undefined is not a function")
 		var sEscaped = BindingInfo.escape("{model>myPath}");
 		assert.strictEqual('\\{model>myPath\\}', sEscaped, "Binding string correctly escaped");
 
 		// asserts
-		assert.strictEqual(ManagedObject.bindingParser, BindingParser.complexParser, "Default complex binding parser is correctly set");
-		assert.strictEqual(ManagedObject.bindingParser, BindingInfo.parse, "ManagedObject.bindingParser function is in line with the BindingInfo.parse function");
+		assert.strictEqual(BindingInfo.parse, BindingParser.complexParser, "Default complex binding parser is correctly set");
+		assert.strictEqual(BindingInfo.parse, BindingInfo.parse, "BindingInfo.parse function is in line with the BindingInfo.parse function");
 
-		ManagedObject.bindingParser = BindingParser.simpleParser;
+		BindingInfo.parse = BindingParser.simpleParser;
 
-		assert.strictEqual(ManagedObject.bindingParser, BindingParser.simpleParser, "Default complex binding parser is correctly set");
-		assert.strictEqual(ManagedObject.bindingParser, BindingInfo.parse, "ManagedObject.bindingParser function is in line with the BindingInfo.parse function");
+		assert.strictEqual(BindingInfo.parse, BindingParser.simpleParser, "Default complex binding parser is correctly set");
+		assert.strictEqual(BindingInfo.parse, BindingInfo.parse, "BindingInfo.parse function is in line with the BindingInfo.parse function");
 
-		ManagedObject.bindingParser = BindingParser.complexParser;
+		BindingInfo.parse = BindingParser.complexParser;
 	});
 
 	QUnit.module("Property Metadata", {
@@ -594,14 +600,14 @@ sap.ui.define([
 
 	QUnit.test("Escape property before setting", function(assert) {
 		// cannot test actual escaping because it does not change the value when bindingSyntax is not set to "complex"
-		sinon.spy(ManagedObject.bindingParser, "escape");
+		sinon.spy(BindingInfo.parse, "escape");
 
 		// string
 		ManagedObject.escapeSettingsValue("x");
-		assert.equal(ManagedObject.bindingParser.escape.callCount, 1, "strings should be escaped by escapeSettingsValue");
+		assert.equal(BindingInfo.parse.escape.callCount, 1, "strings should be escaped by escapeSettingsValue");
 
 		ManagedObject.escapeSettingsValue(41);
-		assert.equal(ManagedObject.bindingParser.escape.callCount, 1, "non-strings should not be escaped by escapeSettingsValue");
+		assert.equal(BindingInfo.parse.escape.callCount, 1, "non-strings should not be escaped by escapeSettingsValue");
 	});
 
 	QUnit.test("Bind / Unbind functions", function(assert) {
@@ -778,6 +784,26 @@ sap.ui.define([
 		oModel.setProperty("/value", "testvalue");
 	});
 
+	QUnit.test("Bind property formatter in string with scope object", function(assert) {
+		const oStub = this.stub().returns("ABC");
+		const oInstance = new TestManagedObject({
+			value: "{path: '/value', formatter: '.formatters.upperCase.bind($control)'}"
+		}, {
+			formatters: {
+				upperCase: oStub
+			}
+		});
+		oInstance.setModel(oModel);
+
+		assert.equal(oInstance.isBound("value"), true, "isBound must return true for bound properties");
+		assert.equal(oInstance.getProperty("value"), "ABC", "Property must return model value");
+		assert.equal(oStub.callCount, 1, "Formatter must be called once");
+		sinon.assert.calledOn(oStub, oInstance);
+		sinon.assert.calledWith(oStub, "testvalue");
+
+		oInstance.destroy();
+	});
+
 	QUnit.test("Bind property Composite with type set as class", function(assert) {
 		this.obj.bindProperty("value", {
 			parts: [
@@ -792,9 +818,9 @@ sap.ui.define([
 			type: UnitType
 		});
 		assert.equal(this.obj.isBound("value"), true, "isBound must return true for bound properties");
-		assert.equal(this.obj.getProperty("value"), "123.000 KG", "Property must return model value");
+		assert.equal(this.obj.getProperty("value"), "123.000\u00a0KG", "Property must return model value");
 		oModel.setProperty("/number", 234);
-		assert.equal(this.obj.getProperty("value"), "234.000 KG", "New model value must be reflected");
+		assert.equal(this.obj.getProperty("value"), "234.000\u00a0KG", "New model value must be reflected");
 		this.obj.setProperty("value", "345 KG");
 		assert.equal(oModel.getProperty("/number"), 345, "Control property change must update model");
 		oModel.setProperty("/number", 123);
@@ -1046,6 +1072,24 @@ sap.ui.define([
 
 		assert.ok(oMyObject.getBinding("value"), "CompositeBinding created");
 		assert.equal(oMyObject.getValue(), "test value", "value set properly");
+	});
+
+	QUnit.test("Binding creation: static binding object with object marker=false yields binding", function(assert) {
+		var oMyObject = new TestManagedObject({
+			anyValue: {value: 42, [BindingParser.UI5ObjectMarker]: false}
+		});
+
+		assert.ok(oMyObject.getBinding("anyValue"), "anyValue: static binding created");
+		assert.strictEqual(oMyObject.getAnyValue(), 42, "anyValue set properly with correct type");
+	});
+
+	QUnit.test("Binding creation: static binding object with object marker=undefined yields object", function(assert) {
+		var oMyObject = new TestManagedObject({
+			anyValue: {value: 42}
+		});
+
+		assert.strictEqual(oMyObject.getBinding("anyValue"), undefined, "anyValue: no binding created");
+		assert.deepEqual(oMyObject.getAnyValue(), {value: 42}, "anyValue set properly as object");
 	});
 
 	QUnit.module("Aggregations", {
@@ -1330,7 +1374,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Bind aggregation with Owner", function(assert) {
-		var oObjWithOwner = ManagedObject.runWithOwner(function() {
+		var oObjWithOwner = runWithOwner(function() {
 			return new TestManagedObject();
 		}, "myOwnerComponent");
 
@@ -1381,7 +1425,7 @@ sap.ui.define([
 		oClone.destroy();
 
 		// new MO with different owner ID
-		var oObjWithDifferentOwner = ManagedObject.runWithOwner(function() {
+		var oObjWithDifferentOwner = runWithOwner(function() {
 			return new TestManagedObject();
 		}, "myOwnerComponent2");
 
@@ -1403,7 +1447,7 @@ sap.ui.define([
 		oObjWithOwner.bindAggregation("subObjects", {
 			path: "/list",
 			factory: function(id) {
-				return ManagedObject.runWithOwner(function() {
+				return runWithOwner(function() {
 					return new TestManagedObject(id);
 				}, "myAppOwnerComponent");
 			}
@@ -1730,6 +1774,9 @@ sap.ui.define([
 		assert.equal(this.obj.getAggregation("singleAggr").getValue(), "testvalue3", "Value matches the last array entry");
 	});
 
+	/**
+	 * @deprecated As of version 1.136
+	 */
 	QUnit.test("Bind aggregation without templateShareable (default)", function(assert) {
 
 		var Log = sap.ui.require("sap/base/Log");
@@ -1794,9 +1841,7 @@ sap.ui.define([
 		// create new UI object with same Id (must not throw exception, class can differ)
 		var oLogSpy = this.spy(Log, "debug");
 		Log.setLevel(Log.Level.DEBUG);
-		var oTemplateNew = new Control("template", {
-			value: "{value}"
-		});
+		var oTemplateNew = new Control("template");
 		assert.ok(oLogSpy.calledWith(sinon.match(/destroying dangling template [\s\S]+ when creating new object with same ID/)), "destroyed elements should be reported with level debug");
 		oLogSpy.restore();
 		assert.ok(oTemplate.bIsDestroyed, "old Template should have been destroyed after object with same Id has been created");
@@ -1817,6 +1862,9 @@ sap.ui.define([
 
 	});
 
+	/**
+	 * @deprecated As of version 1.136
+	 */
 	QUnit.test("Bind aggregation without templateShareable (default, Component)", function(assert) {
 
 		var Log = sap.ui.require("sap/base/Log");
@@ -1870,6 +1918,9 @@ sap.ui.define([
 
 	});
 
+	/**
+	 * @deprecated As of version 1.136
+	 */
 	QUnit.test("Bind aggregation and clone with different templateShareable values", function(assert) {
 
 		var Log = sap.ui.require("sap/base/Log");
@@ -2059,6 +2110,7 @@ sap.ui.define([
 			this.obj.bindAggregation("subObjects", {
 				path: "/list",
 				template: this.template,
+				templateShareable: true,
 				sorter: new Sorter(sGroupProperty, false, true)
 			});
 			assert.equal(this.obj.isBound("subObjects"), true, "isBound must return true for bound aggregations");
@@ -2076,6 +2128,8 @@ sap.ui.define([
 			assert.equal(subobjects[1].getBooleanValue(), false, "Entry must not be a header entry");
 			assert.equal(subobjects[2].getBooleanValue(), false, "Entry must not be a header entry");
 		}.bind(this));
+
+		this.template.destroy();
 	});
 
 	QUnit.test("Bind aggregation with grouping, but without grouping function", function(assert) {
@@ -2101,6 +2155,7 @@ sap.ui.define([
 			this.obj.bindAggregation("subObjects", {
 				path: "/list",
 				template: this.template,
+				templateShareable: true,
 				sorter: new Sorter(sGroupProperty, false, true),
 				groupHeaderFactory: function(oGroup) {
 					return new TestManagedObject({
@@ -2124,6 +2179,8 @@ sap.ui.define([
 			assert.equal(subobjects[1].getBooleanValue(), false, "Entry must not be a header entry");
 			assert.equal(subobjects[2].getBooleanValue(), false, "Entry must not be a header entry");
 		}.bind(this));
+
+		this.template.destroy();
 	});
 
 	QUnit.test("Unbind aggregation", function(assert) {
@@ -2607,7 +2664,11 @@ sap.ui.define([
 			}]
 		});
 		this.obj.setModel(oModel);
-		this.obj.bindAggregation("subObjects", "/testpath", this.template);
+		this.obj.bindAggregation("subObjects", {
+			path: "/testpath",
+			template: this.template,
+			templateShareable: true
+		});
 		assert.equal(this.obj.isBound("subObjects"), true, "isBound must return true for bound aggregations");
 		var oClone = this.obj.clone(null, null, {
 			cloneChildren: false,
@@ -2630,6 +2691,8 @@ sap.ui.define([
 		var result = oClone.getAggregation("subObjects", []);
 		assert.equal(result.length, 2, "children cloned");
 		assert.equal(oClone.isBound("subObjects"), false, "isBound must return false for bound aggregations");
+
+		this.template.destroy();
 	});
 
 	QUnit.test("Clone Object: Nested ObjectBindings: cloneBinding:true/false", function(assert) {

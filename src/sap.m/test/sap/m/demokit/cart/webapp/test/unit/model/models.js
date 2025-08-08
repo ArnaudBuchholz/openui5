@@ -3,24 +3,23 @@
 sap.ui.define([
 	"sap/ui/demo/cart/model/models",
 	"sap/ui/Device"
-], function (models, Device) {
+], (models, Device) => {
 	"use strict";
 
 	QUnit.module("createDeviceModel", {
-		afterEach : function () {
+		afterEach() {
 			this.oDeviceModel.destroy();
 		}
 	});
 
 	function isPhoneTestCase(assert, bIsPhone) {
 		// Arrange
-		this.stub(Device, "system", { phone : bIsPhone });
+		this.stub(Device, "system").value({ phone : bIsPhone });
 
 		// System under test
 		this.oDeviceModel = models.createDeviceModel();
 
 		// Assert
-
 		assert.strictEqual(this.oDeviceModel.getProperty("/system/phone"), bIsPhone, "IsPhone property is correct");
 	}
 
@@ -34,7 +33,7 @@ sap.ui.define([
 
 	function isTouchTestCase(assert, bIsTouch) {
 		// Arrange
-		this.stub(Device, "support", { touch : bIsTouch });
+		this.stub(Device, "support").value({ touch : bIsTouch });
 
 		// System under test
 		this.oDeviceModel = models.createDeviceModel();
@@ -52,13 +51,10 @@ sap.ui.define([
 	});
 
 	QUnit.test("The binding mode of the device model should be one way", function (assert) {
-
 		// System under test
 		this.oDeviceModel = models.createDeviceModel();
 
 		// Assert
 		assert.strictEqual(this.oDeviceModel.getDefaultBindingMode(), "OneWay", "Binding mode is correct");
 	});
-
-
 });

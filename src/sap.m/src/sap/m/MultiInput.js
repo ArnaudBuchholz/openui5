@@ -72,6 +72,8 @@ function(
 	* <li> When a single value is copied and pasted in the field, it is shown as a text value, as further editing might be required before it is converted into a token.</li>
 	* <li> Provide meaningful labels for all input fields. Do not use the placeholder as a replacement for the label.</li>
 	* <li> The <code>showValueHelp</code> property is overwritten and after initialization of the control, its value becomes <code>truthy</code>.</li>
+	* <li> A mix of read-only and deletable tokens isn't supported. </li>
+	* <li> The read-only state of tokens should be controlled using the <code>editable</code> property of the MultiInput control.</li>
 	* </ul>
 	* <h3>Usage</h3>
 	* <h4>When to use:</h4>
@@ -376,6 +378,12 @@ function(
 				}
 				this._syncInputWidth(oTokenizer);
 
+				if (this.getEditable()) {
+					oTokenizer.addStyleClass("sapMTokenizerIndicatorDisabled");
+				} else {
+					oTokenizer.removeStyleClass("sapMTokenizerIndicatorDisabled");
+				}
+
 				// Prevent layout thrashing from the methods below as the Tokenizer
 				// does not need any adjustments without tokens
 				if (this.getTokens().length) {
@@ -441,9 +449,15 @@ function(
 	 */
 	MultiInput.prototype.onAfterRendering = function () {
 		var oTokenizer = this.getAggregation("tokenizer");
+		var oTokenizerOpener = Element.getElementById(oTokenizer.getProperty("opener"))?.getDomRef();
+
 		this._bTokenIsValidated = false;
 
 		oTokenizer.setMaxWidth(this._calculateSpaceForTokenizer());
+
+		if (oTokenizerOpener !== this.getDomRef()) {
+			oTokenizer.setProperty("opener", this.getId(), true);
+		}
 
 		this._registerResizeHandler();
 
@@ -929,7 +943,7 @@ function(
 
 		// ctrl/meta + I -> Open suggestions
 		if ((oEvent.ctrlKey || oEvent.metaKey) && oEvent.which === KeyCodes.I && oTokenizer.getTokens().length) {
-			oTokenizer._togglePopup(oTokenizer.getTokensPopup());
+			oTokenizer._togglePopup();
 			oEvent.preventDefault();
 		}
 	};
@@ -1130,7 +1144,7 @@ function(
 		if (!this.getEditable()
 			&& oTokenizer.getHiddenTokensCount()
 			&& oEvent.target === this.getFocusDomRef()) {
-			oTokenizer._togglePopup(oTokenizer.getTokensPopup());
+			oTokenizer._togglePopup();
 		}
 
 		if (!containsOrEquals(oTokenizer.getFocusDomRef(), document.activeElement)) {
@@ -1191,7 +1205,7 @@ function(
 		}
 
 		if (!bFocusIsInSelectedItemPopup && !bNewFocusIsInTokenizer) {
-			oSelectedItemsPopup.isOpen() && !this.isMobileDevice() && oTokenizer._togglePopup(oSelectedItemsPopup);
+			oSelectedItemsPopup.isOpen() && !this.isMobileDevice() && oTokenizer._togglePopup();
 			oTokenizer.setRenderMode(TokenizerRenderMode.Narrow);
 		}
 
@@ -1204,7 +1218,12 @@ function(
 	 * @param {jQuery.Event} oEvent The event object
 	 */
 	MultiInput.prototype.ontap = function (oEvent) {
-		var oTokenizer = this.getAggregation("tokenizer");
+		const oTokenizer = this.getAggregation("tokenizer");
+		const bNMoreLabelClick = oEvent.target?.className && oEvent.target.className.indexOf("sapMTokenizerIndicator") > -1;
+
+		if (bNMoreLabelClick && this.getEditable()) {
+			this._handleNMoreIndicatorPress();
+		}
 
 		//deselect tokens when focus is on text field
 		if (document.activeElement === this._$input[0]
@@ -1216,7 +1235,10 @@ function(
 			return;
 		}
 
-		Input.prototype.ontap.apply(this, arguments);
+		if (!bNMoreLabelClick) {
+			Input.prototype.ontap.apply(this, arguments);
+			this._getSuggestionsPopover()?.getInput()?.setValueHelpIconSrc("sap-icon://search");
+		}
 	};
 
 	/**
@@ -1265,7 +1287,7 @@ function(
 		this.selectText(0, 0);
 
 		if (oPopup.isOpen()) {
-			oTokenizer._togglePopup(oPopup);
+			oTokenizer._togglePopup();
 		}
 
 		Input.prototype.onsapescape.apply(this, arguments);
@@ -1782,6 +1804,12 @@ function(
 		}
 	};
 
+	MultiInput.prototype._handleNMoreIndicatorPress = function () {
+		const oTokenizer = this.getAggregation("tokenizer");
+
+		oTokenizer._bIsOpenedByNMoreIndicator = true;
+		oTokenizer._togglePopup();
+	};
 
 	/**
 	 * A helper function calculating if the SuggestionsPopover should be opened on mobile.

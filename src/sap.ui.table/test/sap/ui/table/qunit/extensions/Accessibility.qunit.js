@@ -11,6 +11,7 @@ sap.ui.define([
 	"sap/ui/table/library",
 	"sap/m/IllustratedMessage",
 	"sap/m/Label",
+	"sap/m/plugins/CellSelector",
 	"sap/ui/core/Control",
 	"sap/ui/core/ControlBehavior",
 	"sap/ui/core/library",
@@ -31,6 +32,7 @@ sap.ui.define([
 	library,
 	IllustratedMessage,
 	Label,
+	CellSelector,
 	Control,
 	ControlBehavior,
 	coreLibrary,
@@ -222,12 +224,8 @@ sap.ui.define([
 			aLabels.push(sTableId + "-ariagrandtotallabel");
 		}
 
-		if (!bGroup && !bSum) {
+		if (!bGroup && !bSum && (bFirstTime || bRowChange)) {
 			aLabels.push(sRowId + "-highlighttext");
-		}
-
-		if (iIndex === 0) {
-			aLabels.push(sTableId + "-ariafixedcolumn");
 		}
 
 		if (!bGroup) {
@@ -251,13 +249,6 @@ sap.ui.define([
 
 	function testAriaLabelsForNonFocusedDataCell(oTable, oCellElement, iRow, iCol, assert) {
 		const aLabels = [];
-		const oRow = oTable.getRows()[iRow];
-		const oCell = oRow.getCells()[iCol];
-		const iIndex = Column.ofCell(oCell).getIndex();
-
-		if (iIndex === 0) {
-			aLabels.push(oTable.getId() + "-ariafixedcolumn");
-		}
 
 		assert.strictEqual(
 			(oCellElement.getAttribute("aria-labelledby") || "").trim(),
@@ -618,7 +609,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Sum row", async function(assert) {
-		TableUtils.Grouping.setToDefaultGroupMode(this.oTable);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Group);
 		this.oTable.setSelectionMode(SelectionMode.Row);
 		await this.oTable.qunit.setRowStates([{type: Row.prototype.Type.Summary}]);
 
@@ -657,13 +648,28 @@ sap.ui.define([
 		await TableQUnitUtils.wait(100);
 		testAriaLabelsForNonFocusedDataCell(this.oTable, this.oTable.qunit.getDataCell(0, -1), 0, this.oTable.getColumns().length - 1, assert);
 
-		TableUtils.Grouping.setToDefaultFlatMode(this.oTable);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Flat);
 		await this.oTable.qunit.whenRenderingFinished();
 
 		assert.notOk(oRowDomRefs.rowScrollPart.getAttribute("aria-level"), "aria-level is not set on scrollable part");
 		assert.notOk(oRowDomRefs.rowFixedPart.getAttribute("aria-level"), "aria-level is not set on fixed part");
 		assert.notOk(oRowDomRefs.rowHeaderPart.getAttribute("aria-level"), "aria-level is not set on row header");
 		assert.notOk(oRowDomRefs.rowActionPart.getAttribute("aria-level"), "aria-level is not set on row action");
+	});
+
+	QUnit.test("aria-colindex", async function(assert) {
+		function testAriaColIndex(oTable, assert) {
+			for (let i = 0; i < oTable._getVisibleColumns().length; i++) {
+				const oCell = oTable.qunit.getDataCell(0, i);
+				assert.strictEqual(oCell.getAttribute("aria-colindex"), (i + 2).toString(), "aria-colindex of cell [0, " + i + "]");
+			}
+		}
+
+		testAriaColIndex(this.oTable, assert);
+		this.oTable.getColumns()[0].setVisible(false);
+		this.oTable.getColumns()[3].setVisible(false);
+		await nextUIUpdate();
+		testAriaColIndex(this.oTable, assert);
 	});
 
 	QUnit.test("Other ARIA attributes of data cell", async function(assert) {
@@ -709,7 +715,7 @@ sap.ui.define([
 	function testAriaLabelsForColumnHeader($Cell, iCol, assert, mParams = {}) {
 		const bFocus = !!mParams.focus;
 		const sTableId = oTable.getId();
-		const aLabels = [];
+		const aLabels = [$Cell.attr("id") + "-inner"];
 
 		if (iCol === 0) {
 			aLabels.push(sTableId + "-ariafixedcolumn");
@@ -723,16 +729,12 @@ sap.ui.define([
 			aLabels.push(sTableId + "-cellacc"); // Column 2 has tooltip see TableQUnitUtils.js
 		}
 
-		if (bFocus && iCol === 4) {
+		if (iCol === 4) {
 			aLabels.push(sTableId + "-ariarequired");
 		}
 
 		if ($Cell.attr("colspan")) {
 			aLabels.push(sTableId + "-ariacolspan");
-		}
-
-		if (bFocus && aLabels.length > 0) {
-			aLabels.unshift($Cell.attr("id") + "-inner");
 		}
 
 		assert.strictEqual(
@@ -1011,6 +1013,21 @@ sap.ui.define([
 		assert.strictEqual(oTable.getColumns()[1].getDomRef().getAttribute("role"), "columnheader", "Second column");
 	});
 
+	QUnit.test("aria-colindex", async function(assert) {
+		function testAriaColIndex(oTable, assert) {
+			for (let i = 0; i < oTable._getVisibleColumns().length; i++) {
+				const oCell = getColumnHeader(i);
+				assert.strictEqual(oCell.attr("aria-colindex"), (i + 2).toString(), "aria-colindex of column header [" + i + "]");
+			}
+		}
+
+		testAriaColIndex(oTable, assert);
+		oTable.getColumns()[0].setVisible(false);
+		oTable.getColumns()[3].setVisible(false);
+		await nextUIUpdate();
+		testAriaColIndex(oTable, assert);
+	});
+
 	QUnit.module("Row Header", {
 		beforeEach: async function() {
 			this.oTable = TableQUnitUtils.createTable({
@@ -1154,7 +1171,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Sum row", async function(assert) {
-		TableUtils.Grouping.setToDefaultGroupMode(this.oTable);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Group);
 		await this.oTable.qunit.setRowStates([{type: Row.prototype.Type.Summary}]);
 
 		const oRowDomRefs = this.oTable.getRows()[0].getDomRefs();
@@ -1184,7 +1201,7 @@ sap.ui.define([
 		await TableQUnitUtils.wait(100);
 		this.testAriaLabels(oCell, 0, assert);
 
-		TableUtils.Grouping.setToDefaultFlatMode(this.oTable);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Flat);
 		await this.oTable.qunit.whenRenderingFinished();
 		assert.notOk(oRowDomRefs.rowHeaderPart.hasAttribute("aria-level"), "Has aria-level");
 	});
@@ -1243,6 +1260,23 @@ sap.ui.define([
 		await this.oTable.qunit.whenRenderingFinished();
 
 		assert.notOk(oRow.getDomRef("rowselectText"), `SelectionMode ${this.oTable.getSelectionMode()} - Empty row`);
+	});
+
+	QUnit.test("Selector text with CellSelector plugin", async function(assert) {
+		const oRow = this.oTable.getRows()[0];
+		const oRowSelectorText = oRow.getDomRef("rowselecttext");
+		const sSelectedText = TableUtils.getResourceText("TBL_ROW_DESELECT_KEY_ALTERNATIVE");
+		const sNotSelectedText = TableUtils.getResourceText("TBL_ROW_SELECT_KEY_ALTERNATIVE");
+		const oSelectionPlugin = new TableQUnitUtils.TestSelectionPlugin();
+
+		this.oTable.addDependent(oSelectionPlugin);
+		this.oTable.addDependent(new CellSelector());
+		this.oTable.setSelectionBehavior(library.SelectionBehavior.Row);
+
+		await this.oTable.qunit.whenRenderingFinished();
+		assert.equal(oRowSelectorText.innerText, sNotSelectedText, "not selected row");
+		oSelectionPlugin.setSelected(oRow, true);
+		assert.equal(oRowSelectorText.innerText, sSelectedText, "selected row");
 	});
 
 	QUnit.module("Row Actions", {
@@ -1304,6 +1338,13 @@ sap.ui.define([
 				"aria-labelledby of row action " + iRow
 			);
 		}
+	});
+
+	QUnit.test("column header", function(assert) {
+		const oColumnHeader = this.oTable.qunit.getRowActionHeaderCell();
+		assert.equal(oColumnHeader.getAttribute("role"), "columnheader", "role is correct");
+		assert.equal(oColumnHeader.getAttribute("aria-colindex"), 3, "aria-colindex is correct");
+		assert.equal(oColumnHeader.getAttribute("aria-label"), TableUtils.getResourceText("TBL_ROW_ACTION_COLUMN_LABEL"), "aria-label is correct");
 	});
 
 	QUnit.test("aria-labelledby with focus", async function(assert) {
@@ -1394,7 +1435,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Sum row", async function(assert) {
-		TableUtils.Grouping.setToDefaultGroupMode(this.oTable);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Group);
 		await this.oTable.qunit.setRowStates([{type: Row.prototype.Type.Summary}]);
 
 		const oRowDomRefs = this.oTable.getRows()[0].getDomRefs();
@@ -1424,7 +1465,7 @@ sap.ui.define([
 		await TableQUnitUtils.wait(100);
 		this.testAriaLabels(oCell, 0, assert);
 
-		TableUtils.Grouping.setToDefaultFlatMode(this.oTable);
+		TableUtils.Grouping.setHierarchyMode(this.oTable, TableUtils.Grouping.HierarchyMode.Flat);
 		await this.oTable.qunit.whenRenderingFinished();
 		assert.notOk(oRowDomRefs.rowActionPart.hasAttribute("aria-level"), "Has aria-level");
 	});
@@ -1713,6 +1754,43 @@ sap.ui.define([
 			done();
 		}
 		oTable.attachEventOnce("rowsUpdated", onAfterRowsUpdated);
+		oTable.setFirstVisibleRow(3);
+	});
+
+	QUnit.test("ARIA rowindices - multi headers", async function(assert) {
+		oTable.getColumns()[0].addMultiLabel(new TestControl());
+		oTable.getColumns()[1].addMultiLabel(new TestControl());
+		oTable.getColumns()[1].addMultiLabel(new TestControl());
+		oTable.getColumns()[1].addMultiLabel(new TestControl());
+		oTable.getColumns()[2].addMultiLabel(new TestControl());
+		oTable.getColumns()[2].addMultiLabel(new TestControl());
+		oTable.getColumns()[2].addMultiLabel(new TestControl());
+		oTable.getColumns()[3].addMultiLabel(new TestControl());
+		oTable.getColumns()[3].addMultiLabel(new TestControl());
+		oTable.getColumns()[1].setHeaderSpan([3, 2, 1]);
+
+		await nextUIUpdate();
+
+		const iNumberOfRows = oTable.getRows().length;
+		let $Elem; let i;
+
+		await TableQUnitUtils.nextEvent("rowsUpdated", oTable);
+
+		oTable.getDomRef().querySelectorAll(".sapUiTableCtrlScroll .sapUiTableHeaderRow")
+				.forEach((oRowRef, iIndex) => {
+					assert.equal(oRowRef.getAttribute("aria-rowindex"), `${iIndex + 1}`, `Header row has aria-rowindex ${iIndex + 1}`);
+				});
+
+		for (i = 0; i < iNumberOfRows; i++) {
+			$Elem = getCell(i, 0, false, assert).parent();
+			assert.strictEqual($Elem.attr("aria-rowindex"),
+				"" + (oTable.getFirstVisibleRow() + i + 4), "row " + i + ": aria-rowindex of the tr element");
+			$Elem = oTable.$("rowsel" + i).parent();
+			assert.notOk($Elem.attr("aria-rowindex"), "no aria-rowindex on the row header");
+			$Elem = oTable.$("rowact" + i).parent();
+			assert.notOk($Elem.attr("aria-rowindex"), "no aria-rowindex of the row action");
+		}
+
 		oTable.setFirstVisibleRow(3);
 	});
 

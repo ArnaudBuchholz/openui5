@@ -20,19 +20,18 @@ sap.ui.define([
 	QUnit.module("Validation");
 
 	QUnit.test("Simple property with attribute 'aggregatable'", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
 			new PropertyHelper([{
 				key: "prop",
 				label: "Property",
 				dataType: "String",
 				aggregatable: true
 			}]).destroy();
-		}, new Error("Invalid property definition for property with key 'prop': Property contains invalid attribute 'aggregatable'."
-		));
+		}, new Error("Invalid property definition for property with key 'prop': Property contains invalid attribute 'aggregatable'."));
 	});
 
 	QUnit.test("Simple property with both 'text' and 'unit'", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
 			new PropertyHelper([{
 				key: "prop",
 				label: "Property",
@@ -52,7 +51,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Complex property with attribute 'groupable'", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
 			new PropertyHelper([{
 				key: "prop",
 				label: "Property",
@@ -67,7 +66,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Complex property with attribute 'isKey'", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
 			new PropertyHelper([{
 				key: "prop",
 				label: "Property",
@@ -78,12 +77,11 @@ sap.ui.define([
 				propertyInfos: ["prop"],
 				isKey: true
 			}]).destroy();
-		}, new Error("Invalid property definition for property with key 'complexProp': Complex property contains invalid attribute 'isKey'."
-		));
+		}, new Error("Invalid property definition for property with key 'complexProp': Complex property contains invalid attribute 'isKey'."));
 	});
 
 	QUnit.test("Complex property with attribute 'unit'", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
 			new PropertyHelper([{
 				key: "prop",
 				label: "Property",
@@ -98,7 +96,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Complex property with attribute 'text'", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
             new PropertyHelper([{
 				key: "prop",
 				label: "Property",
@@ -301,7 +299,8 @@ sap.ui.define([
 					type: "Currency",
 					displayUnit: true,
 					unitProperty: "currency",
-					textAlign: "End"
+					textAlign: "End",
+					property: "price"
 				}
 			}, {
 				key: "currencyCode",
@@ -461,7 +460,7 @@ sap.ui.define([
 		assert.deepEqual(this.oPropertyHelper.getColumnExportSettings(this.oColumnPropA), [{
 			columnId: "propAColumn",
 			label: "Export label",
-			property: "propAPath",
+			property: ["propAPath"],
 			textAlign: "Begin",
 			type: "Number",
 			width: 20
@@ -472,7 +471,7 @@ sap.ui.define([
 			textAlign: "End",
 			type: "String",
 			width: "",
-			property: "propBPath"
+			property: ["propBPath"]
 		}], "Expected column export settings returned");
 		assert.deepEqual(this.oPropertyHelper.getColumnExportSettings(this.oColumnComplexPropA), [{
 			columnId: "columnComplexPropA",
@@ -504,7 +503,7 @@ sap.ui.define([
 		assert.deepEqual(this.oPropertyHelper.getColumnExportSettings(this.oNoDataColumn1), [{
 			columnId: "noDataColumn1",
 			label: "NoDataColumn1",
-			property: "",
+			property: [""],
 			textAlign: "Begin",
 			type: "String",
 			width: 5
@@ -512,7 +511,7 @@ sap.ui.define([
 		assert.deepEqual(this.oPropertyHelper.getColumnExportSettings(this.oNoDataColumn2), [{
 			columnId: "noDataColumn2",
 			label: "NoDataColumn2",
-			property: "",
+			property: [""],
 			textAlign: "Begin",
 			type: "String",
 			width: ""
@@ -528,7 +527,7 @@ sap.ui.define([
 		assert.deepEqual(this.oPropertyHelper.getColumnExportSettings(this.oColumnComplexPropD), [{
 			columnId: "columnComplexPropD",
 			label: "Export label",
-			property: "propAPath",
+			property: ["propAPath"],
 			textAlign: "Begin",
 			type: "Number",
 			width: 20
@@ -538,7 +537,7 @@ sap.ui.define([
 			textAlign: "Begin",
 			type: "String",
 			width: "",
-			property: "propBPath"
+			property: ["propBPath"]
 		}], "Complex property without exportSettings referencing property with exportSettings=null");
 
 		assert.deepEqual(this.oPropertyHelper.getColumnExportSettings(this.oColumnComplexPropExport), [{
@@ -601,7 +600,7 @@ sap.ui.define([
 
 		const aPropertiesWithText = oPropertyHelper.getProperties().filter((oProperty) => oProperty.text);
 		// assert
-		assert.ok(aPropertiesWithText.length == 2, "Returns an array");
+		assert.ok(aPropertiesWithText.length === 2, "Returns an array");
 		assert.ok(Array.isArray(aRedundantProperties), "Returns an array");
 		assert.equal(aRedundantProperties.length, 2, "Returns an array with two items");
 		assert.deepEqual(aRedundantProperties[0], oSimplePropertyB, "Returns an array with two items");
@@ -681,7 +680,7 @@ sap.ui.define([
 	QUnit.module("Extension attributes");
 
 	QUnit.test("Property with extension when no extension attributes are defined", function(assert) {
-		assert.throws(function () {
+		assert.throws(function() {
             new PropertyHelper([{
 				key: "foo",
 				label: "bar",
@@ -762,7 +761,7 @@ sap.ui.define([
 
 		oPropertyHelper.destroy();
 
-		assert.throws(function () {
+		assert.throws(function() {
 			new PropertyHelper([{
 				key: "foo",
 				label: "bar",
@@ -778,8 +777,8 @@ sap.ui.define([
 				allowedInComplex: {type: "string", inComplexProperty: {allowed: true}},
 				notAllowedInComplex: {type: "string", inComplexProperty: {valueIfNotAllowed: "not allowed"}}
 			}).destroy();
-        }, new Error("Invalid property definition for property with key 'complexFoo': Complex property contains invalid attribute 'extension.notAllowedInComplex'."
-		));
+		}, new Error("Invalid property definition for property with key 'complexFoo': Complex property contains invalid attribute "
+			+ "'extension.notAllowedInComplex'."));
 	});
 
 	QUnit.module("Computed attributes", {

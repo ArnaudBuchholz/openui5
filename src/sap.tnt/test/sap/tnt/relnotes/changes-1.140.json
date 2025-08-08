@@ -1,0 +1,12 @@
+{
+  "1.140.0": {
+    "date": "August 2025",
+    "notes": [
+      {
+        "id": "bca1c35bc70e689b9805d091f7766705d985b9cf",
+        "type": "FIX",
+        "text": " sap.tnt.SideNavigation: no exceptions in the console"
+      }
+    ]
+  }
+}

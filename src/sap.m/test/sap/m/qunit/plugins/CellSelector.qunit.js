@@ -27,8 +27,9 @@ sap.ui.define([
 	"sap/ui/model/Sorter",
 	"sap/m/Input",
 	"sap/m/ComboBox",
-	"sap/ui/core/InvisibleRenderer"
-], function (Dialog, Text, MTable, MColumn, ColumnListItem, CellSelector, CustomData, MockServer, DragDropInfo, DropInfo, KeyCodes, MDCTable, MDCColumn, JSONModel, ODataModel, qutils, nextUIUpdate, GridColumn, GridTable, GridFixedRowMode, MultiSelectionPlugin, Sorter, Input, ComboBox, InvisibleRenderer) {
+	"sap/ui/core/InvisibleRenderer",
+	"sap/m/Link"
+], function (Dialog, Text, MTable, MColumn, ColumnListItem, CellSelector, CustomData, MockServer, DragDropInfo, DropInfo, KeyCodes, MDCTable, MDCColumn, JSONModel, ODataModel, qutils, nextUIUpdate, GridColumn, GridTable, GridFixedRowMode, MultiSelectionPlugin, Sorter, Input, ComboBox, InvisibleRenderer, Link) {
 	"use strict";
 
 	const sServiceURI = "/service/";
@@ -52,7 +53,7 @@ sap.ui.define([
 			}),
 			columns: [
 				new GridColumn({ template: new Text({text: "{ProductId}"}) }),
-				new GridColumn({ template: new Text({text: "{Name}"}) }),
+				new GridColumn({ template: new Link({text: "{Name}"}) }),
 				new GridColumn({ template: new Text({text: "{Category}", visible: false}) }),
 				new GridColumn({ template: new Input()}),
 				new GridColumn({ template: new ComboBox()})
@@ -226,6 +227,18 @@ sap.ui.define([
 		assert.equal(oSelectCellsSpy.callCount, 0, "No cells are selected");
 		assert.deepEqual(this.oCellSelector.getSelectionRange(), null);
 
+		qutils.triggerEvent("mousedown", oCell, { button: 0 }); // select first cell of first row with left-click/primary button
+		const oEvent = {target: getCell(oTable, 1, 1), preventDefault: () => {}, stopImmediatePropagation: () => {}};
+		assert.notOk(this.oCellSelector._bMouseDown, "Flag has not been set");
+
+		const fnConfigSpy = sinon.spy(this.oCellSelector, "getConfig");
+
+		this.oCellSelector._onmousemove(oEvent);
+		qutils.triggerEvent("mouseup", getCell(oTable, 1, 1), { button: 0 });
+
+		assert.notOk(fnConfigSpy.calledWith("focusCell"), "focusCell config is not called");
+		assert.equal(oSelectCellsSpy.callCount, 0, "Cells have been selected");
+
 		oConfig.setEnabled(false);
 		qutils.triggerKeydown(oCell, KeyCodes.SPACE); // select first cell of first row
 		qutils.triggerKeyup(oCell, KeyCodes.SPACE); // select first cell of first row
@@ -246,6 +259,9 @@ sap.ui.define([
 		qutils.triggerKeydown(oCell, KeyCodes.SPACE); // select first cell of first row
 		assert.equal(oSelectCellsSpy.callCount, 1, "Cells have been selected");
 		assert.deepEqual(this.oCellSelector.getSelectionRange(), {from: {rowIndex: 1, colIndex: 0}, to: {rowIndex: 1, colIndex: 0}});
+
+		fnConfigSpy.restore();
+		oSelectCellsSpy.restore();
 	});
 
 	QUnit.test("removeSelection with invalid session object", function (assert) {
@@ -746,6 +762,22 @@ sap.ui.define([
 		assert.equal(this.oCellSelector.getSelectionRange(), null, "Selection is cleared");
 	});
 
+	QUnit.test("Avoid selection clicking on column header", function(assert) {
+		this.oTable.addDragDropConfig(new DragDropInfo({
+			sourceAggregation: "columns",
+			targetAggregation: "columns",
+			dropPosition: "Between"
+		}));
+
+		assert.ok(this.oCellSelector.getEnabled(), "CellSelector is enabled");
+		assert.ok(this.oCellSelector.isActive(), "CellSelector is active");
+
+		const oColumn = this.oTable.getColumns()[0];
+		qutils.triggerEvent("mousedown", oColumn.getDomRef(), { button: 0 }); // select first column with left-click/primary button
+
+		assert.notOk(this.oCellSelector._bMouseDown, "Flag has not been set");
+	});
+
 	QUnit.module("Dialog Behavior", {
 		beforeEach: async function() {
 			this.oMockServer = new MockServer({ rootUri : sServiceURI });
@@ -800,7 +832,7 @@ sap.ui.define([
 		});
 	});
 
-	QUnit.module("Interaction - Shift + Click", {
+	QUnit.module("Interaction - Modifier + Click", {
 		beforeEach: async function() {
 			this.oMockServer = new MockServer({ rootUri : sServiceURI });
 			this.oMockServer.simulate("test-resources/sap/m/qunit/data/metadata.xml", "test-resources/sap/m/qunit/data");
@@ -838,5 +870,41 @@ sap.ui.define([
 		qutils.triggerEvent("mouseup", oComboBox.getDomRef());
 		assert.deepEqual(this.oCellSelector.getSelectionRange(), {from: {rowIndex: 0, colIndex: 0}, to: {rowIndex: 1, colIndex: 4}}, "Cells has been selected");
 		assert.notEqual(oComboBox.getId(), document.activeElement.id, "ComboBox is not focused");
+	});
+
+	QUnit.test("Mousemove with click origin on Input", function(assert) {
+		const oSelectCellsSpy = sinon.spy(this.oCellSelector, "_selectCells");
+
+		const oInput = this.oTable.getRows()[0].getCells()[3];
+		qutils.triggerEvent("mousedown", oInput.getDomRef(), { button: 0, shiftKey: true });
+		assert.ok(this.oCellSelector._bMouseDown, "Flag has been set");
+
+		const oEvent = {target: getCell(this.oTable, 1, 1), preventDefault: () => {}, stopImmediatePropagation: () => {}};
+		this.oCellSelector._onmousemove(oEvent);
+
+		qutils.triggerEvent("mouseup", oInput.getDomRef());
+
+		assert.equal(oSelectCellsSpy.callCount, 0, "selectCells has not been called");
+		assert.deepEqual(this.oCellSelector.getSelectionRange(), null, "No cells have been selected");
+	});
+
+	QUnit.test("Ctrl + Click on Link", async function(assert) {
+		const oLink = this.oTable.getRows()[0].getCells()[1];
+
+		let bCalled = false;
+		const oPromise = new Promise((resolve) => {
+			oLink.attachPress(() => {
+				bCalled = true;
+				resolve();
+			});
+		});
+
+		qutils.triggerEvent("mousedown", oLink.getDomRef(), { button: 0, ctrlKey: true });
+		assert.ok(this.oCellSelector._bMouseDown, "Flag has been set");
+		qutils.triggerEvent("click", oLink.getDomRef(),  { button: 0, ctrlKey: true });
+		assert.deepEqual(this.oCellSelector.getSelectionRange(), {from: {rowIndex: 0, colIndex: 1}, to: {rowIndex: 0, colIndex: 1}});
+
+		await oPromise;
+		assert.ok(bCalled, "Link has been pressed");
 	});
 });

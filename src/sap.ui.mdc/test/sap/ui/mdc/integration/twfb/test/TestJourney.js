@@ -21,7 +21,7 @@ sap.ui.define([
 
 	Opa5.extendConfig({
 
-		// TODO: increase the timeout timer from 15 (default) to 45 seconds
+		// TODO: increase the timeout timer from 15 (default) to 90 seconds
 		// to see whether it influences the success rate of the first test on
 		// the build infrastructure.
 		// As currently, the underlying service takes some time for the
@@ -29,7 +29,7 @@ sap.ui.define([
 		// You might want to remove this timeout timer after the underlying
 		// service has been optimized or if the timeout timer increase does
 		// not have any effect on the success rate of the tests.
-		timeout: 45,
+		timeout: 90,
 
 		actions: new Opa5({
 			iToggleTheValueHelpListItem: function (sText, sValueHelpId) {
@@ -156,7 +156,7 @@ sap.ui.define([
 		When.onTheMDCTable.iPersonalizeSort(sTableID, [{key: "Price", descending: false}]); //ERROR failed because of custom stock slider (when at the end I call teardown....)
 		// When.onTheMDCTable.iResetThePersonalization(sTableID);
 
-		When.onTheMDCTable.iPressShowSelected(sTableID);
+		When.onTheMDCTable.iPressShowSelected(sTableID, true);
 
 		Then.iTeardownMyAppFrame();
 	});
@@ -235,7 +235,31 @@ sap.ui.define([
 		Then.iTeardownMyAppFrame();
 	});
 
+	opaTest("twfb - start app and test zoom buttons in overflow behavior", function(Given, When, Then) {
+		// Restrict width to ensure that the zoom buttons are in the overflow area.
+		Given.iStartMyAppInAFrame({source: "test-resources/sap/ui/mdc/internal/TableWithFilterBar/index.html", width: "500px", height: "1000px"});
 
+		const sChartId = "container-v4demo---books--bookChart";
+
+		// Change Chart type to stacked bar chart, which has zoom buttons enabled.
+		When.onTheMDCChart.iOpenTheOverflowPopover(sChartId);
+		Then.onTheMDCChart.iShouldSeeAnOverflowPopover(sChartId);
+		When.onTheMDCChart.iSelectAChartType(sChartId, "Stacked Bar Chart");
+		Then.onTheMDCChart.iShouldSeeTheChartWithChartType(sChartId, "stacked_bar");
+		// Selecting chart type closes overflow popover
+
+		// Click zoom in button and check that overflow popover stays open.
+		When.onTheMDCChart.iOpenTheOverflowPopover(sChartId);
+		Then.onTheMDCChart.iShouldSeeAnOverflowPopover(sChartId);
+		When.onTheMDCChart.iClickOnZoomIn(sChartId);
+		Then.onTheMDCChart.iShouldSeeAnOverflowPopover(sChartId);
+
+		// Click zoom out button and check that overflow popover stays open.
+		When.onTheMDCChart.iClickOnZoomOut(sChartId);
+		Then.onTheMDCChart.iShouldSeeAnOverflowPopover(sChartId);
+
+		Then.iTeardownMyAppFrame();
+	});
 
 	opaTest("twfb - start app and test filterbar", function(Given, When, Then) {
 		Given.iStartMyAppInAFrame("test-resources/sap/ui/mdc/internal/TableWithFilterBar/index.html");

@@ -268,16 +268,14 @@ sap.ui.define([
 	 * {@link sap.ui.table.Row#initDomRefs}.
 	 *
 	 * @param {boolean} [bJQuery=false] If set to <code>true</code>, jQuery objects are returned, otherwise native DOM references.
-	 * @param {boolean} [bCollection=false] If set to <code>true</code>, the DOM references will be returned as an array, otherwise as an object.
 	 * @returns {Object|Array} An object (or array, if <code>bCollection</code> is true) containing jQuery objects, or native references to the DOM
 	 *                         elements of the row.
 	 * @see sap.ui.core.Element#getDomRef
 	 * @see sap.ui.table.Row#initDomRefs
 	 * @private
 	 */
-	Row.prototype.getDomRefs = function(bJQuery, bCollection) {
+	Row.prototype.getDomRefs = function(bJQuery) {
 		bJQuery = bJQuery === true;
-		bCollection = bCollection === true;
 
 		const sKey = bJQuery ? "jQuery" : "dom";
 		const mDomRefs = this._mDomRefs;
@@ -328,14 +326,7 @@ sap.ui.define([
 			}
 		}
 
-		const mKeyDomRefs = mDomRefs[sKey];
-		if (bCollection) {
-			return Object.keys(mKeyDomRefs).map(function(sKey) {
-				return sKey === "row" ? null : mKeyDomRefs[sKey];
-			}).filter(Boolean);
-		}
-
-		return mKeyDomRefs;
+		return mDomRefs[sKey];
 	};
 
 	/**
@@ -375,10 +366,6 @@ sap.ui.define([
 		this._updateTableCells(oTable);
 	};
 
-	Row.prototype.getRowBindingContext = function() {
-		return state(this).context;
-	};
-
 	Row.prototype.setBindingContext = function(oContext, sModelName) {
 		return Element.prototype.setBindingContext.call(this, oContext || null, sModelName);
 	};
@@ -389,7 +376,7 @@ sap.ui.define([
 		const iAbsoluteRowIndex = this.getIndex();
 		const bHasTableCellUpdate = !!oTable._updateTableCell;
 		let oCell; let $Td; let bHasCellUpdate;
-		const oBindingContext = this.getRowBindingContext();
+		const oBindingContext = TableUtils.getBindingContextOfRow(this);
 
 		for (let i = 0; i < aCells.length; i++) {
 			oCell = aCells[i];
@@ -412,7 +399,14 @@ sap.ui.define([
 	 * @private
 	 */
 	Row.prototype.getType = function() {
-		return state(this).type;
+		const sType = state(this).type;
+
+		if (sType === RowType.GroupHeader && TableUtils.Grouping.isInTreeMode(this.getTable())) {
+			// In tree mode, the row type GroupHeader is ignored and treated like row type Standard.
+			return RowType.Standard;
+		}
+
+		return sType;
 	};
 
 	/**

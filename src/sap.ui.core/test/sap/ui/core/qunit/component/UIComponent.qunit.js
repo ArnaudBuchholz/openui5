@@ -1317,6 +1317,11 @@ sap.ui.define([
 	});
 
 	QUnit.test("Component with async rootView creation", function(assert) {
+		assert.expect(7);
+
+		/**
+		 * @deprecated
+		 */
 		assert.expect(8);
 
 		var oManifest = {
@@ -1378,6 +1383,9 @@ sap.ui.define([
 			assert.equal(this.oViewCreateSpy.callCount, 2, "async view factory called twice");
 			// check if router is async
 			assert.ok(oComponent.getRouter(), "Router created");
+			/**
+			 * @deprecated
+			 */
 			assert.ok(oComponent.getRouter()._isAsync(), "Router is async");
 		}.bind(this)).catch(function() {
 			assert.ok(false, "Modules could not be loaded and an error occured.");
@@ -1533,7 +1541,7 @@ sap.ui.define([
 		}).catch(function(oError) {
 			assert.equal(
 				oError.message,
-				"A nested view contained in a Component implementing 'sap.ui.core.IAsyncContentCreation' is processed asynchronously by default and cannot be processed synchronously.\n" +
+				"A nested view contained in a Component that uses manifest version 2 or implements 'sap.ui.core.IAsyncContentCreation' is processed asynchronously by default and cannot be processed synchronously.\n" +
 				"Affected Component 'manifestModules.scenario8' and View 'testdata.view.Nested'."
 			);
 		});

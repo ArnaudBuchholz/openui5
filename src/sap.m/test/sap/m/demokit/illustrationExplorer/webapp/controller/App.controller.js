@@ -1,5 +1,6 @@
 sap.ui.define([
     "sap/ui/demo/illustrationExplorer/controller/BaseController",
+    "sap/ui/demo/illustrationExplorer/utils/DeprecatedIllustrations",
     "sap/ui/model/json/JSONModel",
     "sap/ui/documentation/sdk/controller/util/ThemePicker",
     "sap/m/IllustrationPool",
@@ -7,6 +8,7 @@ sap.ui.define([
     "sap/m/IllustratedMessageType",
     "sap/ui/core/Fragment"
 ], (BaseController,
+    DeprecatedIllustrations,
     JSONModel,
     ThemePicker,
     IllustrationPool,
@@ -58,10 +60,16 @@ sap.ui.define([
                 ],
                 selectedIllustrationSet: "sapIllus",
                 selectedIllustrationSize: "Medium",
-                selectedCategory: "All",
+                hideDeprecated: true,
                 currentYear: new Date().getFullYear()
             });
             this.setModel(oModel, "app");
+        },
+
+        onHideDeprecatedChange(oEvent) {
+            const bHideDeprecated = oEvent.getParameter("selected");
+            this.getModel("app").setProperty("/hideDeprecated", bHideDeprecated);
+            this._applySearch();
         },
 
         _initThemePicker() {
@@ -97,26 +105,13 @@ sap.ui.define([
             const sSelectedSize = oModel.getProperty("/selectedIllustrationSize");
             const oSetMetadata = IllustrationPool.getIllustrationSetMetadata(sSelectedSet);
 
-            const oCategoriesModel = this.getOwnerComponent().getModel("categories");
-            const aCategories = oCategoriesModel.getProperty("/categories") || [];
-            const illustrationToCategoryMap = {};
-
-            aCategories.forEach((oCategory) => {
-                const sCategoryName = oCategory.category;
-                if (oCategory.illustrations && Array.isArray(oCategory.illustrations)) {
-                    oCategory.illustrations.forEach((sType) => {
-                        illustrationToCategoryMap[sType] = sCategoryName;
-                    });
-                }
-            });
-
             this._aAllIllustrations = oSetMetadata.aSymbols.map((sType) => {
                 const convertedType = this._convertIllustrationType(sType);
                 return {
                     set: sSelectedSet,
                     size: sSelectedSize,
                     type: convertedType,
-                    category: illustrationToCategoryMap[convertedType] || "Unknown"
+                    deprecated: DeprecatedIllustrations.isDeprecated(convertedType)
                 };
             }).sort((a, b) => a.type.localeCompare(b.type)); // Sort illustrations alphabetically
 
@@ -156,20 +151,7 @@ sap.ui.define([
             const oModel = this.getModel("app");
             oModel.setProperty("/selectedIllustrationSet", sSelectedSet);
 
-            if (sSelectedSet === "tnt") {
-                oModel.setProperty("/selectedCategory", "All");
-                this.byId("categorySelect").setEnabled(false);
-            } else {
-                this.byId("categorySelect").setEnabled(true);
-            }
-
             this._setIllustrations();
-        },
-
-        onCategoryChange(oEvent) {
-            const sSelectedCategory = oEvent.getParameter("selectedItem").getKey();
-            this.getModel("app").setProperty("/selectedCategory", sSelectedCategory);
-            this._applySearch();
         },
 
         onThemeChange(oEvent) {
@@ -194,11 +176,11 @@ sap.ui.define([
         _applySearch() {
             const oModel = this.getModel("app");
             const sSearchQuery = oModel.getProperty("/searchQuery").toLowerCase();
-            const sSelectedCategory = oModel.getProperty("/selectedCategory");
-            const aFiltered = this._aAllIllustrations.filter(({ type, category }) => {
+            const bHideDeprecated = oModel.getProperty("/hideDeprecated");
+            const aFiltered = this._aAllIllustrations.filter(({ type, deprecated }) => {
                 const matchesQuery = !sSearchQuery || type.toLowerCase().includes(sSearchQuery);
-                const matchesCategory = sSelectedCategory === "All" || category === sSelectedCategory;
-                return matchesQuery && matchesCategory;
+                const passesDeprecationFilter = !bHideDeprecated || !deprecated;
+                return matchesQuery && passesDeprecationFilter;
             });
             oModel.setProperty("/filteredIllustrations", aFiltered);
         },
@@ -223,7 +205,6 @@ sap.ui.define([
 
             if (!oDynamicSideContent.isSideContentVisible()) {
                 this.getRouter().navTo("illustrationDetails", {
-                    category: oSelectedIllustration.category,
                     set: oSelectedIllustration.set,
                     type: oSelectedIllustration.type
                 });
@@ -231,9 +212,9 @@ sap.ui.define([
             }
 
             // Update the illustration model properties
-            oIllustrationModel.setProperty("/category", oSelectedIllustration.category);
             oIllustrationModel.setProperty("/set", oSelectedIllustration.set);
             oIllustrationModel.setProperty("/type", `${oSelectedIllustration.set}-${oSelectedIllustration.type}`);
+            oIllustrationModel.setProperty("/deprecated", oSelectedIllustration.deprecated);
 
             // Load the fragment if not already loaded
             if (!this._pIllustrationDetailsFragment) {

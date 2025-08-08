@@ -3,11 +3,11 @@
 sap.ui.define([
 	"sap/base/i18n/Localization",
 	"sap/ui/fl/apply/api/ControlVariantApplyAPI",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/variants/VariantManagement",
 	"sap/ui/fl/variants/VariantModel",
 	"sap/ui/fl/Layer",
-	"sap/ui/fl/registry/Settings",
+	"sap/ui/fl/initial/_internal/Settings",
 	"sap/ui/layout/Grid",
 	"sap/m/OverflowToolbar",
 	"sap/m/Input",
@@ -70,8 +70,8 @@ sap.ui.define([
 	QUnit.module("sap.ui.fl.variants.VariantManagement", {
 		beforeEach() {
 			sinon.stub(flSettings, "getInstance").returns(Promise.resolve({
-				isVariantPersonalizationEnabled() { return true; },
-				isPublicFlVariantEnabled() { return true; }
+				getIsVariantPersonalizationEnabled() { return true; },
+				getIsPublicFlVariantEnabled() { return true; }
 			}));
 
 			this.oVariantManagement = new VariantManagement("One", {});
@@ -134,7 +134,6 @@ sap.ui.define([
 					]
 				}
 			}, {
-				flexController: {},
 				appComponent: {
 					getId: () => {"foo";}
 				}
@@ -1411,6 +1410,38 @@ sap.ui.define([
 
 			assert.ok(this.oVariantManagement.getTitle());
 			assert.ok(this.oVariantManagement.getTitle().isA("sap.m.Title"), "expected type 'sap.m.Title'.");
+		});
+
+		QUnit.test("_addVariantAppliedListener, _removeVariantAppliedListener, _executeAllVariantAppliedListeners", function(assert) {
+			const oVariantManagement = new VariantManagement("TestVM");
+			const oControl1 = { getId() { return "ctrl1"; } };
+			const oControl2 = { getId() { return "ctrl2"; } };
+			const fnListener1 = sinon.stub();
+			const fnListener2 = sinon.stub();
+
+			// Add listeners
+			oVariantManagement._addVariantAppliedListener(oControl1, fnListener1);
+			oVariantManagement._addVariantAppliedListener(oControl2, fnListener2);
+
+			// Execute listeners
+			const oVariant = "TestVariant";
+			oVariantManagement._executeAllVariantAppliedListeners(oVariant);
+			assert.ok(fnListener1.calledWith(oVariant), "Listener 1 called with correct parameter");
+			assert.ok(fnListener2.calledWith(oVariant), "Listener 2 called with correct parameter");
+
+			// Remove one listener
+			fnListener1.resetHistory();
+			oVariantManagement._removeVariantAppliedListener(oControl1);
+			oVariantManagement._executeAllVariantAppliedListeners(oVariant);
+			assert.ok(fnListener1.notCalled, "Listener 1 not called after removal");
+			assert.ok(fnListener2.calledTwice, "Listener 2 still called after removal");
+
+			// Remove the other listener
+			fnListener2.resetHistory();
+			oVariantManagement._removeVariantAppliedListener(oControl2);
+			oVariantManagement._executeAllVariantAppliedListeners(oVariant);
+			assert.ok(fnListener2.notCalled, "Listener 2 not called after removal");
+			oVariantManagement.destroy();
 		});
 	});
 

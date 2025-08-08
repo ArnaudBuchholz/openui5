@@ -1,0 +1,58 @@
+<mvc:View
+	xmlns="sap.m"
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns:w="sap.ui.integration.widgets"
+	controllerName="sap.f.cardsdemo.controller.HeaderInfoSection"
+	displayBlock="true">
+	<Page title="{i18n>appTitle}">
+		<subHeader>
+			<Toolbar>
+				<ToolbarSpacer />
+				<Title text="Card with Header with Info Section" />
+				<ToolbarSpacer />
+			</Toolbar>
+		</subHeader>
+		<Panel>
+			<w:Card id="card1"
+					width="300px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/basic.json">
+			</w:Card>
+			<w:Card id="card2"
+					width="500px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/rowsAndColumns.json">
+			</w:Card>
+		</Panel>
+
+		<Panel>
+			<w:Card id="card3"
+					width="300px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/mainWithInfoSection.json">
+			</w:Card>
+			<w:Card id="card4"
+					width="300px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/mainWithNumericPart.json">
+			</w:Card>
+			<w:Card id="card5"
+					width="300px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/onlyMainPart.json">
+			</w:Card>
+		</Panel>
+		<Panel>
+			<w:Card id="card6"
+					width="300px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/statusTimestampWithInfoSection.json">
+			</w:Card>
+			<w:Card id="card7"
+					width="300px"
+					class="sapUiTinyMargin"
+					manifest="{cardsPlayground>/playgroundBaseUrl}/cardcontent/headerInfoSection/actionsToolbarWithInfoSection.json">
+			</w:Card>
+		</Panel>
+	</Page>
+</mvc:View>

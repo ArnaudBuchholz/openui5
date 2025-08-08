@@ -1,6 +1,7 @@
 /* global QUnit */
 
 sap.ui.define([
+	"sap/base/util/merge",
 	"sap/ui/core/Control",
 	"sap/ui/core/UIComponent",
 	"sap/ui/fl/apply/_internal/changes/Reverter",
@@ -9,15 +10,16 @@ sap.ui.define([
 	"sap/ui/fl/apply/_internal/flexState/changes/DependencyHandler",
 	"sap/ui/fl/apply/_internal/flexState/FlexObjectState",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
+	"sap/ui/fl/initial/_internal/Settings",
 	"sap/ui/fl/initial/api/Version",
-	"sap/ui/fl/registry/Settings",
+	"sap/ui/fl/write/_internal/condenser/Condenser",
 	"sap/ui/fl/write/_internal/connectors/SessionStorageConnector",
-	"sap/ui/fl/write/_internal/flexState/compVariants/CompVariantState",
+	"sap/ui/fl/write/_internal/flexState/changes/UIChangeManager",
+	"sap/ui/fl/write/_internal/flexState/compVariants/CompVariantManager",
 	"sap/ui/fl/write/_internal/flexState/FlexObjectManager",
 	"sap/ui/fl/write/_internal/Storage",
 	"sap/ui/fl/write/_internal/Versions",
-	"sap/ui/fl/FlexControllerFactory",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils",
 	"sap/ui/model/json/JSONModel",
@@ -25,6 +27,7 @@ sap.ui.define([
 	"test-resources/sap/ui/fl/qunit/FlQUnitUtils",
 	"test-resources/sap/ui/rta/qunit/RtaQunitUtils"
 ], function(
+	merge,
 	Control,
 	UIComponent,
 	Reverter,
@@ -34,14 +37,15 @@ sap.ui.define([
 	FlexObjectState,
 	FlexState,
 	ManifestUtils,
-	Version,
 	Settings,
+	Version,
+	Condenser,
 	SessionStorageConnector,
-	CompVariantState,
+	UIChangeManager,
+	CompVariantManager,
 	FlexObjectManager,
 	Storage,
 	Versions,
-	FlexControllerFactory,
 	Layer,
 	Utils,
 	JSONModel,
@@ -101,7 +105,7 @@ sap.ui.define([
 		FlexObjectManager.addDirtyFlexObjects(sReference, [createChange(), createChange()]);
 	}
 
-	QUnit.module("getFlexObjects / saveFlexObjects", {
+	QUnit.module("getFlexObjects", {
 		before() {
 			return Settings.getInstance();
 		},
@@ -117,8 +121,10 @@ sap.ui.define([
 			this.oAppComponent.destroy();
 			FlexState.clearState(sReference);
 			FlexState.clearRuntimeSteadyObjects(sReference, this.oAppComponent.getId());
-			FlexState.resetInitialNonFlCompVariantData(sReference);
 			sandbox.restore();
+		},
+		after() {
+			Settings.clearInstance();
 		}
 	}, function() {
 		QUnit.test("Get - Given no flex objects are present", async function(assert) {
@@ -163,14 +169,24 @@ sap.ui.define([
 			assert.ok(aFilenames.indexOf("foobar") > -1, "then the standard variant is returned");
 		});
 
-		QUnit.test("Get - Given flex objects are present in the CompVariantState", async function(assert) {
+		QUnit.test("Get - Given flex objects are present in the CompVariantManager", async function(assert) {
 			await FlQUnitUtils.initializeFlexStateWithData(sandbox, sReference);
+
+			sandbox.stub(Settings, "getInstanceOrUndef").returns({
+				getIsPublicLayerAvailable() {
+					return true;
+				},
+				getUserId() {
+					return "USER_ID";
+				}
+			});
+
 			const sPersistencyKey = "persistency.key";
 			const oControl = new Control();
 			oControl.getPersistencyKey = function() {
 				return sPersistencyKey;
 			};
-			CompVariantState.addVariant({
+			CompVariantManager.addVariant({
 				changeSpecificData: {
 					type: "pageVariant",
 					isVariant: true,
@@ -180,7 +196,7 @@ sap.ui.define([
 				reference: sReference,
 				persistencyKey: sPersistencyKey
 			});
-			CompVariantState.updateVariant({
+			CompVariantManager.updateVariant({
 				favorite: true,
 				id: "myId",
 				layer: Layer.USER,
@@ -196,30 +212,6 @@ sap.ui.define([
 				assert.strictEqual(aFlexObjects.length, 2, "an array with two entries is returned");
 				assert.strictEqual(aFlexObjects[0].getChangeType(), "pageVariant", "the variant from the compVariantState is present");
 				assert.strictEqual(aFlexObjects[1].getChangeType(), "updateVariant", "the change from the compVariantState is present");
-			});
-		});
-
-		QUnit.test("Get - Given no flex objects are present in the CompVariantState + ChangePersistence but only Standard variant and invalidateCache is true", async function(assert) {
-			await FlQUnitUtils.initializeFlexStateWithData(sandbox, sReference);
-			const sPersistencyKey = "persistency.key";
-			const oControl = new Control();
-			oControl.getPersistencyKey = function() {
-				return sPersistencyKey;
-			};
-			FlexState.setInitialNonFlCompVariantData(sReference, sPersistencyKey,
-				{
-					executeOnSelection: false,
-					id: "*standard*",
-					name: "Standard"
-				}
-			);
-			return FlexObjectManager.getFlexObjects({
-				selector: this.oAppComponent,
-				invalidateCache: true
-			})
-			.then(function(aFlexObjects) {
-				assert.strictEqual(aFlexObjects.length, 1, "an array with 1 entries is returned");
-				assert.strictEqual(aFlexObjects[0].getVariantId(), "*standard*", "the standard variant is present");
 			});
 		});
 
@@ -253,18 +245,6 @@ sap.ui.define([
 					]
 				}
 			});
-			FlexState.setInitialNonFlCompVariantData(sReference, sPersistencyKey,
-				{
-					executeOnSelection: false,
-					id: "*standard*",
-					name: "Standard"
-				},
-				[{
-					favorite: true,
-					id: "#PS1",
-					name: "EntityType"
-				}]
-			);
 			const aFlexObjects = await FlexObjectManager.getFlexObjects({
 				selector: this.oAppComponent,
 				invalidateCache: true
@@ -272,13 +252,11 @@ sap.ui.define([
 			const aNames = aFlexObjects.map((oFlexObject) => {
 				return oFlexObject.getVariantId ? oFlexObject.getVariantId() : oFlexObject.getId();
 			});
-			assert.strictEqual(aFlexObjects.length, 6, "an array with 6 entries is returned");
+			assert.strictEqual(aFlexObjects.length, 4, "an array with 4 entries is returned");
 			assert.ok(aNames.indexOf("variant1") > -1, "the variant from the compVariantState is present");
 			assert.ok(aNames.indexOf("change12") > -1, "the change from the compVariantState is present");
 			assert.ok(aNames.indexOf("change1") > -1, "the 1st change in changePersistence is present");
 			assert.ok(aNames.indexOf("change2") > -1, "the 2nd change in changePersistence is present");
-			assert.ok(aNames.indexOf("#PS1") > -1, "the oData variant is present");
-			assert.ok(aNames.indexOf("*standard*") > -1, "the standard variant is present");
 		});
 
 		QUnit.test("Get - Given flex objects are present in the CompVariantState + ChangePersistence + invalidateCache is true and setVisible change", async function(assert) {
@@ -311,17 +289,6 @@ sap.ui.define([
 					]
 				}
 			});
-			FlexState.setInitialNonFlCompVariantData(sReference, sPersistencyKey,
-				{
-					executeOnSelection: false,
-					id: "*standard*",
-					name: "Standard"
-				},
-				[{
-					favorite: true,
-					id: "#PS1",
-					name: "EntityType"
-				}]);
 			const aFlexObjects = await FlexObjectManager.getFlexObjects({
 				selector: this.oAppComponent,
 				invalidateCache: true
@@ -329,10 +296,9 @@ sap.ui.define([
 			const aNames = aFlexObjects.map((oFlexObject) => {
 				return oFlexObject.getVariantId ? oFlexObject.getVariantId() : oFlexObject.getId();
 			});
-			assert.strictEqual(aFlexObjects.length, 5, "an array with 5 entries is returned");
+			assert.strictEqual(aFlexObjects.length, 4, "an array with 3 entries is returned");
+			assert.ok(aNames.indexOf("variant1") > -1, "the variant from the compVariantState is present");
 			assert.ok(aNames.indexOf("change12") > -1, "the change from the compVariantState is present");
-			assert.ok(aNames.indexOf("#PS1") > -1, "the oData variant is present");
-			assert.ok(aNames.indexOf("*standard*") > -1, "the standard variant is present");
 			assert.ok(aNames.indexOf("change1") > -1, "the 1st change in changePersistence is present");
 			assert.ok(aNames.indexOf("change2") > -1, "the 2nd change in changePersistence is present");
 		});
@@ -341,7 +307,7 @@ sap.ui.define([
 			const sPersistencyKey = "persistency.key";
 			const sVariantId = "variantId1";
 
-			CompVariantState.addVariant({
+			CompVariantManager.addVariant({
 				changeSpecificData: {
 					type: "pageVariant",
 					isUserDependent: true,
@@ -358,7 +324,7 @@ sap.ui.define([
 					}
 				}
 			});
-			CompVariantState.updateVariant({
+			CompVariantManager.updateVariant({
 				favorite: true,
 				id: sVariantId,
 				layer: Layer.CUSTOMER,
@@ -366,7 +332,7 @@ sap.ui.define([
 				persistencyKey: sPersistencyKey
 			});
 			sandbox.stub(URLSearchParams.prototype, "get").returns(Layer.VENDOR);
-			CompVariantState.addVariant({
+			CompVariantManager.addVariant({
 				changeSpecificData: {
 					type: "pageVariant",
 					isVariant: true,
@@ -395,7 +361,16 @@ sap.ui.define([
 			const sPersistencyKey = "persistency.key";
 			const sVariantId = "variantId1";
 
-			CompVariantState.addVariant({
+			sandbox.stub(Settings, "getInstanceOrUndef").returns({
+				getIsPublicLayerAvailable() {
+					return true;
+				},
+				getUserId() {
+					return "USER_ID";
+				}
+			});
+
+			CompVariantManager.addVariant({
 				changeSpecificData: {
 					type: "pageVariant",
 					isUserDependent: true,
@@ -406,13 +381,13 @@ sap.ui.define([
 				reference: sReference,
 				persistencyKey: sPersistencyKey
 			});
-			CompVariantState.updateVariant({
+			CompVariantManager.updateVariant({
 				favorite: true,
 				id: sVariantId,
 				reference: sReference,
 				persistencyKey: sPersistencyKey
 			});
-			CompVariantState.addVariant({
+			CompVariantManager.addVariant({
 				changeSpecificData: {
 					type: "pageVariant",
 					isVariant: true,
@@ -443,142 +418,414 @@ sap.ui.define([
 
 		QUnit.test("hasDirtyObjects - Given flex objects and dirty changes are present in the ChangePersistence", function(assert) {
 			const oGetDirtyFlexObjectsStub = sandbox.stub(FlexObjectState, "getDirtyFlexObjects").returns(["mockDirty"]);
-			const oStubCompStateHasDirtyChanges = sandbox.stub(CompVariantState, "hasDirtyChanges").returns(true);
 			const bHasDirtyFlexObjects = FlexObjectManager.hasDirtyFlexObjects({selector: this.oAppComponent});
-			assert.ok(bHasDirtyFlexObjects, "hasDirtyFlexObjects returns true");
+			assert.equal(bHasDirtyFlexObjects, true, "hasDirtyFlexObjects returns true");
 			assert.strictEqual(oGetDirtyFlexObjectsStub.callCount, 1, "getDirtyFlexObjects is called once");
-			assert.strictEqual(oStubCompStateHasDirtyChanges.callCount, 0, "CompVariantState.hasDirtyChanges is not called");
 		});
+	});
 
-		QUnit.test("hasDirtyObjects - Given flex objects and dirty changes are present in the CompVariantState", function(assert) {
-			const oGetDirtyFlexObjectsStub = sandbox.stub(FlexObjectState, "getDirtyFlexObjects").returns([]);
-			const oStubCompStateHasDirtyChanges = sandbox.stub(CompVariantState, "hasDirtyChanges").returns(true);
-			const bHasDirtyFlexObjects = FlexObjectManager.hasDirtyFlexObjects({selector: this.oAppComponent});
-			assert.ok(bHasDirtyFlexObjects, "hasDirtyFlexObjects returns true");
-			assert.strictEqual(oGetDirtyFlexObjectsStub.callCount, 1, "getDirtyFlexObjects is called once");
-			assert.strictEqual(oStubCompStateHasDirtyChanges.callCount, 1, "CompVariantState.hasDirtyChanges is called");
-		});
-
-		QUnit.test("Save", function(assert) {
-			sandbox.stub(Utils, "getAppComponentForControl").returns(this.oAppComponent);
-			const oPersistAllStub = sandbox.stub(CompVariantState, "persistAll").resolves();
-			const oFlexController = FlexControllerFactory.createForControl(this.oAppComponent);
-			const oSaveAllStub1 = sandbox.stub(oFlexController, "saveAll").resolves();
-			const oGetFlexObjectsStub = sandbox.stub(FlexObjectManager, "getFlexObjects").resolves("foo");
-
-			return FlexObjectManager.saveFlexObjects({
-				selector: this.oAppComponent,
-				skipUpdateCache: true,
-				draft: true,
-				layer: Layer.USER,
-				condenseAnyLayer: true
-			}).then((sReturn) => {
-				assert.strictEqual(sReturn, "foo", "the function returns whatever getFlexObjects returns");
-				assert.strictEqual(oPersistAllStub.callCount, 1, "the CompVariant changes were saved");
-
-				assert.strictEqual(oSaveAllStub1.callCount, 1, "the UI Changes were saved");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[0], this.oAppComponent, "the component was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[1], true, "the skipUpdateCache flag was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[2], true, "the draft flag was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[5], true, "the condense flag was passed");
-
-				assert.strictEqual(oGetFlexObjectsStub.callCount, 1, "the changes were retrieved at the end");
-				const oExpectedParameters = {
-					componentId: sComponentId,
-					selector: this.oAppComponent,
-					draft: true,
-					layer: Layer.USER,
-					currentLayer: Layer.USER,
-					invalidateCache: true,
-					condenseAnyLayer: true,
-					reference: sReference
-				};
-				assert.deepEqual(oGetFlexObjectsStub.firstCall.args[0], oExpectedParameters, "the parameters for getFlexObjects are correct");
-			});
-		});
-
-		QUnit.test("Save with update version parameter from version model", function(assert) {
-			sandbox.stub(Utils, "getAppComponentForControl").returns(this.oAppComponent);
-			const oPersistAllStub = sandbox.stub(CompVariantState, "persistAll").resolves();
-			const oFlexController = FlexControllerFactory.createForControl(this.oAppComponent);
-			const oSaveAllStub1 = sandbox.stub(oFlexController, "saveAll").resolves();
-			const oGetFlexObjectsStub = sandbox.stub(FlexObjectManager, "getFlexObjects").resolves("foo");
-			sandbox.stub(Versions, "hasVersionsModel").returns(true);
-			sandbox.stub(Versions, "getVersionsModel").returns(new JSONModel({
-				displayedVersion: Version.Number.Draft
+	QUnit.module("saveFlexObjects with two dirty changes", {
+		beforeEach() {
+			sandbox.stub(Settings, "getInstanceOrUndef").returns(new Settings({
+				hasPersoConnector: false,
+				isCondensingEnabled: true
 			}));
+			sandbox.stub(ManifestUtils, "getFlexReferenceForSelector").returns(sReference);
+			this.oAppComponent = new Component();
+			sandbox.stub(Utils, "getAppComponentForControl").returns(this.oAppComponent);
+			const oChangeContent1 = {
+				fileName: "ChangeFileName1",
+				fileType: "change",
+				changeType: "hideControl",
+				selector: {id: "control1"},
+				layer: Layer.CUSTOMER
+			};
 
-			return FlexObjectManager.saveFlexObjects({
-				selector: this.oAppComponent,
-				skipUpdateCache: true,
-				draft: true,
-				layer: Layer.CUSTOMER,
-				condenseAnyLayer: true,
-				version: 1
-			}).then((sReturn) => {
-				assert.strictEqual(sReturn, "foo", "the function returns whatever getFlexObjects returns");
-				assert.strictEqual(oPersistAllStub.callCount, 1, "the CompVariant changes were saved");
-
-				assert.strictEqual(oSaveAllStub1.callCount, 1, "the UI Changes were saved");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[0], this.oAppComponent, "the component was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[1], true, "the skipUpdateCache flag was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[2], true, "the draft flag was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[5], true, "the condense flag was passed");
-
-				assert.strictEqual(oGetFlexObjectsStub.callCount, 1, "the changes were retrieved at the end");
-				const oExpectedParameters = {
-					componentId: sComponentId,
-					selector: this.oAppComponent,
-					draft: true,
-					layer: Layer.CUSTOMER,
-					currentLayer: Layer.CUSTOMER,
-					invalidateCache: true,
-					condenseAnyLayer: true,
-					reference: sReference,
-					version: Version.Number.Draft
-				};
-				assert.deepEqual(oGetFlexObjectsStub.firstCall.args[0], oExpectedParameters, "the parameters for getFlexObjects are correct");
+			const oChangeContent2 = {
+				fileName: "ChangeFileName2",
+				fileType: "change",
+				changeType: "hideControl",
+				selector: {id: "control1"},
+				layer: Layer.CUSTOMER
+			};
+			this.aChanges = UIChangeManager.addDirtyChanges(sReference, [oChangeContent1, oChangeContent2], this.oAppComponent);
+			this.oCondenserStub = sandbox.stub(Condenser, "condense").resolves(this.aChanges);
+			this.oStorageWriteStub = sandbox.stub(Storage, "write").callsFake((oPropertyBag) => {
+				return Promise.resolve({ response: oPropertyBag.flexObjects });
 			});
+			this.oStorageRemoveStub = sandbox.stub(Storage, "remove").callsFake((oPropertyBag) => {
+				return Promise.resolve({ response: [oPropertyBag.flexObject] });
+			});
+			this.oStorageCondenseStub = sandbox.stub(Storage, "condense").callsFake((oPropertyBag) => {
+				return Promise.resolve({ response: oPropertyBag.condensedChanges.map((oChange) => oChange.convertToFileContent()) });
+			});
+			this.oFlexStateUpdateSpy = sandbox.spy(FlexState, "updateStorageResponse");
+			this.oFlexObjectDSUpdateSpy = sandbox.spy(FlexState.getFlexObjectsDataSelector(), "checkUpdate");
+			this.oDHRemoveFromMapSpy = sandbox.spy(DependencyHandler, "removeChangeFromMap");
+			this.oDHRemoveFromDependenciesSpy = sandbox.spy(DependencyHandler, "removeChangeFromDependencies");
+			sandbox.stub(Versions, "getVersionsModel").returns(new JSONModel({
+				persistedVersion: Version.Number.Original,
+				draftFilenames: ["ChangeFileName1", "ChangeFileName2"],
+				versioningEnabled: true
+			}));
+			this.oVersionsUpdateStub = sandbox.stub(Versions, "updateAfterSave");
+		},
+		afterEach() {
+			this.oAppComponent.destroy();
+			FlexState.clearState(sReference);
+			sandbox.restore();
+		}
+	}, function() {
+		QUnit.test("with draft handling and two changes that are not saved via condense and versioning is disabled", async function(assert) {
+			const aAdditionalChanges = UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "notSavedChange1", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				},
+				{
+					fileName: "notSavedChange2", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				}
+			], this.oAppComponent);
+			Versions.getVersionsModel.restore();
+			sandbox.stub(Versions, "getVersionsModel").returns(new JSONModel({
+				persistedVersion: Version.Number.Original,
+				draftFilenames: ["ChangeFileName1", "ChangeFileName2"],
+				versioningEnabled: false
+			}));
+			const oReturn = await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				layer: Layer.CUSTOMER
+			});
+
+			assert.deepEqual(oReturn, {
+				response: [...this.aChanges].map((oChange) => oChange.convertToFileContent())
+			}, "the function returns the changes that were saved");
+			assert.strictEqual(this.oVersionsUpdateStub.callCount, 0, "the versions model was not updated");
+			assert.deepEqual(this.oStorageCondenseStub.firstCall.args[0], {
+				allChanges: this.aChanges.concat(aAdditionalChanges),
+				condensedChanges: this.aChanges,
+				layer: Layer.CUSTOMER,
+				transport: "",
+				isLegacyVariant: false,
+				parentVersion: undefined
+			}, "the condense was called with the correct parameters");
+			this.aChanges.forEach((oChange) => {
+				assert.strictEqual(oChange.getState(), States.LifecycleState.PERSISTED, "the change is in the PERSISTED state");
+			});
+			assert.strictEqual(this.oFlexStateUpdateSpy.callCount, 4, "FlexState.updateStorageResponse was called four times");
+			// checkUpdate is called for the initial addDirtyChanges, for the update of the saved changes
+			// and for the deletion of the additional changes
+			assert.strictEqual(this.oFlexObjectDSUpdateSpy.callCount, 4, "FlexObjectDataSelector.checkUpdate was called four times");
+			assert.strictEqual(this.oDHRemoveFromMapSpy.callCount, 2, "removeChangeFromMap was called twice");
+			assert.strictEqual(this.oDHRemoveFromDependenciesSpy.callCount, 2, "removeChangeFromDependencies was called twice");
 		});
 
-		QUnit.test("Save with app variant by startup param ", function(assert) {
-			sandbox.stub(Utils, "getAppComponentForControl").returns(this.oAppComponent);
-			sandbox.stub(Utils, "isVariantByStartupParameter").returns("true");
-			ManifestUtils.getFlexReferenceForSelector.returns(sReference);
-			const oPersistAllStub = sandbox.stub(CompVariantState, "persistAll").resolves();
-			const oFlexController = FlexControllerFactory.createForControl(this.oAppComponent);
-			const oSaveAllStub1 = sandbox.stub(oFlexController, "saveAll").resolves();
-			const oGetFlexObjectsStub = sandbox.stub(FlexObjectManager, "getFlexObjects").resolves("foo");
-
-			return FlexObjectManager.saveFlexObjects({
+		QUnit.test("with additional changes in a different layer and removeOtherLayerChanges", async function(assert) {
+			const oReverterStub = sandbox.stub(Reverter, "revertMultipleChanges").resolves();
+			const oRemoveFOSpy = sandbox.spy(FlexObjectManager, "removeDirtyFlexObjects");
+			UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "notSavedChange1", layer: Layer.USER, selector: { id: "control1" }
+				},
+				{
+					fileName: "notSavedChange2", layer: Layer.PUBLIC, selector: { id: "control1" }
+				}
+			], this.oAppComponent);
+			const oReturn = await FlexObjectManager.saveFlexObjects({
 				selector: this.oAppComponent,
-				skipUpdateCache: true,
-				draft: true,
-				layer: Layer.USER,
-				condenseAnyLayer: true
-			}).then((sReturn) => {
-				assert.strictEqual(sReturn, "foo", "the function returns whatever getFlexObjects returns");
-				assert.strictEqual(oPersistAllStub.callCount, 1, "the CompVariant changes were saved");
-
-				assert.strictEqual(oSaveAllStub1.callCount, 1, "the UI Changes were saved");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[0], this.oAppComponent, "the component was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[1], true, "the skipUpdateCache flag was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[2], true, "the draft flag was passed");
-				assert.deepEqual(oSaveAllStub1.firstCall.args[5], true, "the condense flag was passed");
-
-				assert.strictEqual(oGetFlexObjectsStub.callCount, 1, "the changes were retrieved at the end");
-				const oExpectedParameters = {
-					componentId: sComponentId,
-					selector: this.oAppComponent,
-					draft: true,
-					layer: Layer.USER,
-					currentLayer: Layer.USER,
-					invalidateCache: true,
-					condenseAnyLayer: true,
-					reference: sReference
-				};
-				assert.deepEqual(oGetFlexObjectsStub.firstCall.args[0], oExpectedParameters, "the parameters for getFlexObjects are correct");
+				layer: Layer.CUSTOMER,
+				removeOtherLayerChanges: true
 			});
+
+			assert.deepEqual(oReturn, {
+				response: [...this.aChanges].map((oChange) => oChange.convertToFileContent())
+			}, "the function returns the changes that were saved");
+			assert.strictEqual(oReverterStub.callCount, 1, "the Reverter.revertMultipleChanges was called once");
+			assert.strictEqual(oReverterStub.firstCall.args[0][0].getId(), "notSavedChange2", "the second change was reverted first");
+			assert.strictEqual(oReverterStub.firstCall.args[0][1].getId(), "notSavedChange1", "the second change was reverted first");
+			assert.strictEqual(oRemoveFOSpy.callCount, 1, "then the changes were removed from the dirty changes");
+			assert.deepEqual(oRemoveFOSpy.firstCall.args[0], {
+				reference: sReference,
+				layers: [Layer.USER, Layer.PUBLIC, "CUSTOMER_BASE", "PARTNER", "VENDOR", "BASE"],
+				component: this.oAppComponent
+			}, "the removeFlexObjects was called with the correct parameters");
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the condense was called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+		});
+
+		QUnit.test("with additional changes in a different layer and a separate perso connector", async function(assert) {
+			sandbox.stub(Settings.getInstanceOrUndef(), "getHasPersoConnector").returns(true);
+			const aAdditionalChanges = UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "notSavedChange", layer: Layer.USER, selector: { id: "control1" }
+				},
+				{
+					fileName: "deletedChange", layer: Layer.USER, selector: { id: "control1" }
+				}
+			], this.oAppComponent);
+			aAdditionalChanges[1].setState(States.LifecycleState.PERSISTED);
+			aAdditionalChanges[1].setState(States.LifecycleState.DELETED);
+			const oReturn = await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				layer: Layer.CUSTOMER
+			});
+
+			assert.deepEqual(oReturn, {
+				response: [...this.aChanges, ...aAdditionalChanges].map((oChange) => oChange.convertToFileContent())
+			}, "the function returns the changes that were saved");
+			assert.strictEqual(this.oCondenserStub.callCount, 0, "the condense was not called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 3, "the Storage.write was called three times");
+			assert.strictEqual(this.oStorageRemoveStub.callCount, 1, "the Storage.remove was called once");
+			assert.strictEqual(
+				this.oStorageWriteStub.getCall(0).args[0].parentVersion,
+				Version.Number.Original,
+				"the first change has the parent version"
+			);
+			[1, 2].forEach((iIndex) => {
+				assert.strictEqual(
+					this.oStorageWriteStub.getCall(iIndex).args[0].parentVersion,
+					Version.Number.Draft,
+					"the other changes have the draft as parent version"
+				);
+			});
+			assert.strictEqual(
+				this.oStorageRemoveStub.getCall(0).args[0].parentVersion,
+				Version.Number.Original,
+				"the first change has the parent version"
+			);
+			assert.strictEqual(this.oFlexObjectDSUpdateSpy.callCount, 3, "FlexObjectDataSelector.checkUpdate was called three times");
+		});
+
+		QUnit.test("without backend condensing and the condenser returning not all changes", async function(assert) {
+			const oDeleteStub = sandbox.stub(FlexObjectManager, "deleteFlexObjects");
+			const aChanges = UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "deletedChange1", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				},
+				{
+					fileName: "deletedChange2", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				},
+				{
+					fileName: "notSavedChange1", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				},
+				{
+					fileName: "notSavedChange2", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				}
+			], this.oAppComponent);
+			aChanges[0].setState(States.LifecycleState.PERSISTED);
+			aChanges[0].setState(States.LifecycleState.DELETED);
+			aChanges[1].setState(States.LifecycleState.PERSISTED);
+			aChanges[1].setState(States.LifecycleState.DELETED);
+			sandbox.stub(Settings.getInstanceOrUndef(), "getIsCondensingEnabled").returns(false);
+			const oReturn = await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				layer: Layer.CUSTOMER
+			});
+
+			assert.deepEqual(oReturn, {
+				response: [...this.aChanges].map((oChange) => oChange.convertToFileContent())
+			}, "the function returns the changes that were saved");
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 1, "the Storage.write was called once");
+			assert.strictEqual(this.oStorageRemoveStub.callCount, 2, "the Storage.remove was called twice");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 0, "the Storage.condense was not called");
+			assert.strictEqual(this.oDHRemoveFromMapSpy.callCount, 0, "removeChangeFromMap was not called directly");
+			assert.strictEqual(this.oDHRemoveFromDependenciesSpy.callCount, 0, "removeChangeFromDependencies was not called directly");
+			assert.strictEqual(oDeleteStub.callCount, 4, "deleteFlexObjects was called four times");
+		});
+
+		QUnit.test("without backend condensing and the condenser returning no changes", async function(assert) {
+			const oDeleteStub = sandbox.stub(FlexObjectManager, "deleteFlexObjects");
+			sandbox.stub(Settings.getInstanceOrUndef(), "getIsCondensingEnabled").returns(false);
+			this.oCondenserStub.restore();
+			this.oCondenserStub = sandbox.stub(Condenser, "condense").resolves([]);
+
+			const oReturn = await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent
+			});
+
+			assert.deepEqual(oReturn, { response: [] }, "the function returns an empty response");
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.strictEqual(this.oStorageRemoveStub.callCount, 0, "the Storage.remove was not called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 0, "the Storage.condense was not called");
+			assert.strictEqual(oDeleteStub.callCount, 2, "deleteFlexObjects was called twice");
+		});
+
+		function removeChangesAndAddDeveloperChanges(oAppComponent) {
+			FlexObjectManager.removeDirtyFlexObjects({ reference: sReference });
+			return UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "developerChange1", layer: Layer.CUSTOMER_BASE, selector: { id: "control1" }
+				},
+				{
+					fileName: "developerChange2", layer: Layer.CUSTOMER_BASE, selector: { id: "control1" }
+				}
+			], oAppComponent);
+		}
+
+		QUnit.test("Developer Changes with condenseAnyLayer", async function(assert) {
+			const aChanges = removeChangesAndAddDeveloperChanges(this.oAppComponent);
+			aChanges[0].setState(States.LifecycleState.PERSISTED);
+			aChanges[0].setState(States.LifecycleState.UPDATED);
+			this.oCondenserStub.restore();
+			this.oCondenserStub = sandbox.stub(Condenser, "condense").resolves(aChanges);
+
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				condenseAnyLayer: true
+			});
+
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 1, "the Storage.condense was called once");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.strictEqual(this.oVersionsUpdateStub.callCount, 0, "the versions model was not updated");
+			assert.deepEqual(this.oStorageCondenseStub.firstCall.args[0], {
+				allChanges: aChanges,
+				condensedChanges: aChanges,
+				layer: Layer.CUSTOMER_BASE,
+				transport: "",
+				isLegacyVariant: false,
+				parentVersion: undefined
+			}, "the condense was called with the correct parameters");
+		});
+
+		QUnit.test("Developer Changes without condenseAnyLayer", async function(assert) {
+			removeChangesAndAddDeveloperChanges(this.oAppComponent);
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent
+			});
+
+			assert.strictEqual(this.oCondenserStub.callCount, 0, "the Condenser was not called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 1, "the Storage.write was called once");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 0, "the Storage.condense was not called");
+		});
+
+		QUnit.test("Developer Changes with url parameter set to true", async function(assert) {
+			const sParameterName = "sap-ui-xx-condense-changes";
+			const aChanges = removeChangesAndAddDeveloperChanges(this.oAppComponent);
+			this.oCondenserStub.restore();
+			this.oCondenserStub = sandbox.stub(Condenser, "condense").resolves(aChanges);
+			sandbox.stub(URLSearchParams.prototype, "has").withArgs(sParameterName).returns(true);
+			sandbox.stub(URLSearchParams.prototype, "get").withArgs(sParameterName).returns("true");
+
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent
+			});
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 1, "the Storage.condense was called once");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+		});
+
+		QUnit.test("Key User changes with url parameter set to not true", async function(assert) {
+			const sParameterName = "sap-ui-xx-condense-changes";
+			sandbox.stub(URLSearchParams.prototype, "has").withArgs(sParameterName).returns(true);
+			sandbox.stub(URLSearchParams.prototype, "get").withArgs(sParameterName).returns("true123");
+
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent
+			});
+			assert.strictEqual(this.oCondenserStub.callCount, 0, "the Condenser was not called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 0, "the Storage.condense was not called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 1, "the Storage.write was called once");
+		});
+
+		QUnit.test("with saved changes, only some belonging to the draft", async function(assert) {
+			this.aChanges.forEach((oChange) => { oChange.setState(States.LifecycleState.PERSISTED); });
+			const aChanges = UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "persistedChange1", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				},
+				{
+					fileName: "persistedChange2", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				},
+				{
+					fileName: "notSavedChange", layer: Layer.CUSTOMER, selector: { id: "control1" }
+				}
+			], this.oAppComponent);
+			aChanges[0].setState(States.LifecycleState.PERSISTED);
+			aChanges[1].setState(States.LifecycleState.PERSISTED);
+
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				layer: Layer.CUSTOMER
+			});
+
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 1, "the Storage.condense was called");
+			assert.deepEqual(
+				this.oCondenserStub.firstCall.args[1],
+				this.aChanges.concat([aChanges[2]]),
+				"the condense was called with the correct parameters"
+			);
+		});
+
+		QUnit.test("with persisted changes in two layers", async function(assert) {
+			this.aChanges.forEach((oChange) => { oChange.setState(States.LifecycleState.PERSISTED); });
+			const aChanges = UIChangeManager.addDirtyChanges(sReference, [
+				{
+					fileName: "persistedChange1", layer: Layer.CUSTOMER_BASE, selector: { id: "control1" }
+				},
+				{
+					fileName: "persistedChange2", layer: Layer.CUSTOMER_BASE, selector: { id: "control1" }
+				},
+				{
+					fileName: "notSavedChange", layer: Layer.CUSTOMER_BASE, selector: { id: "control1" }
+				}
+			], this.oAppComponent);
+			aChanges[0].setState(States.LifecycleState.PERSISTED);
+			aChanges[1].setState(States.LifecycleState.PERSISTED);
+
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				condenseAnyLayer: true
+			});
+
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 1, "the Storage.condense was called");
+			assert.deepEqual(this.oCondenserStub.firstCall.args[1], aChanges, "the condense was called with the correct parameters");
+		});
+
+		QUnit.test("without dirty changes", async function(assert) {
+			this.aChanges.forEach((oChange) => { oChange.setState(States.LifecycleState.PERSISTED); });
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent
+			});
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 0, "the Storage.condense was not called");
+			assert.strictEqual(this.oCondenserStub.callCount, 0, "the Condenser was not called");
+		});
+
+		QUnit.test("with passing not all dirty changes", async function(assert) {
+			this.oCondenserStub.restore();
+			this.oCondenserStub = sandbox.stub(Condenser, "condense").resolves([this.aChanges[0]]);
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				flexObjects: [this.aChanges[0]]
+			});
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 1, "the Storage.condense was called once");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.deepEqual(this.oStorageCondenseStub.firstCall.args[0], {
+				allChanges: [this.aChanges[0]],
+				condensedChanges: [this.aChanges[0]],
+				layer: Layer.CUSTOMER,
+				transport: "",
+				isLegacyVariant: false,
+				parentVersion: undefined
+			}, "the condense was called with the correct parameters");
+		});
+
+		QUnit.test("with passing skipUpdateCache", async function(assert) {
+			await FlexObjectManager.saveFlexObjects({
+				selector: this.oAppComponent,
+				skipUpdateCache: true
+			});
+			assert.strictEqual(this.oCondenserStub.callCount, 1, "the Condenser was called");
+			assert.strictEqual(this.oStorageCondenseStub.callCount, 1, "the Storage.condense was called once");
+			assert.strictEqual(this.oStorageWriteStub.callCount, 0, "the Storage.write was not called");
+			assert.strictEqual(this.oFlexStateUpdateSpy.callCount, 0, "FlexState.updateStorageResponse was not called");
 		});
 	});
 

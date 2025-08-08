@@ -34,7 +34,7 @@ sap.ui.define([
 		return BaseController.extend("sap.ui.documentation.sdk.controller.SubApiDetail", {
 
 			NOT_AVAILABLE: 'N/A',
-			PUBLIC_GITHUB_FRAMEWORK_DOMAIN: 'https://github.com/SAP/openui5/blob/master/src/',
+			PUBLIC_GITHUB_FRAMEWORK_DOMAIN: 'https://github.com/UI5/openui5/blob/master/src/',
 			SECTION_MAP: {
 				"properties": "controlProperties",
 				"fields": "properties",
@@ -532,12 +532,15 @@ sap.ui.define([
 							const versionData = this.getModel("versionData").getData();
 							const isModuleAvailable = oControlData.module !== this.NOT_AVAILABLE;
 							const library = versionData?.libraries?.find((lib) => lib.name === oEntityData.lib);
+							const sVersion = library?.version?.includes("-SNAPSHOT") ? "HEAD" : library?.version;
+							const bIsOpenUI5Lib = library.npmPackageName?.startsWith("@openui5");
 
-							if (!isModuleAvailable || !library?.version) {
+
+							if (!isModuleAvailable || !sVersion || !bIsOpenUI5Lib) {
 								return _getObjectAttributeBlock("Module", oControlData.module);
 							}
 
-							const sGitHubUrl = `https://github.com/SAP/openui5/blob/${library.version}/src/${oEntityData.lib}/src/${oControlData.module}.js`;
+							const sGitHubUrl = `https://github.com/UI5/openui5/blob/${sVersion}/src/${oEntityData.lib}/src/${oControlData.module}.js`;
 
 							return _getHBox({
 								items: [

@@ -129,6 +129,8 @@ sap.ui.define([
 
 	const DEFAULT_MODEL_SIZE_LIMIT = 1000;
 
+	const oResourceBundle = Library.getResourceBundleFor("sap.ui.integration");
+
 	/**
 	 * Constructor for a new <code>Card</code>.
 	 *
@@ -733,13 +735,17 @@ sap.ui.define([
 			i18n: {
 				init: () => {
 					this.setModel(new ResourceModel({
-						bundle: this._oIntegrationRb,
+						bundleName: "sap.ui.integration.i18n.public.messagebundle",
 						async: true
 					}), "i18n");
-					this._oActiveRb = this._oIntegrationRb;
 				},
 				reset: () => {
-					this._oActiveRb = this._oIntegrationRb;
+					this._oActiveRb = null;
+					this.getModel("i18n").destroy();
+					this.setModel(new ResourceModel({
+						bundleName: "sap.ui.integration.i18n.public.messagebundle",
+						async: true
+					}), "i18n");
 				}
 			},
 			size: {
@@ -1124,10 +1130,11 @@ sap.ui.define([
 			this._logSevereError("There must be a 'sap.card' section in the manifest.");
 		}
 
-		if (oCardManifest && oCardManifest.getResourceBundle()) {
-			this._oActiveRb = await this._enhanceI18nModel(oCardManifest.getResourceBundle());
+		if (oCardManifest.getResourceBundle()) {
+			this._enhanceI18nModel(oCardManifest.getResourceBundle());
 		}
 
+		this._oActiveRb = await this.getModel("i18n").getResourceBundle();
 		this.getModel("context").resetHostProperties();
 
 		if (this._hasContextParams()) {
@@ -1141,30 +1148,13 @@ sap.ui.define([
 	};
 
 	/**
-	 * Enhances or creates the i18n model for the card.
+	 * Enhances the public resource bundle with the one of the card.
 	 *
-	 * @param {module:sap/base/i18n/ResourceBundle} oResourceBundle The resource bundle which will be enhanced.
-	 * @returns {Promise<module:sap/base/i18n/ResourceBundle>} The enhanced resource bundle.
+	 * @param {module:sap/base/i18n/ResourceBundle} oResourceBundle The resource bundle of the card.
 	 * @private
 	 */
 	Card.prototype._enhanceI18nModel = function (oResourceBundle) {
-		var oResourceModel = this.getModel("i18n"),
-			oNewResourceModel;
-
-		// the library resource bundle must not be enhanced
-		// so the card resource bundle should be first
-		oNewResourceModel = new ResourceModel({
-			async: true,
-			bundle: oResourceBundle,
-			enhanceWith: [
-				this._oIntegrationRb
-			]
-		});
-
-		this.setModel(oNewResourceModel, "i18n");
-		oResourceModel.destroy();
-
-		return oNewResourceModel.getResourceBundle();
+		this.getModel("i18n").enhance(oResourceBundle);
 	};
 
 	/**
@@ -1459,21 +1449,24 @@ sap.ui.define([
 		this.destroyAggregation("_filterBar");
 		this.destroyAggregation("_footer");
 
-		this._cleanupOldManifest();
+		this._cleanupOldManifest(false);
 	};
 
 	/**
 	 * Cleans up internal models and other before new manifest processing.
+	 * @param {boolean} [bResetInternalModels=true] If true, the internal models will be reset.
 	 */
-	Card.prototype._cleanupOldManifest = function() {
+	Card.prototype._cleanupOldManifest = function(bResetInternalModels = true) {
 		if (this._fnOnModelChange) {
 			this.getModel().detachEvent("change", this._fnOnModelChange, this);
 			delete this._fnOnModelChange;
 		}
 
-		for (const modelName in this._INTERNAL_MODELS) {
-			if (this._INTERNAL_MODELS[modelName].reset) {
-				this._INTERNAL_MODELS[modelName].reset();
+		if (bResetInternalModels) {
+			for (const modelName in this._INTERNAL_MODELS) {
+				if (this._INTERNAL_MODELS[modelName].reset) {
+					this._INTERNAL_MODELS[modelName].reset();
+				}
 			}
 		}
 
@@ -1680,7 +1673,7 @@ sap.ui.define([
 	};
 
 	/**
-	 * Settings for blocking message that ocurred in a {@link sap.ui.integration.widgets.Card}
+	 * Settings for blocking message that occurred in a {@link sap.ui.integration.widgets.Card}
 	 *
 	 * @typedef {object} sap.ui.integration.BlockingMessageSettings
 	 * @property {sap.ui.integration.CardBlockingMessageType} type Blocking message type
@@ -1755,9 +1748,8 @@ sap.ui.define([
 	/**
 	 * Gets translated text from the i18n properties files configured for this card.
 	 *
-	 * For more details see {@link module:sap/base/i18n/ResourceBundle#getText}.
+	 * This method uses <code>ResourceBundle.getText()</code>. For more details see {@link module:sap/base/i18n/ResourceBundle#getText}.
 	 *
-	 * @experimental Since 1.83. The API might change.
 	 * @public
 	 * @param {string} sKey Key to retrieve the text for
 	 * @param {string[]} [aArgs] List of parameter values which should replace the placeholders "{<i>n</i>}"
@@ -1765,14 +1757,12 @@ sap.ui.define([
 	 *     whenever <code>aArgs</code> is given, no matter whether the text contains placeholders or not
 	 *     and no matter whether <code>aArgs</code> contains a value for <i>n</i> or not.
 	 * @param {boolean} [bIgnoreKeyFallback=false] If set, <code>undefined</code> is returned instead of the key string, when the key is not found in any bundle or fallback bundle.
-	 * @returns {string} The value belonging to the key, if found; otherwise the key itself or <code>undefined</code> depending on <code>bIgnoreKeyFallback</code>.
+	 * @returns {string|undefined} The value belonging to the key, if found; otherwise, it returns the key itself or <code>undefined</code> depending on <code>bIgnoreKeyFallback</code>.
 	 */
 	Card.prototype.getTranslatedText = function (sKey, aArgs, bIgnoreKeyFallback) {
-		var oModel = this.getModel("i18n");
-
-		if (!oModel || !this._oActiveRb) {
-			Log.warning("There are no translations available. Either the i18n configuration is missing or the method is called too early.");
-			return null;
+		if (!this._oActiveRb) {
+			Log.error("'getTranslatedText' cannot be used before the card instance is ready. Consider using the event 'manifestApplied'.", "sap.ui.integration.widgets.Card");
+			return bIgnoreKeyFallback ? undefined : sKey;
 		}
 
 		return this._oActiveRb.getText(sKey, aArgs, bIgnoreKeyFallback);
@@ -1863,11 +1853,20 @@ sap.ui.define([
 			this._oDataProviderFactory.destroy();
 		}
 
-		this._oDestinations = new Destinations({
-			host: this.getHostInstance(),
-			card: this,
-			manifestConfig: this._oCardManifest.get(MANIFEST_PATHS.DESTINATIONS)
-		});
+		try {
+			this._oDestinations = Destinations.create(this, this.getMainCard());
+		} catch (oError) {
+			this.getMainCard()._handleError({
+				illustrationType: IllustratedMessageType.UnableToLoad,
+				title: oResourceBundle.getText("CARD_ERROR_CONFIGURATION_TITLE"),
+				description: oResourceBundle.getText("CARD_ERROR_CONFIGURATION_DESCRIPTION"),
+				details: " ",
+				originalError: oError
+			});
+
+			return Promise.reject(oError);
+		}
+
 		this._oIconFormatter = new IconFormatter({
 			card: this
 		});
@@ -1949,7 +1948,8 @@ sap.ui.define([
 			return;
 		}
 
-		this.bindObject(BindingResolver.resolveValue(oDataSettings.path || "/", this));
+		this._sBindingPath = oDataSettings.path || "/";
+		this.bindObject(BindingResolver.resolveValue(this._sBindingPath, this));
 
 		if (this._oDataProvider) {
 			this._oDataProvider.destroy();
@@ -2241,24 +2241,44 @@ sap.ui.define([
 	};
 
 	/**
-	 * Creates specific type of card content based on sap.card/content part of the manifest
+	 * Generates accessibility texts based on the rendering style of the card.
+	 *
+	 * @private
+	 */
+	Card.prototype._applyAriaTexts = function () {
+		const sCardType = this._oCardManifest.get(MANIFEST_PATHS.TYPE);
+		const bIsTileDisplayVariant = this.isTileDisplayVariant();
+		let sAriaText;
+
+
+		if (sCardType  && !bIsTileDisplayVariant) {
+			sAriaText = this._oIntegrationRb.getText("ARIA_DESCRIPTION_CARD_TYPE_" + sCardType.toUpperCase());
+
+			// @TODO: This adds the same text to the card. The region has an aria-describedby = card type. Group has aria-labelledby with the card type. Leads to duplicate hidden text.
+			// Suggestion for a fix: delete _ariaText and add _describedByCardTypeText to aria-labelled by of the region.
+			this._describedByCardTypeText.setText(sAriaText);
+		} else if (bIsTileDisplayVariant) {
+			sAriaText = this._oIntegrationRb.getText("ARIA_LABELLEDBY_DISPLAY_VARIANT_TILE");
+		} else {
+			sAriaText = this._oRb.getText("ARIA_ROLEDESCRIPTION_CARD");
+		}
+
+		this._ariaText.setText(sAriaText);
+	};
+
+	/**
+	 * Creates specific type of card content based on sap.card/content part of the manifest.
 	 *
 	 * @private
 	 */
 	Card.prototype._applyContentManifestSettings = function () {
 		var sCardType = this._oCardManifest.get(MANIFEST_PATHS.TYPE),
 			oContentManifest = this.getContentManifest(),
-			sAriaText,
 			oContent;
 
-		if (sCardType) {
-			sAriaText = this._oIntegrationRb.getText("ARIA_DESCRIPTION_CARD_TYPE_" + sCardType.toUpperCase());
-		} else {
-			sAriaText = this._oRb.getText("ARIA_ROLEDESCRIPTION_CARD");
-		}
 		this.destroyAggregation("_content");
-		this._ariaText.setText(sAriaText);
-		this._describedByCardTypeText.setText(sAriaText);
+
+		this._applyAriaTexts();
 
 		if (this._shouldIgnoreContent()) {
 			this.fireEvent("_contentReady");
@@ -2278,9 +2298,9 @@ sap.ui.define([
 			});
 		} catch (e) {
 			this._handleError({
-				illustrationType: IllustratedMessageType.ErrorScreen,
-				title: this.getTranslatedText("CARD_ERROR_CONFIGURATION_TITLE"),
-				description: this.getTranslatedText("CARD_ERROR_CONFIGURATION_DESCRIPTION"),
+				illustrationType: IllustratedMessageType.UnableToLoad,
+				title: oResourceBundle.getText("CARD_ERROR_CONFIGURATION_TITLE"),
+				description: oResourceBundle.getText("CARD_ERROR_CONFIGURATION_DESCRIPTION"),
 				details: e.message,
 				originalError: e
 			});
@@ -2374,6 +2394,15 @@ sap.ui.define([
 	};
 
 	/**
+	 * @private
+	 * @ui5-restricted sap.ui.integration
+	 * @returns {string|undefined} The binding path for the card.
+	 */
+	Card.prototype._getDataPath = function () {
+		return this._sBindingPath || "/";
+	};
+
+	/**
 	 * Checks if the content section should be ignored.
 	 * @private
 	 * @returns {boolean} True if the content section should be ignored.
@@ -2416,6 +2445,7 @@ sap.ui.define([
 			this._fireConfigurationChange({
 				[`/sap.card/configuration/filters/${oEvent.getParameter("key")}/value`]: oEvent.getParameter("value")
 			});
+			this.scheduleFireStateChanged();
 			this.resetPaginator();
 		});
 	};
@@ -2764,23 +2794,72 @@ sap.ui.define([
 		}
 
 		this._setLoadingProviderState(false);
+
+		this._fireDataChange();
 	};
 
 	/**
-	 * Performs an HTTP request using the given configuration.
+	 * Settings for card request error.
+	 *
+	 * <b>Note:</b> For backward compatibility, the object can also be accessed as an array
+	 * with the properties in the order - message, response, and responseText.
+	 *
+	 * @typedef {object} sap.ui.integration.CardRequestError
+	 * @property {string} message The error message
+	 * @property {object} response The response object
+	 * @property {string} responseText The response text
+	 * @public
+	 * @experimental As of version 1.139
+	 */
+
+	/**
+	 * Performs an asynchronous network request using the specified request settings,
+	 * enabling dynamic bindings to card configurations, such as CSRF tokens, destinations, and parameters.
+	 * If the request is successful, it returns a Promise that resolves with the response data.
+	 *
+	 * If an error occurs during the request, the Promise will reject with a {@link sap.ui.integration.CardRequestError}.
+	 *
+	 * For more details on card data handling and request settings see [Card Explorer Data Section]{@link https://ui5.sap.com/test-resources/sap/ui/integration/demokit/cardExplorer/webapp/index.html#/learn/features/data}.
 	 *
 	 * @public
-	 * @experimental since 1.79
+	 * @since 1.79
 	 * @param {object} oConfiguration The configuration of the request.
 	 * @param {string} oConfiguration.url The URL of the resource.
 	 * @param {string} [oConfiguration.mode="cors"] The mode of the request. Possible values are "cors", "no-cors", "same-origin".
 	 * @param {string} [oConfiguration.method="GET"] The HTTP method. Possible values are "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", and "HEAD".
-	 * @param {object|FormData} [oConfiguration.parameters] The request parameters. If the HTTP method is "POST", "PUT", "PATCH", or "DELETE" the parameters will be put into the body of the request.
-	 *
-	 *                                                      <b>Note:</b> If parameters are of type "FormData", the "FormData" will not be resolved for bindings, destinations and others. It will be sent as it is.
-	 * @param {string} [oConfiguration.dataType="json"] Deprecated. Use the correct Accept headers and correct Content-Type header in the response.
+	 * @param {object|FormData|string} [oConfiguration.parameters] The request parameters to be sent to the server. They are sent as follows:
+	 *<ul>
+	 *	<li>
+	 *		When the HTTP method is "GET" or "HEAD", and parameters are set as:
+	 *		<ul>
+	 *			<li>object - Sent as part of the URL, appended as key/value pairs in the query string</li>
+	 *			<li>FormData - Not sent</li>
+	 *			<li>string - Not sent</li>
+	 *		</ul>
+	 *	</li>
+	 *	<li>
+	 *		When the HTTP method is "POST", "PUT", "PATCH", or "DELETE", the parameters will be sent in the request body, encoded based on the <code>Content-Type</code> header and parameters type:
+	 *		<ul>
+	 *			<li>
+	 *				object - Supports the following encodings, decided based on the Content-Type header of the request:
+	 *				<ul>
+	 *					<li><code>application/x-www-form-urlencoded</code> - Default</li>
+	 *					<li><code>application/json</code></li>
+	 *				</ul>
+	 *			</li>
+	 *			<li>
+	 *				FormData - Encoded as <code>multipart/form-data</code>. The <code>Content-Type</code> header on the request must not be set explicitly.
+	 *				<b>Note:</b> FormData will not be resolved for bindings, destinations and others. It will be sent as it is.
+	 *				Added since version 1.130
+	 *			</li>
+	 *			<li>string - Must be used in combination with <code>Content-Type: text/plain</code>. Will be sent as is. Added since version 1.138</li>
+	 *		</ul>
+	 *	</li>
+	 *</ul>
+	 * @param {string} [oConfiguration.dataType="json"] Deprecated. Use the correct <code>Accept</code> headers and set correct <code>Content-Type</code> header in the response.
 	 * @param {object} [oConfiguration.headers] The HTTP headers of the request.
-	 * @param {boolean} [oConfiguration.withCredentials=false] Indicates whether cross-site requests should be made using credentials.
+	 * @param {boolean} [oConfiguration.withCredentials=false] Indicates whether
+	 * cross-site requests should be made using credentials. Same-origin requests are always made using credentials.
 	 * @returns {Promise<any>} Resolves when the request is successful, rejects otherwise.
 	 */
 	Card.prototype.request = function (oConfiguration) {
@@ -2794,7 +2873,19 @@ sap.ui.define([
 					true)
 				.setAllowCustomDataType(true)
 				.attachDataChanged((e) => { resolve(e.getParameter("data")); })
-				.attachError((e) => { reject([e.getParameter("message"), e.getParameter("response"), e.getParameter("responseText"), e.getParameter("settings")]); })
+				.attachError((e) => {
+					const oResult = [e.getParameter("message"),
+						e.getParameter("response"),
+						e.getParameter("responseText"),
+						e.getParameter("settings")];
+
+					oResult.message = e.getParameter("message");
+					oResult.response = e.getParameter("response");
+					oResult.responseText = e.getParameter("responseText");
+					oResult._requestSettings = e.getParameter("settings");
+
+					reject(oResult);
+				})
 				.triggerDataUpdate();
 			});
 		});
@@ -3442,6 +3533,21 @@ sap.ui.define([
 	 */
 	Card.prototype.isDataReady = function () {
 		return !!this._bDataReady;
+	};
+
+	/**
+	 * @private
+	 * @ui5-restricted sap.ui.integration
+	 * @returns {sap.ui.integration.widgets.Card} The main card of the current card.
+	 */
+	Card.prototype.getMainCard = function () {
+		let oParentCard = Element.getElementById(this.getAssociation("openerReference"));
+
+		while (oParentCard && oParentCard.getAssociation("openerReference")) {
+			oParentCard = Element.getElementById(oParentCard.getAssociation("openerReference"));
+		}
+
+		return oParentCard || this;
 	};
 
 	return Card;

@@ -1,20 +1,18 @@
 /* global QUnit */
 
 sap.ui.define([
-	"sap/ui/base/ManagedObject",
 	"sap/ui/core/mvc/View",
 	"sap/ui/core/mvc/ViewType",
 	"sap/ui/core/Component",
 	"sap/ui/core/ComponentContainer",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/apply/_internal/preprocessors/ControllerExtension",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils",
 	"sap/ui/thirdparty/sinon-4",
 	"test-resources/sap/ui/fl/qunit/FlQUnitUtils"
 ], function(
-	ManagedObject,
 	View,
 	ViewType,
 	Component,
@@ -151,7 +149,6 @@ sap.ui.define([
 
 			sandbox.stub(ManifestUtils, "getFlexReferenceForControl").returns(sReference);
 			sandbox.stub(Utils, "isApplication").returns(true);
-			ManagedObject._sOwnerId = "<component name>";
 
 			// preparation of the changes
 			var sModuleName1 = "sap/ui/fl/qunit/ControllerExtension/1.0.0/codeExtensions/secondCodeExt";

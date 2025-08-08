@@ -11,7 +11,8 @@ sap.ui.define([
 	"sap/ui/qunit/utils/nextUIUpdate",
 	"sap/ui/rta/util/changeVisualization/ChangeIndicator",
 	"sap/ui/rta/util/changeVisualization/commands/RenameVisualization",
-	"sap/ui/thirdparty/sinon-4"
+	"sap/ui/thirdparty/sinon-4",
+	"test-resources/sap/ui/rta/qunit/RtaQunitUtils"
 ], function(
 	Button,
 	DateFormat,
@@ -23,7 +24,8 @@ sap.ui.define([
 	nextUIUpdate,
 	ChangeIndicator,
 	RenameVisualization,
-	sinon
+	sinon,
+	RtaQunitUtils
 ) {
 	"use strict";
 
@@ -44,16 +46,6 @@ sap.ui.define([
 			descriptionPayload: mPayload,
 			affectedElementId: sAffectedElementId
 		};
-	}
-
-	function waitForMethodCall(oObject, sMethodName) {
-		return new Promise(function(resolve) {
-			sandbox.stub(oObject, sMethodName)
-			.onFirstCall().callsFake(function(...aArgs) {
-				resolve(oObject[sMethodName].wrappedMethod.apply(this, aArgs));
-			})
-			.callThrough();
-		});
 	}
 
 	QUnit.module("Basic tests", {
@@ -108,7 +100,7 @@ sap.ui.define([
 				changes: [createMockChange("someChangeId", this.oButton.getId(), "rename", "rename", mPayload)]
 			});
 			await nextUIUpdate();
-			var oOpenPopoverPromise = waitForMethodCall(this.oChangeIndicator, "setAggregation");
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
 			assert.ok(
 				this.oChangeIndicator.getDomRef().classList.contains("sapUiRtaChangeIndicatorVerticallyCentered"),
 				"then the indicator is vertically centered"
@@ -189,7 +181,7 @@ sap.ui.define([
 				changes: [createMockChange("someChangeId", this.oButton.getId(), "rename", "rename", mPayload)]
 			});
 			await nextUIUpdate();
-			var oOpenPopoverPromise = waitForMethodCall(this.oChangeIndicator, "setAggregation");
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
 			assert.ok(
 				this.oChangeIndicator.getDomRef().classList.contains("sapUiRtaChangeIndicatorVerticallyCentered"),
 				"then the indicator is vertically centered"
@@ -253,7 +245,7 @@ sap.ui.define([
 				}]
 			});
 			await nextUIUpdate();
-			var oOpenPopoverPromise = waitForMethodCall(this.oChangeIndicator, "setAggregation");
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
 			assert.ok(
 				this.oChangeIndicator.getDomRef().classList.contains("sapUiRtaChangeIndicatorVerticallyCentered"),
 				"then the indicator is vertically centered"
@@ -293,7 +285,7 @@ sap.ui.define([
 			});
 			await nextUIUpdate();
 
-			var oOpenPopoverPromise = waitForMethodCall(this.oChangeIndicator, "setAggregation");
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
 			QUnitUtils.triggerEvent("click", this.oChangeIndicator.getDomRef());
 
 			return oOpenPopoverPromise
@@ -413,7 +405,48 @@ sap.ui.define([
 			);
 		});
 
-		QUnit.test("when a change indicator with two changes is created", async function(assert) {
+		QUnit.test("When a change indicater is created with other types of changes", function(assert) {
+			const oPayloadDefault = {
+				description: "defaultDescription",
+				descriptionTooltip: "defaultDescriptionTooltip"
+			};
+			const aChanges = [
+				createMockChange("id5", this.oButton.getId(), "reveal", "reveal", oPayloadDefault),
+				createMockChange("id6", this.oButton.getId(), "addDelegateProperty", "addViaDelegate", oPayloadDefault),
+				createMockChange("id7", this.oButton.getId(), "addIFrame", "addIFrame", oPayloadDefault),
+				createMockChange("id8", this.oButton.getId(), "other", "other", oPayloadDefault)
+			];
+			this.oChangeIndicator.setChanges(aChanges);
+
+			this.oChangeIndicator._oDetailModel.getData().forEach((item, idx) => {
+				assert.notOk(
+					item.description && item.description.includes("_CHANGEVISUALIZATION_"),
+					`DetailModel data at index ${idx} has a missing description: ${item.description}`
+				);
+			});
+			assert.strictEqual(
+				this.oChangeIndicator._oDetailModel.getData()[0].description,
+				oRtaResourceBundle.getText("TXT_CHANGEVISUALIZATION_CHANGE_OTHER", [0]),
+				"the description is correct"
+			);
+			assert.strictEqual(
+				this.oChangeIndicator._oDetailModel.getData()[1].description,
+				oRtaResourceBundle.getText("TXT_CHANGEVISUALIZATION_CHANGE_ADDIFRAME", [0]),
+				"the description is correct"
+			);
+			assert.strictEqual(
+				this.oChangeIndicator._oDetailModel.getData()[2].description,
+				oRtaResourceBundle.getText("TXT_CHANGEVISUALIZATION_CHANGE_ADDDELEGATEPROPERTY", ["TestButton"]),
+				"the description is correct"
+			);
+			assert.strictEqual(
+				this.oChangeIndicator._oDetailModel.getData()[3].description,
+				oRtaResourceBundle.getText("TXT_CHANGEVISUALIZATION_CHANGE_REVEAL", ["TestButton"]),
+				"the description is correct"
+			);
+		});
+
+		QUnit.test("when a change indicator with two changes is created and the details view gets opened by spacebar", async function(assert) {
 			this.oChangeIndicator.getModel().setData({
 				changes: [
 					createMockChange("someChangeId", this.oButton.getId(), "move", "move"),
@@ -422,19 +455,20 @@ sap.ui.define([
 			});
 			await nextUIUpdate();
 
-			var oOpenPopoverPromise = waitForMethodCall(this.oChangeIndicator, "setAggregation");
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
 			assert.strictEqual(
 				this.oChangeIndicator.getDomRef().title,
 				"2 changes",
 				"then the correct title (tooltip) is set"
 			);
-			QUnitUtils.triggerEvent("click", this.oChangeIndicator.getDomRef());
+			// Making Sure the popover can be opened by spacebar
+			QUnitUtils.triggerKeyEvent("keydown", this.oChangeIndicator.getDomRef(), "SPACE");
 
 			return oOpenPopoverPromise
 			.then(function() {
 				assert.ok(
 					this.oChangeIndicator.getAggregation("_popover"),
-					"then the popover is opened on click"
+					"then the popover is opened on spacebar press"
 				);
 				assert.ok(
 					this.oChangeIndicator.getAggregation("_popover").getContent()[0].getVisible(),
@@ -467,7 +501,29 @@ sap.ui.define([
 			}.bind(this));
 		});
 
-		QUnit.test("when a change indicator with six changes is created", async function(assert) {
+		QUnit.test("when a change indicator with two changes is created and the details view gets opened by click", async function(assert) {
+			this.oChangeIndicator.getModel().setData({
+				changes: [
+					createMockChange("someChangeId", this.oButton.getId(), "move", "move"),
+					createMockChange("someOtherChangeId", this.oButton.getId(), "addDelegateProperty", "add")
+				]
+			});
+			await nextUIUpdate();
+
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
+			// Making Sure the popover can be opened by click
+			QUnitUtils.triggerEvent("click", this.oChangeIndicator.getDomRef());
+
+			return oOpenPopoverPromise
+			.then(function() {
+				assert.ok(
+					this.oChangeIndicator.getAggregation("_popover"),
+					"then the popover is opened on click"
+				);
+			}.bind(this));
+		});
+
+		QUnit.test("when a change indicator with six changes is created and the details view gets opened by enter", async function(assert) {
 			this.oChangeIndicator.getModel().setData({
 				changes: [
 					createMockChange("someChangeId", this.oButton.getId(), "move", "move", undefined, new Date(2023)),
@@ -514,6 +570,18 @@ sap.ui.define([
 				"someOtherChangeIdTwo",
 				"then the indicator is correctly sorted"
 			);
+
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
+			// Making Sure the popover can be opened by enter
+			QUnitUtils.triggerKeyEvent("keydown", this.oChangeIndicator.getDomRef(), "ENTER");
+
+			return oOpenPopoverPromise
+			.then(function() {
+				assert.ok(
+					this.oChangeIndicator.getAggregation("_popover"),
+					"then the popover is opened on enter press"
+				);
+			}.bind(this));
 		});
 
 		QUnit.test("when a change indicator is focused before it is rendered", async function(assert) {
@@ -719,7 +787,7 @@ sap.ui.define([
 				changes: [createMockChange("someChangeId", this.oButton.getId(), "rename", "rename", mPayload)]
 			});
 
-			var oOpenPopoverPromise = waitForMethodCall(this.oChangeIndicator, "setAggregation");
+			var oOpenPopoverPromise = RtaQunitUtils.waitForMethodCall(sandbox, this.oChangeIndicator, "setAggregation");
 
 			await nextUIUpdate();
 			assert.ok(this.oChangeIndicator.getVisible(), "then the indicator is visible");

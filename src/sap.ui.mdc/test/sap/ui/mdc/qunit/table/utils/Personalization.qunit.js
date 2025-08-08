@@ -57,6 +57,7 @@ sap.ui.define([
 
 			this.oUiComponentContainer = mCreatedApp.container;
 			this.oTable = mCreatedApp.view.byId('myTable');
+			this.oTable._getType().setEnableColumnFreeze(true);
 			this.oEngine = this.oTable.getEngine();
 
 			sinon.stub(TableDelegate, "getSupportedFeatures").callsFake(function() {
@@ -103,6 +104,31 @@ sap.ui.define([
 		assert.deepEqual(this.oTable.getGroupConditions(), {
 			groupLevels: []
 		}, "Group conditions");
+	});
+
+	QUnit.test("createFixedColumnCountChange", async function(assert) {
+		PersonalizationUtils.createFixedColumnCountChange(this.oTable, {fixedColumnCount: 2});
+		assert.equal(this.oEngine.createChanges.callCount, 1, "Engine#createChanges call");
+		sinon.assert.calledWithExactly(this.oEngine.createChanges, {
+			control: this.oTable,
+			key: "ColumnFreeze",
+			state: [{
+				name: "GridTable",
+				fixedColumnCount: 2
+			}],
+			applyAbsolute: true
+		});
+
+		await this.oEngine.waitForChanges(this.oTable);
+		assert.deepEqual(this.oTable.getCurrentState().xConfig, {
+			"aggregations": {
+				"type": {
+					"GridTable": {
+						"fixedColumnCount": 2
+					}
+				}
+			}
+		}, "Current state is correct");
 	});
 
 	QUnit.module("User personalization detection", {
@@ -223,7 +249,8 @@ sap.ui.define([
 		await TableQUnitUtils.waitForP13nPopup(oTable);
 		await TableQUnitUtils.closeP13nPopup(oTable);
 		PersonalizationUtils.openSettingsDialog(oTable, oTable.getColumns()[0]);
-		assert.ok(oInbuiltFilterVisibleFieldsSpy.calledWith(["colA"]), "setVisibleFields is called with an array of the column's filterable properties");
+		assert.ok(oInbuiltFilterVisibleFieldsSpy.calledWith(["colA"]),
+			"setVisibleFields is called with an array of the column's filterable properties");
 		await TableQUnitUtils.waitForP13nPopup(oTable);
 		await TableQUnitUtils.closeP13nPopup(oTable);
 		oInbuiltFilterVisibleFieldsSpy.restore();

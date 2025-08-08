@@ -307,7 +307,7 @@ sap.ui.define(["sap/m/library", "sap/base/security/encodeCSS", "sap/ui/core/Them
 				oRm.openStart("div", oControl.getId() + "-wrapper-content").class("sapMGTWrapperCnt").openEnd();
 			}
 
-			oRm.openStart("div");
+			oRm.openStart("div",oControl.getId() + "-hdrContent");
 			oRm.class("sapMGTHdrContent");
 			if (oControl._isIconMode() ){
 				if (frameType === frameTypes.OneByOne) {
@@ -351,8 +351,8 @@ sap.ui.define(["sap/m/library", "sap/base/security/encodeCSS", "sap/ui/core/Them
 				}
 			}
 
-			var bIsContentPriorityPresent = this._isPriorityPresent(oControl);
-			if (bIsContentPriorityPresent) {
+			var bIsTilePriorityPresent = this._isPriorityPresent(oControl);
+			if (bIsTilePriorityPresent) {
 				oRm.openStart("div", oControl.getId() + "-header-container").class("sapMATHeaderContainer").openEnd();
 			}
 
@@ -374,13 +374,24 @@ sap.ui.define(["sap/m/library", "sap/base/security/encodeCSS", "sap/ui/core/Them
 				}
 			}
 
-			if (bIsContentPriorityPresent) {
+			if (bIsTilePriorityPresent) {
 				this._renderPriorityText(oRm, oControl);
 			} else if (!(isHalfFrame && isContentPresent) && oControl.getSubheader()) {
 				this._renderSubheader(oRm, oControl);
 			}
 
-			if (bIsContentPriorityPresent) {
+			if (bIsTilePriorityPresent) {
+				oRm.close("div");
+			}
+
+			var aTileContents = oControl.getTileContent();
+			var oTileContent = Array.isArray(aTileContents) && aTileContents[0];
+			var oContentPriorityBadge = oTileContent && oTileContent._getPriorityBadge();
+
+			// Render Content Priority Badge - only in ArticleMode
+			if (bIsArticleMode && oContentPriorityBadge) {
+				oRm.openStart("div", oControl.getId() + "-content-priority-badge").class("sapMGTBackgroundBadge").openEnd();
+				oRm.renderControl(oContentPriorityBadge);
 				oRm.close("div");
 			}
 			oRm.close("div");

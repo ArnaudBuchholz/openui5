@@ -35,7 +35,9 @@ sap.ui.define([
 		isContextSharingEnabled: false,
 		isVersioningEnabled: true,
 		logonUser: "DEFAULT_USER",
-		isVariantAuthorNameAvailable: false
+		isVariantAuthorNameAvailable: false,
+		isAnnotationChangeEnabled: true,
+		isSeenFeaturesAvailable: false // this is required to ensure that the value is false after the merging of features
 	};
 
 	function loadDataFromStorage(mPropertyBag) {

@@ -94,7 +94,7 @@ sap.ui.define([
 						Description: "{1}",
 						Value: "{0}"
 					},
-					format: function(oCondition, oType, sDisplayFormat, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes) {
+					format: function(oCondition, oType, sDisplayFormat, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, sCustomFormat, sBaseType) {
 						sDisplayFormat = sDisplayFormat || FieldDisplay.DescriptionValue;
 						let iCount = this.valueTypes.length;
 						const aValues = oCondition.values;
@@ -131,7 +131,7 @@ sap.ui.define([
 
 						return sTokenText;
 					},
-					parse: function(sText, oType, sDisplayFormat, bDefaultOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, bHideOperator) {
+					parse: function(sText, oType, sDisplayFormat, bDefaultOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, bHideOperator, sBaseType) {
 						sDisplayFormat = sDisplayFormat || FieldDisplay.DescriptionValue;
 						let aResult = Operator.prototype.parse.apply(this, [sText,
 							oType,
@@ -162,8 +162,8 @@ sap.ui.define([
 
 						return aResult;
 					},
-					getValues: function(sText, sDisplayFormat, bDefaultOperator, bHideOperator) {
-						const regExp = bHideOperator ? this.hiddenOperatorRegExp : this.tokenParseRegExp; // if operator symbol is not used -> use complete text
+					getValues: function(sText, sDisplayFormat, bDefaultOperator, bHideOperator, sBaseType) {
+						const regExp = bHideOperator ? this.hiddenOperatorRegExp : this.getTokenParseRegExp(sBaseType); // if operator symbol is not used -> use complete text
 						const aMatch = sText.match(regExp);
 						let aValues;
 						if (aMatch && aMatch.length > 1 && aMatch[1] !== undefined) { // only if a text was found
@@ -242,7 +242,7 @@ sap.ui.define([
 						}
 					},
 					validateInput: true,
-					getTextForCopy: function(oCondition, oType, sDisplay, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes) {
+					getTextForCopy: function(oCondition, oType, sDisplay, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, sBaseType) {
 						if (oCondition.validated !== ConditionValidated.Validated) {
 							// for not validated condition just return the output as description and let it be parsed on paste
 							return Operator.prototype.getTextForCopy.apply(this, arguments);
@@ -315,7 +315,7 @@ sap.ui.define([
 					tokenParse: "^<?(.+)?$", // if "<" not entered the complete text should be parsed
 					tokenFormat: "<{0}",
 					longText: _getText(OperatorName.LT, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.LT, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.LT, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self]
 				}),
 				/*
@@ -329,7 +329,7 @@ sap.ui.define([
 					tokenParse: ["^!\\(<?(.+)?\\)$", "^(!<)?(.+)?$"].join("|"),
 					tokenFormat: "!(<{0})",
 					longText: _getText(OperatorName.NOTLT, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.NOTLT, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.NOTLT, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self],
 					exclude: true
 				}),
@@ -344,7 +344,7 @@ sap.ui.define([
 					tokenParse: "^>?(.+)?$", // if ">" not entered the complete text should be parsed
 					tokenFormat: ">{0}",
 					longText: _getText(OperatorName.GT, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.GT, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.GT, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self]
 				}),
 				/*
@@ -358,7 +358,7 @@ sap.ui.define([
 					tokenParse: ["^!\\(>(.+)?\\)$", "^(!>)?(.+)?$"].join("|") ,
 					tokenFormat: "!(>{0})",
 					longText: _getText(OperatorName.NOTGT, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.NOTGT, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.NOTGT, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self],
 					exclude: true
 				}),
@@ -374,7 +374,7 @@ sap.ui.define([
 					tokenParse: "^(<=)?(.+)?$",
 					tokenFormat: "<={0}",
 					longText: _getText(OperatorName.LE, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.LE, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.LE, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self]
 				}),
 				/*
@@ -388,7 +388,7 @@ sap.ui.define([
 					tokenParse: ["^!\\(<=(.+)?\\)$", "^(!<=)?(.+)?$"].join("|"),
 					tokenFormat: "!(<={0})",
 					longText: _getText(OperatorName.NOTLE, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.NOTLE, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.NOTLE, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self],
 					exclude: true
 				}),
@@ -404,7 +404,7 @@ sap.ui.define([
 					tokenParse: "^(>=)?(.+)?$",
 					tokenFormat: ">={0}",
 					longText: _getText(OperatorName.GE, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.GE, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.GE, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self]
 				}),
 				/*
@@ -418,7 +418,7 @@ sap.ui.define([
 					tokenParse: ["^!\\(>=(.+)?\\)$", "^(!>=)?(.+)?$"].join("|"),
 					tokenFormat: "!(>={0})",
 					longText: _getText(OperatorName.NOTGE, true),
-					longTextForTypes: _getLongTextForTypes(OperatorName.NOTGE, [BaseType.Date]),
+					longTextForTypes: _getTextForTypes(OperatorName.NOTGE, [BaseType.Date], true),
 					valueTypes: [OperatorValueType.Self],
 					exclude: true
 				}),
@@ -526,10 +526,29 @@ sap.ui.define([
 					tokenParse: "^<#tokenText#>$",
 					tokenFormat: "<#tokenText#>",
 					longText: _getText(OperatorName.Empty, true),
+					longTextForTypes: _getTextForTypes(OperatorName.Empty, [BaseType.Date], true),
 					tokenText: _getText(OperatorName.Empty, false),
+					tokenTextForTypes: _getTextForTypes(OperatorName.Empty, [BaseType.Date], false),
+					groupsForTypes: _getGroupsForTypes([{id: "901", name: "GROUP3", baseType: BaseType.Date}]), // need to had a group number starting > 2 otherwise in operators dropdown it would me inserted between 1 and 2
 					valueTypes: [],
 					getModelFilter: function(oCondition, sFieldPath, oType, bCaseSensitive, sBaseType) {
-						if (sBaseType === BaseType.String) { // depending on backend and/or Type configuration filter is "" or null
+						const oAnyAllPath = _getAnyAllPath(sFieldPath);
+						if (oAnyAllPath) {
+							// Any or All Filter -> Empty needs to filter for non-existance of navigation targets
+							// once the NOT-filtering exists this can be changed into NOT-Any (at least for oData V4)
+							return new Filter({
+								path: oAnyAllPath.navPath,
+								operator: ModelOperator.All,
+								variable: "L1",
+								condition: new Filter({
+										filters: [ // create a Filter that cannot bring a result
+											new Filter({path: "L1/" + oAnyAllPath.propertyPath, operator: ModelOperator.EQ, value1: null}),
+											new Filter({path: "L1/" + oAnyAllPath.propertyPath, operator: ModelOperator.NE, value1: null})
+											],
+										and: true
+									})
+								});
+						} else if (sBaseType === BaseType.String) { // depending on backend and/or Type configuration filter is "" or null
 							let isNullable = false;
 							if (oType) {
 								const vResult = oType.parseValue("", "string");
@@ -566,7 +585,14 @@ sap.ui.define([
 					valueTypes: [],
 					exclude: true,
 					getModelFilter: function(oCondition, sFieldPath, oType, bCaseSensitive, sBaseType) {
-						if (sBaseType === BaseType.String) { // depending on backend and/or Type configuration filter is "" or null
+						const oAnyAllPath = _getAnyAllPath(sFieldPath);
+						if (oAnyAllPath) {
+							// Any or All Filter -> NotEmpty needs to filter for existance of navigation targets
+							return new Filter({
+								path: oAnyAllPath.navPath,
+								operator: ModelOperator.Any
+								});
+						} else if (sBaseType === BaseType.String) { // depending on backend and/or Type configuration filter is "" or null
 							let isNullable = false;
 							if (oType) {
 								const vResult = oType.parseValue("", "string");
@@ -781,9 +807,9 @@ sap.ui.define([
 					paramTypes: ["([-+]?\\d+)", "([-+]?\\d+)"],
 					//label:["x", "y"],
 					additionalInfo: "",
-					format: function(oCondition, oType, sDisplay, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, sCustomFormat) {
+					format: function(oCondition, oType, sDisplay, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, sCustomFormat, sBaseType) {
 						// format numbers into strings with leading "+" and "-"
-						let sTokenText = sCustomFormat || this.tokenFormat;
+						let sTokenText = sCustomFormat || this.getTokenFormat(sBaseType);
 						const iFrom = (oCondition.values[0] || 0) * -1;
 						const iTo = oCondition.values[1] || 0;
 						let sFrom = iFrom < 0 ? "" : "+";
@@ -801,8 +827,8 @@ sap.ui.define([
 
 						return sTokenText;
 					},
-					parse: function(sText, oType, sDisplayFormat, bDefaultOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, bHideOperator) {
-						const aValues = this.getValues(sText, sDisplayFormat, bDefaultOperator, bHideOperator);
+					parse: function(sText, oType, sDisplayFormat, bDefaultOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, bHideOperator, sBaseType) {
+						const aValues = this.getValues(sText, sDisplayFormat, bDefaultOperator, bHideOperator, sBaseType);
 						let iFrom = this._parseValue(aValues[0], this._createLocalType(this.valueTypes[0], oType));
 						let iTo = this._parseValue(aValues[1], this._createLocalType(this.valueTypes[1], oType));
 
@@ -1157,9 +1183,9 @@ sap.ui.define([
 						oDate = UniversalDateUtils.getMonthStartDate(oDate);
 						return UniversalDateUtils.getRange(0, "MONTH", oDate);
 					},
-					format: function(oCondition, oType, sDisplayFormat, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes) {
+					format: function(oCondition, oType, sDisplayFormat, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, sCustomFormat, sBaseType) {
 						const [iValue] = oCondition.values;
-						const sTokenText = this.tokenFormat;
+						const sTokenText = this.getTokenFormat(sBaseType);
 						const sReplace = _getMonths.apply(this)[iValue];
 
 						if (bHideOperator) {
@@ -1168,7 +1194,7 @@ sap.ui.define([
 							return sReplace == null ? null : sTokenText.replace(new RegExp("\\$" + 0 + "|" + 0 + "\\$" + "|" + "\\{" + 0 + "\\}", "g"), sReplace);
 						}
 					},
-					getValues: function(sText, sDisplayFormat, bDefaultOperator, bHideOperator) {
+					getValues: function(sText, sDisplayFormat, bDefaultOperator, bHideOperator, sBaseType) {
 						const aValues = Operator.prototype.getValues.apply(this, arguments);
 
 						if (aValues) {
@@ -1220,9 +1246,9 @@ sap.ui.define([
 						oDate = UniversalDateUtils.getMonthStartDate(oDate);
 						return UniversalDateUtils.getRange(0, "MONTH", oDate);
 					},
-					format: function(oCondition, oType, sDisplayFormat, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes) {
+					format: function(oCondition, oType, sDisplayFormat, bHideOperator, aCompositeTypes, oAdditionalType, aAdditionalCompositeTypes, sCustomFormat, sBaseType) {
 						const [iValue, iYear] = oCondition.values;
-						let sTokenText = this.tokenFormat;
+						let sTokenText = this.getTokenFormat(sBaseType);
 						const sReplace = _getMonths.apply(this)[iValue];
 
 						if (bHideOperator) {
@@ -1234,7 +1260,7 @@ sap.ui.define([
 							return sTokenText.replace(replaceRegExp1, iYear);
 						}
 					},
-					getValues: function(sText, sDisplayFormat, bDefaultOperator, bHideOperator) {
+					getValues: function(sText, sDisplayFormat, bDefaultOperator, bHideOperator, sBaseType) {
 						const aValues = Operator.prototype.getValues.apply(this, arguments);
 
 						if (aValues) {
@@ -1571,12 +1597,16 @@ sap.ui.define([
 			/**
 			 * Adds an operator to the list of known operators.
 			 *
+			 * <b>Note:</b> For application-specific operators, use an application-specific name to prevent conflicts with different applications.
 			 * @param {sap.ui.mdc.condition.Operator} oOperator Operator
 			 *
 			 * @public
 			 */
 			addOperator: function(oOperator) {
 
+				if (FilterOperatorUtil._mOperators[oOperator.name]) {
+					Log.warning("FilterOperatorUtil.addOperator", "Operator " + oOperator.name + " already exist. It will be overwritten.");
+				}
 				FilterOperatorUtil._mOperators[oOperator.name] = oOperator; // TODO: use semantic name?
 
 			},
@@ -1584,6 +1614,7 @@ sap.ui.define([
 			/**
 			 * Adds an array of operators to the list of known operators.
 			 *
+			 * <b>Note:</b> For application-specific operators, use an application-specific name to prevent conflicts with different applications.
 			 * @param {sap.ui.mdc.condition.Operator[]} aOperators Array of operators
 			 *
 			 * @since: 1.88.0
@@ -1799,12 +1830,13 @@ sap.ui.define([
 			 *
 			 * @param {string[]} aOperators List of all supported operator names
 			 * @param {string} [sValue] Value entered (including operator)
+			 * @param {sap.ui.mdc.enums.BaseType} [sBaseType] Basic type
 			 * @returns {sap.ui.mdc.condition.Operator[]} the operator objects suitable for the given input string, depending on the given type
 			 *
 			 * @private
 			 * @ui5-restricted sap.ui.mdc
 			 */
-			getMatchingOperators: function(aOperators, sValue) {
+			getMatchingOperators: function(aOperators, sValue, sBaseType) {
 
 				const aMyOperators = [];
 
@@ -1815,7 +1847,7 @@ sap.ui.define([
 					}
 				}
 
-				return _getMatchingOperators.call(this, aMyOperators, sValue);
+				return _getMatchingOperators.call(this, aMyOperators, sValue, sBaseType);
 
 			},
 
@@ -2083,34 +2115,29 @@ sap.ui.define([
 			 * Returns the operator object for the given <code>DynamicDateOption</code> name.
 			 * @param {string} sOption Name of the operator
 			 * @param {sap.ui.mdc.enums.BaseType} [sBaseType] Basic type
+			 * @param {string[]} aSupportedOperators List of all supported operator names
 			 * @returns {sap.ui.mdc.condition.Operator|undefined} the operator object, or <code>undefined</code> if the operator with the requested name does not exist
 			 *
 			 * @private
 			 * @ui5-restricted sap.ui.mdc
 			 * @since: 1.100.0
 			 */
-			getOperatorForDynamicDateOption: function(sOption, sBaseType) {
+			getOperatorForDynamicDateOption: function(sOption, sBaseType, aSupportedOperators) {
 
-				let oOperator;
+				const sName = sBaseType && sOption.startsWith(sBaseType) ? sOption.slice(sBaseType.length + 1) : sOption; // determine operator name if used as custom DynamicDateOption created in DateContent using getCustomDynamicDateOptionForOperator
+				let oFoundOperator;
 
-				// determine operator name if used as custom DynamicDateOption created in DateContent using getCustomDynamicDateOptionForOperator
-				if (sBaseType && sOption.startsWith(sBaseType)) {
-					oOperator = this.getOperator(sOption.slice(sBaseType.length + 1));
-				} else {
-					oOperator = this.getOperator(sOption);
-				}
-
-				if (!oOperator && sBaseType) {
-					for (const sName in FilterOperatorUtil._mOperators) {
-						const oCheckOperator = FilterOperatorUtil._mOperators[sName];
-						if (oCheckOperator.alias && oCheckOperator.alias[sBaseType] === sOption) {
-							oOperator = oCheckOperator;
-							break;
-						}
+				for (const sOperatorName in FilterOperatorUtil._mOperators) {
+					const oOperator = FilterOperatorUtil._mOperators[sOperatorName];
+					if (aSupportedOperators.length > 0 && aSupportedOperators.indexOf(oOperator.name) < 0) {
+						continue; // Operator not supported
+					} else if (oOperator.name === sName || oOperator.alias?.[sBaseType] === sOption) {
+						oFoundOperator = oOperator;
+						break;
 					}
 				}
 
-				return oOperator;
+				return oFoundOperator;
 
 			},
 
@@ -2403,16 +2430,17 @@ sap.ui.define([
 		 *
 		 * @param {sap.ui.mdc.condition.Operator[]} aOperators Operators which are checked for matching
 		 * @param {string} sValue Value used to check for the operators
+		 * @param {sap.ui.mdc.enums.BaseType} [sBaseType] Basic type
 		 * @returns {sap.ui.mdc.condition.Operator[]} the operator objects suitable for the given input string
 		 *
 		 * @private
 		 */
-		function _getMatchingOperators(aOperators, sValue) {
+		function _getMatchingOperators(aOperators, sValue, sBaseType) {
 			// TODO: sType will be needed for checking the value content:   "=5" matches the EQ operator, but should only match when type is e.g. number, not for e.g. boolean
 			const aResult = [];
 
 			for (const oOperator of aOperators) {
-				if (oOperator && oOperator.test && oOperator.test(sValue)) {
+				if (oOperator && oOperator.test && oOperator.test(sValue, sBaseType)) {
 					aResult.push(oOperator);
 				}
 			}
@@ -2549,15 +2577,41 @@ sap.ui.define([
 
 		}
 
-		function _getLongTextForTypes(sName, aBaseTypes) {
+		function _getTextForTypes(sName, aBaseTypes, bLongText) {
 
-			const sTextKey = "operators." + sName + ".longText";
+			const sTextKey = "operators." + sName + (bLongText ? ".longText" : ".tokenText");
 			const oTexts = {};
 
 			for (let i = 0; i < aBaseTypes.length; i++) {
 				oTexts[aBaseTypes[i]] = oMessageBundle.getText(sTextKey + "." + aBaseTypes[i].toLowerCase(), undefined, true);
 			}
 			return oTexts;
+
+		}
+
+		function _getGroupsForTypes(aGroupsForTypes) { // Arry of objects {id: iId, name: sName, baseType: sBaseType}
+
+			const sTextKey = "VALUEHELP.OPERATOR.";
+			const oGroups = {};
+
+			for (let i = 0; i < aGroupsForTypes.length; i++) {
+				oGroups[aGroupsForTypes[i].baseType] = {id: aGroupsForTypes[i].id, text: oMessageBundle.getText(sTextKey + aGroupsForTypes[i].name.toUpperCase(), undefined, true)};
+			}
+			return oGroups;
+
+		}
+
+		function _getAnyAllPath(sFieldPath) {
+
+			const [sNavPath, sPattern, sPropertyPath, sWrongPart] = sFieldPath.split(/([\*\+]\/)/);
+			if (sPattern) {
+				// Any or All Filter -> Empty needs to filter for non-existance of navigation targets
+				if (!sWrongPart) { // only one occurence of pattern allowed
+					return {navPath: sNavPath, propertyPath: sPropertyPath};
+				} else {
+					throw new Error("FilterOperatorUtil: not supported binding " + sFieldPath);
+				}
+			}
 
 		}
 

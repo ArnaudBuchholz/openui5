@@ -461,6 +461,8 @@ sap.ui.define([
 					MessageBox.warning(sResetText, {
 						actions: [MessageBox.Action.OK, MessageBox.Action.CANCEL],
 						emphasizedAction: MessageBox.Action.OK,
+						closeOnNavigation: true,
+						dependentOn: this,
 						onClose: (sAction) => {
 							if (sAction === MessageBox.Action.OK) {
 								// --> focus "OK" button after 'reset' has been triggered

@@ -321,6 +321,9 @@ sap.ui.define([
 			exploreSettingsModel.setProperty("/editorType", Constants.EDITOR_TYPE.TEXT);
 			exploreSettingsModel.refresh();
 			this._sEditSource = "codeEditor";
+
+			this.changeEditorHash(false);
+
 			this._oFileEditor.getCardManifestContent().then(function (sManifest) {
 				var sJson = JSON.parse(sManifest);
 				var templatePath = this._sanitizePath(ObjectPath.get(["sap.card", "designtime"], sJson) || "");
@@ -493,6 +496,13 @@ sap.ui.define([
 					}
 
 					this._bCardEditorInitialized = false;
+					var oMessageStrip = new MessageStrip({
+						id: "msgstrip_EoM_BASEditor",
+						showIcon: true,
+						type: "Warning",
+						text: "BAS Editor is end of maintenance since version 1.138"
+					});
+					this.byId("editPage").addContent(oMessageStrip);
 					this._oVisualEditor = new BASEditor({
 						visible: "{= ${settings>/editorType} === 'VISUAL' }",
 						configurationChange: this.onCardEditorConfigurationChange.bind(this),
@@ -548,6 +558,8 @@ sap.ui.define([
 			} else if (sMode === "AdminContent") {
 				cardTitle = "Card Editor with Administration Mode";
 			}
+
+			this.changeEditorHash();
 
 			var oPanel = new Panel({
 				id: "conf_card_panel",
@@ -701,6 +713,23 @@ sap.ui.define([
 			}.bind(this));
 		},
 
+		changeEditorHash: function(bIsConfigurationEditor = true) {
+			const oRouter = this.getRouter(),
+				sHash = oRouter.getHashChanger().getHash(),
+				[sPath, sQueryString] = sHash.split("?"),
+				oParams = new URLSearchParams(sQueryString || "");
+
+			if (bIsConfigurationEditor) {
+				oParams.set("editor", "configurationEditor");
+			} else {
+				oParams.delete("editor");
+			}
+
+			const sNewHash = oParams.toString() ? `${sPath}?${oParams.toString()}` : sPath;
+
+			history.pushState(null, "", `#/${sNewHash}`);
+		},
+
 		_showSeparatePreviewInPopup: function(oEvent) {
 			var oButton = oEvent.getSource();
 			var oEditor = this._getCardEditorControl();
@@ -839,7 +868,7 @@ sap.ui.define([
 				routeName: "explore"
 			});
 
-			this._showSample(oSample, oSubSample)
+			this._showSample(oSample, oSubSample, oEvent)
 				.then(() => {
 					this.byId("splitView").setBusy(false);
 				});
@@ -932,7 +961,7 @@ sap.ui.define([
 			return this.oModel.getProperty("/currentSampleKey");
 		},
 
-		_showSample: function (oSample, oSubSample) {
+		_showSample: function (oSample, oSubSample, oEvent) {
 			var oCurrentSample = oSubSample || oSample;
 
 			// renew the value
@@ -967,6 +996,13 @@ sap.ui.define([
 				this._initConfigurationEditor(oCurrentSample);
 				this._initFileEditor(oCurrentSample);
 				this._initSample(oSample, oSubSample);
+
+				if (oEvent.getParameter("arguments")["?query"]?.editor === "configurationEditor") {
+					exploreSettingsModel.setProperty("/editorType", Constants.EDITOR_TYPE.CARDEDITOR);
+					exploreSettingsModel.refresh();
+					this._sEditSource = "cardEditor";
+					this._initCardEditor();
+				}
 			}))
 			.catch(function (oErr) {
 				if (oErr.message !== SAMPLE_CHANGED_ERROR) {

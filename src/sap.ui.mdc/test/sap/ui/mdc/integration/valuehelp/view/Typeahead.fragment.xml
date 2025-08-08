@@ -78,10 +78,10 @@
 	"/>
 
 	<FormattedText class="sapUiSmallMarginTopBottom" htmlText="Try modifying the ValueHelpDelegate.shouldOpenOnClick method:"/>
-	<ce:CodeEditor id="areaShouldOpenOnClick" value="{runtimeState>/shouldOpenOnClick}" width="100%" height="230px"/>
+	<ce:CodeEditor id="areaShouldOpenOnClick" value="{runtimeState>/typeahead/shouldOpenOnClick}" width="100%" height="230px"/>
 
 	<FormattedText class="sapUiSmallMarginTopBottom" htmlText="Try modifying the ValueHelpDelegate.shouldOpenOnFocus method:"/>
-	<ce:CodeEditor id="areaShouldOpenOnFocus" value="{runtimeState>/shouldOpenOnFocus}" width="100%" height="230px"/>
+	<ce:CodeEditor id="areaShouldOpenOnFocus" value="{runtimeState>/typeahead/shouldOpenOnFocus}" width="100%" height="230px"/>
 	
 	<FormattedText class="sapUiSmallMarginTopBottom" htmlText="
 	&lt;strong&gt;
@@ -91,7 +91,7 @@
 		&lt;br/&gt;&lt;br/&gt;
 		Try modifying the ValueHelpDelegate.showTypeahead method:
 "/>
-	<ce:CodeEditor id="areashowTypeahead" value="{runtimeState>/showTypeahead}" width="100%" height="230px"/>
+	<ce:CodeEditor id="areashowTypeahead" value="{runtimeState>/typeahead/showTypeahead}" width="100%" height="230px"/>
 	
 	
 

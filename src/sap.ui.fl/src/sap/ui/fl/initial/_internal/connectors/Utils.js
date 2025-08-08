@@ -13,7 +13,10 @@ sap.ui.define([
 ) {
 	"use strict";
 
-	var DEFAULT_TIMEOUT = 20000; // 20 seconds
+	// The flex data request can contain manifest changes and so potentially block the app loading.
+	// Therefore, a default timeout keeps the app working when a technical difficulty makes flex data request not responsible.
+	// 20 seconds is applied unless there is valid use case that requires a longer response time.
+	var DEFAULT_TIMEOUT = 20000;
 
 	/**
 	 * Creates <code>Error<code> object from <code>XMLHttpRequest<code> and an additional message for end user

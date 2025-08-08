@@ -11,7 +11,7 @@ sap.ui.define([
 	"sap/ui/fl/apply/_internal/flexState/controlVariants/VariantManagementState",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
 	"sap/ui/fl/apply/_internal/flexState/InitialPrepareFunctions",
-	"sap/ui/fl/apply/_internal/flexState/Loader",
+	"sap/ui/fl/initial/_internal/Loader",
 	"sap/ui/fl/initial/_internal/Storage",
 	"sap/ui/fl/Layer",
 	"sap/ui/thirdparty/sinon-4",
@@ -79,7 +79,7 @@ sap.ui.define([
 			const oStandardVariant = createVariant({
 				fileName: sStandardVariantReference
 			});
-			VariantManagementState.addRuntimeSteadyObject(
+			FlexState.addRuntimeSteadyObject(
 				sReference,
 				sComponentId,
 				oStandardVariant
@@ -869,7 +869,7 @@ sap.ui.define([
 				const oVariant = createVariant({
 					fileName: sVariantManagementReference
 				});
-				VariantManagementState.addRuntimeSteadyObject(sReference, sComponentId, oVariant);
+				FlexState.addRuntimeSteadyObject(sReference, sComponentId, oVariant);
 
 				const oVariantManagementState = VariantManagementState.getVariantManagementMap().get({ reference: sReference });
 
@@ -895,7 +895,7 @@ sap.ui.define([
 				const oVariant = createVariant({
 					fileName: sVariantManagementReference
 				});
-				VariantManagementState.addRuntimeSteadyObject(sReference, sComponentId, oVariant);
+				FlexState.addRuntimeSteadyObject(sReference, sComponentId, oVariant);
 
 				const oVariantManagementState = VariantManagementState.getVariantManagementMap().get({ reference: sReference });
 
@@ -1004,7 +1004,7 @@ sap.ui.define([
 					fileName: "customVariantForSecondVM"
 				})
 			]);
-			VariantManagementState.addRuntimeSteadyObject(
+			FlexState.addRuntimeSteadyObject(
 				sReference,
 				sComponentId,
 				createVariant({
@@ -1041,7 +1041,7 @@ sap.ui.define([
 					fileName: "customVariantForSecondVM"
 				})
 			]);
-			VariantManagementState.addRuntimeSteadyObject(
+			FlexState.addRuntimeSteadyObject(
 				sReference,
 				sComponentId,
 				createVariant({
@@ -1432,7 +1432,7 @@ sap.ui.define([
 		});
 
 		QUnit.test("when retrieving a list of variant management references", function(assert) {
-			VariantManagementState.addRuntimeSteadyObject(
+			FlexState.addRuntimeSteadyObject(
 				sReference,
 				sComponentId,
 				createVariant({
@@ -1448,7 +1448,7 @@ sap.ui.define([
 		});
 
 		QUnit.test("when retrieving variant management changes", function(assert) {
-			VariantManagementState.addRuntimeSteadyObject(
+			FlexState.addRuntimeSteadyObject(
 				sReference,
 				sComponentId,
 				createVariant({
@@ -1509,7 +1509,7 @@ sap.ui.define([
 		beforeEach() {
 			return initializeFlexStateWithStandardVariant()
 			.then(function() {
-				VariantManagementState.addRuntimeSteadyObject(
+				FlexState.addRuntimeSteadyObject(
 					sReference,
 					sComponentId,
 					createVariant({
@@ -1683,18 +1683,39 @@ sap.ui.define([
 			sandbox.restore();
 		}
 	}, function() {
-		QUnit.test("variantSwitchPromise", async function(assert) {
+		QUnit.test("waitForVariantSwitch", async function(assert) {
 			const done = assert.async();
-			await VariantManagementState.getVariantSwitchPromise(sReference);
+			const sVMReference = "variantManagementReference";
+			await VariantManagementState.waitForVariantSwitch(sReference, sVMReference);
 			assert.ok(true, "the function resolves");
 
 			const oDeferred = new Deferred();
-			VariantManagementState.setVariantSwitchPromise(sReference, oDeferred.promise);
-			VariantManagementState.getVariantSwitchPromise(sReference).then(() => {
+			VariantManagementState.setVariantSwitchPromise(sReference, sVMReference, oDeferred.promise);
+			VariantManagementState.waitForVariantSwitch(sReference, sVMReference).then(() => {
 				assert.ok(true, "the promise is resolved");
 				done();
 			});
 			oDeferred.resolve();
+		});
+
+		QUnit.test("waitForAllVariantSwitches", async function(assert) {
+			const done = assert.async();
+			await VariantManagementState.waitForAllVariantSwitches(sReference);
+			assert.ok(true, "the function resolves");
+
+			const oDeferred = new Deferred();
+			const oDeferred2 = new Deferred();
+			VariantManagementState.setVariantSwitchPromise(sReference, "someVMReference", oDeferred.promise);
+			VariantManagementState.setVariantSwitchPromise(sReference, "someOtherVMReference", oDeferred2.promise);
+			VariantManagementState.waitForAllVariantSwitches(sReference).then(() => {
+				assert.ok(true, "the promise is resolved");
+				done();
+			});
+			oDeferred.resolve();
+			setTimeout(() => {
+				assert.ok(true, "the second promise is resolved after a timeout");
+				oDeferred2.resolve();
+			}, 100);
 		});
 
 		QUnit.test("addRuntimeOnlyFlexObjects", function(assert) {

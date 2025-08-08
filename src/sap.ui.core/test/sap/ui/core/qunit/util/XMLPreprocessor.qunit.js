@@ -142,7 +142,10 @@ sap.ui.define([
 				componentId : `this._sOwnerId`,
 				name : `this.sViewName`,
 				sync : !bAsync,
-				//TODO TDD is missing for support info calls!
+				/**
+				 * TODO TDD is missing for support info calls!
+				 * @deprecated since 1.120.0
+				 */
 				_supportInfo : function () {} // Note: FAKE support info handler
 			};
 
@@ -5247,8 +5250,7 @@ sap.ui.define([
 			{m : `[ 0] Binding not ready for attribute text`, d : 1},
 			{m : `[ 1] test == false --> false`, d : 2},
 			{m : `[ 1] Finished`, d : 4},
-			// Note: BindingParser.complexParser|expression turns constant values into strings
-			{m : `[ 1] test == "false" --> false`, d : 5},
+			{m : `[ 1] test == false --> false`, d : 5},
 			{m : `[ 1] Finished`, d : 7},
 			{m : `[ 1] test == true --> true`, d : 8},
 			{m : `[ 1] Finished`, d : 10},

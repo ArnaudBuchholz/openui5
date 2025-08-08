@@ -1,0 +1,27 @@
+{
+  "1.140.0": {
+    "date": "August 2025",
+    "notes": [
+      {
+        "id": "73a5baf8a4b97bdd5bbcdfb9968863b2b97004f5",
+        "type": "FIX",
+        "text": " Field: clearing unit leads to \"0\""
+      },
+      {
+        "id": "c75b1648bca93184185d7cd15ccc780bea4e84ab",
+        "type": "FIX",
+        "text": " PropertyHelperUtil: fix disablement for sap.sac.df"
+      },
+      {
+        "id": "2b3690e7e91869af60d9314a305580202510eb03",
+        "type": "FIX",
+        "text": " PropertyHelperUtil: check UI5 2.0 availability by deprecations"
+      },
+      {
+        "id": "5feb6fb61e7397daeb1b62cfebc408fd30d86927",
+        "type": "FEATURE",
+        "text": " Table: Add ODataV4-specific plugins for selection and tree support"
+      }
+    ]
+  }
+}

@@ -12,6 +12,7 @@ sap.ui.define([
 	'sap/ui/core/ElementRegistry',
 	'./mvc/View',
 	'./mvc/ViewType',
+	'./mvc/_ViewFactory',
 	'./mvc/XMLProcessingMode',
 	'./mvc/EventHandlerResolver',
 	'./ExtensionPoint',
@@ -36,6 +37,7 @@ function(
 	ElementRegistry,
 	View,
 	ViewType,
+	_ViewFactory,
 	XMLProcessingMode,
 	EventHandlerResolver,
 	ExtensionPoint,
@@ -1376,7 +1378,7 @@ function(
 								var sLocalName = localName(attr);
 								aCustomData.push(new CustomData({
 									key: sLocalName,
-									value: parseScalarType("any", sValue, sLocalName, oView._oContainingView.oController, oRequireModules, aTypePromises)
+									value: parseScalarType("any", sValue, sLocalName, oView._oContainingView.oController, oRequireModules, aTypePromises, mAdditionalBindableValues)
 								}));
 							} else if (sNamespace === SUPPORT_INFO_NAMESPACE) {
 								sSupportData = sValue;
@@ -1465,6 +1467,7 @@ function(
 							}
 						} else {
 							future.assertThrows(sName === 'xmlns', oView + ": encountered unknown setting '" + sName + "' for class " + oMetadata.getName() + " (value:'" + sValue + "')");
+							/** @deprecated since 1.120.0 */
 							if (XMLTemplateProcessor._supportInfo) {
 								XMLTemplateProcessor._supportInfo({
 									context : node,
@@ -1723,7 +1726,8 @@ function(
 				var sType = node.getAttribute("type");
 
 				var oOwnerComponent = Component.getOwnerComponentFor(oView);
-				var bIsAsyncComponent = oOwnerComponent && oOwnerComponent.isA("sap.ui.core.IAsyncContentCreation");
+				var bIsAsyncComponent = oOwnerComponent?.getManifestObject()?._getSchemaVersion() === 2 ||
+										oOwnerComponent?.isA("sap.ui.core.IAsyncContentCreation");
 
 				if (bEnrichFullIds) {
 					if (!bRootArea && node.hasAttribute("id")) {
@@ -1741,7 +1745,7 @@ function(
 						// legacy check: async=false is not supported with an async-component
 						if (bIsAsyncComponent && mSettings.async === false) {
 							throw new Error(
-								"A nested view contained in a Component implementing 'sap.ui.core.IAsyncContentCreation' is processed asynchronously by default and cannot be processed synchronously.\n" +
+								"A nested view contained in a Component that uses manifest version 2 or implements 'sap.ui.core.IAsyncContentCreation' is processed asynchronously by default and cannot be processed synchronously.\n" +
 								"Affected Component '" + oOwnerComponent.getMetadata().getComponentName() + "' and View '" + mSettings.viewName + "'."
 							);
 						}
@@ -1761,7 +1765,7 @@ function(
 						}
 
 						vNewControlInstance = scopedRunWithOwner(function() {
-							return View._create(mSettings);
+							return _ViewFactory.create(mSettings);
 						});
 					}
 				} else if (oClass.getMetadata().isA("sap.ui.core.Fragment") && bAsync) {
@@ -1868,6 +1872,7 @@ function(
 					}
 
 					//apply support info if needed
+					/** @deprecated since 1.120.0 */
 					if (XMLTemplateProcessor._supportInfo && vFinalInstance) {
 						for (var i = 0, iLength = vFinalInstance.length; i < iLength; i++) {
 							var oInstance = vFinalInstance[i];

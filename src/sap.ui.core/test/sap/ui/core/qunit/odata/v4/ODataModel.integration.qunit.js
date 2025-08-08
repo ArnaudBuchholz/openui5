@@ -59,6 +59,7 @@ sap.ui.define([
 		fnFireEvent = EventProvider.prototype.fireEvent,
 		sNextSiblingAction
 			= "/com.sap.gateway.default.iwbep.tea_busi.v0001.__FAKE__AcChangeNextSibling",
+		sODataMetaModel = "sap.ui.model.odata.v4.ODataMetaModel",
 		sODCB = "sap.ui.model.odata.v4.ODataContextBinding",
 		sODLB = "sap.ui.model.odata.v4.ODataListBinding",
 		sODPrB = "sap.ui.model.odata.v4.ODataPropertyBinding",
@@ -445,15 +446,17 @@ sap.ui.define([
 	 *   <code>undefined</code> means to ignore the list binding
 	 * @param {any[][]} [aExpectedContent] - "Table" of expected cell contents
 	 * @param {number} [iExpectedLength=aExpectedPaths.length] - Expected length
+	 * @param {boolean} [bLengthFinal=true] - Whether the length is expected to be "final"
 	 * @throws {Error} If <code>iExpectedLength</code> is given but not <code>aExpectedPaths</code>
 	 */
 	// eslint-disable-next-line valid-jsdoc -- [][] is unsupported
-	function checkTable(sTitle, assert, oTable, aExpectedPaths, aExpectedContent, iExpectedLength) {
+	function checkTable(sTitle, assert, oTable, aExpectedPaths, aExpectedContent, iExpectedLength,
+			bLengthFinal = true) {
 		var oListBinding = oTable.getBinding("items") || oTable.getBinding("rows"),
 			aRows = oTable.getItems ? oTable.getItems() : oTable.getRows();
 
 		if (aExpectedPaths) {
-			assert.strictEqual(oListBinding.isLengthFinal(), true, "length is final");
+			assert.strictEqual(oListBinding.isLengthFinal(), bLengthFinal, "length is final");
 			assert.strictEqual(oListBinding.getLength(), iExpectedLength || aExpectedPaths.length,
 				sTitle);
 			const aAllExistingContexts = oListBinding._getAllExistingContexts();
@@ -1840,7 +1843,8 @@ sap.ui.define([
 		 *   values for controls have been set
 		 */
 		createView : function (assert, sViewXML, oModel, oController, mPreprocessors) {
-			var fnLockGroup,
+			var bHasBatchNo, // whether each request inside a $batch (uniformly!) has a batchNo
+				fnLockGroup,
 				fnReportError,
 				that = this;
 
@@ -1925,6 +1929,7 @@ sap.ui.define([
 					});
 				}
 
+				bHasBatchNo = undefined; // reset for every $batch
 				that.iBatchNo += 1;
 
 				return processRequests(aRequests, 0);
@@ -2001,7 +2006,20 @@ sap.ui.define([
 					}
 					if ("batchNo" in oExpectedRequest) {
 						oActualRequest.batchNo = iBatchNo ?? -that.iBatchNo;
-					}
+						if (bHasBatchNo === false) {
+							assert.ok(false, "A previous request within this $batch did not have"
+								+ " batchNo : " + oActualRequest.batchNo
+								+ ", but this one has");
+						}
+						bHasBatchNo = true;
+					} else if (iBatchNo !== undefined) {
+						if (bHasBatchNo === true) {
+							assert.ok(false, "All previous requests within this $batch did have"
+								+ " batchNo : " + oActualRequest.batchNo
+								+ ", but this one doesn't");
+						}
+						bHasBatchNo = false;
+					} // else: $direct/$single
 					if ("changeSetNo" in oExpectedRequest) {
 						oActualRequest.changeSetNo = iChangeSetNo;
 					}
@@ -2240,12 +2258,15 @@ sap.ui.define([
 		 * this.expectChange("foo", "bar").expectChange("foo", "baz"); // expect 2 changes for "foo"
 		 * this.expectChange("foo", null); // initialization due to #setContext
 		 *
-		 * @param {string} sControlId The control ID
-		 * @param {string|string[]|number|number[]} [vValue] The expected value or a list of
-		 *   expected values
-		 * @param {string} [sRow] (Only for meta model tests) The path of the binding's parent
-		 *   context, in case that a change is expected for a single row of a list; in this case
-		 *   <code>vValue</code> must be a string
+		 * @param {string} sControlId
+		 *   The control ID, possibly with suffix "__AS_COMPOSITE", "__IN_LIST", or "__VERBOSE" (see
+		 *   code for more details)
+		 * @param {string|string[]|number|number[]} [vValue]
+		 *   The expected value or a list of expected values
+		 * @param {string} [sRow]
+		 *   (Only for meta model tests) The path of the binding's parent context, in case that a
+		 *   change is expected for a single row of a list; in this case <code>vValue</code> must be
+		 *   a string
 		 * @returns {object} The test instance for chaining
 		 * @throws {Error} For unsupported or inconsistently used control IDs
 		 */
@@ -2265,7 +2286,8 @@ sap.ui.define([
 			 */
 			function isList(bInList) {
 				if (sControlId in that.mIsListByControlId) {
-					if (bInList !== that.mIsListByControlId[sControlId]) {
+					if (bInList !== that.mIsListByControlId[sControlId]
+							 && !sControlId.endsWith("__VERBOSE")) {
 						throw new Error("Inconsistent usage of array values for " + sControlId);
 					}
 				} else {
@@ -2434,10 +2456,9 @@ sap.ui.define([
 		 * responses).
 		 *
 		 * @param {string|object} vRequest
-		 *   The request with the properties "method", "url" and "headers". A string is interpreted
-		 *   as URL with method "GET" and no headers. Spaces, double quotes, square brackets, and
-		 *   curly brackets inside the URL are percent-encoded automatically. Additionally, the
-		 *   following properties may be given for requests within a $batch:
+		 *   The request with the properties "method", "url" and "headers". Spaces, double quotes,
+		 *   square brackets, and curly brackets inside the URL are percent-encoded automatically.
+		 *   Additionally, the following properties may be given for requests within a $batch:
 		 *   <ul>
 		 *      <li> groupId: the group ID by which the $batch was sent
 		 *      <li> batchNo: the number of the ($direct or $batch) request within the test
@@ -2445,6 +2466,9 @@ sap.ui.define([
 		 *      <li> changeSetNo: The number of the change set within $batch (starting with 1)
 		 *      <li> $ContentID: The content ID of the request within the change set
 		 *   </ul>
+		 *   A simple string is interpreted as URL with default method "GET" and no headers, but you
+		 *   can also prefix the URL with "DELETE " to specify that method. Additionally, you can
+		 *   add a prefix with "#", the "batchNo" value, and a space.
 		 * @param {object|string|number|Error|Promise|function} [vResponse]
 		 *   The response message to be returned from the requestor or a promise on it or a function
 		 *   (invoked "just in time" when the request is actually sent) returning the response
@@ -2468,11 +2492,17 @@ sap.ui.define([
 				vRequest = {
 					url : vRequest
 				};
+				if (vRequest.url.startsWith("#")) { // "#batchNo ..."
+					const iSpace = vRequest.url.indexOf(" ");
+					vRequest.batchNo = parseInt(vRequest.url.slice(1, iSpace));
+					vRequest.url = vRequest.url.slice(iSpace + 1);
+				}
 				if (vRequest.url.startsWith("DELETE ")) {
 					vRequest.method = "DELETE";
 					vRequest.url = vRequest.url.slice(7);
 				}
 			}
+
 			// ensure that these properties are defined (required for deepEqual)
 			vRequest.method ??= "GET";
 			vRequest.payload ??= undefined;
@@ -2675,13 +2705,15 @@ sap.ui.define([
 								oBinding = oContext.getBinding();
 							}
 							vRow = oContext.getIndex();
-							if (oContext.isDeleted() || vRow === undefined) {
+							if ((oContext.isDeleted() || vRow === undefined)
+									&& !sControlId.endsWith("__VERBOSE")) {
 								return sValue; // a deleted context w/o row
 							}
 						} else { // e.g. meta model
 							vRow = oContext.getPath();
 						}
-					} else if (bInList) { // a list property that lost its row context
+					} else if (bInList && !sControlId.endsWith("__VERBOSE")) {
+						// a list property that lost its row context
 						return sValue; // do not report the change event
 					}
 					that.checkValue(assert, sValue, sControlId, vRow);
@@ -4452,13 +4484,10 @@ sap.ui.define([
 			assert.strictEqual(oTable.getBinding("items").getCount(), undefined);
 			assert.strictEqual(oTable.getBinding("items").getLength(), 12);
 
-			that.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('1')/SO_2_SOITEM(SalesOrderID='1',ItemPosition='10')"
-						+ "?sap-client=123"
-						+ "&$select=QuantityUnit&$expand=SOITEM_2_PRODUCT($select=ProductID;"
-						+ "$expand=PRODUCT_2_BP($select=BusinessPartnerID,CompanyName))"
-				}, {
+			that.expectRequest("#2 SalesOrderList('1')"
+					+ "/SO_2_SOITEM(SalesOrderID='1',ItemPosition='10')?sap-client=123"
+					+ "&$select=QuantityUnit&$expand=SOITEM_2_PRODUCT($select=ProductID;"
+					+ "$expand=PRODUCT_2_BP($select=BusinessPartnerID,CompanyName))", {
 					"@odata.etag" : "etag0",
 					QuantityUnit : "kg",
 					SOITEM_2_PRODUCT : {
@@ -4472,13 +4501,10 @@ sap.ui.define([
 					}
 				})
 				// the additional late property request
-				.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('1')/SO_2_SOITEM(SalesOrderID='1',ItemPosition='20')"
-						+ "?sap-client=123"
-						+ "&$select=SOITEM_2_PRODUCT&$expand=SOITEM_2_PRODUCT($select=ProductID;"
-						+ "$expand=PRODUCT_2_BP($select=BusinessPartnerID,CompanyName))"
-				}, {
+				.expectRequest("#2 SalesOrderList('1')"
+					+ "/SO_2_SOITEM(SalesOrderID='1',ItemPosition='20')?sap-client=123"
+					+ "&$select=SOITEM_2_PRODUCT&$expand=SOITEM_2_PRODUCT($select=ProductID;"
+					+ "$expand=PRODUCT_2_BP($select=BusinessPartnerID,CompanyName))", {
 					"@odata.etag" : "etag0",
 					SOITEM_2_PRODUCT : {
 						"@odata.etag" : "etag1",
@@ -5388,12 +5414,9 @@ sap.ui.define([
 				.withArgs("Failed to read path /SalesOrderList('1')/SO_2_SOITEM('0010')/"
 					+ "SOITEM_2_SCHDL/ItemKey");
 
-			that.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('1')/SO_2_SOITEM('0010')/SOITEM_2_PRODUCT"
-						+ "?sap-client=123&$select=ProductID"
-						+ "&$expand=PRODUCT_2_BP($select=BusinessPartnerID,CompanyName)"
-				}, {
+			that.expectRequest("#2 SalesOrderList('1')/SO_2_SOITEM('0010')/SOITEM_2_PRODUCT"
+					+ "?sap-client=123&$select=ProductID"
+					+ "&$expand=PRODUCT_2_BP($select=BusinessPartnerID,CompanyName)", {
 					"@odata.etag" : oFixture.lateEtag,
 					ProductID : oFixture.lateID,
 					PRODUCT_2_BP : {
@@ -5401,12 +5424,10 @@ sap.ui.define([
 						CompanyName : "TECUM"
 					}
 				})
-				.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('1')/SO_2_SOITEM('0010')?sap-client=123"
-						+ "&$select=SOITEM_2_SCHDL"
-						+ "&$expand=SOITEM_2_SCHDL($select=ItemKey,ScheduleKey)"
-				}, createErrorInsideBatch())
+				.expectRequest("#2 SalesOrderList('1')/SO_2_SOITEM('0010')?sap-client=123"
+					+ "&$select=SOITEM_2_SCHDL"
+					+ "&$expand=SOITEM_2_SCHDL($select=ItemKey,ScheduleKey)",
+					createErrorInsideBatch())
 				.expectChange("businessPartner", null) // initialization due to #setContext
 				.expectMessages([{
 					message : sMessage4CompanyName,
@@ -8215,23 +8236,11 @@ sap.ui.define([
 		return this.createView(assert, sView, oModel).then(function () {
 			var aItems = that.oView.byId("table").getItems();
 
-			that.expectRequest({
-					batchNo : 2,
-					method : "DELETE",
-					url : "SalesOrderList('0500000002')"
-				})
-				.expectRequest({
-					batchNo : 2,
-					method : "DELETE",
-					url : "SalesOrderList('0500000003')"
-				})
-				.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList?$select=SalesOrderID"
-						+ "&$filter=not (SalesOrderID eq '0500000002'"
-							+ " or SalesOrderID eq '0500000003')"
-						+ "&$skip=1&$top=2"
-				}, {
+			that.expectRequest("#2 DELETE SalesOrderList('0500000002')")
+				.expectRequest("#2 DELETE SalesOrderList('0500000003')")
+				.expectRequest("#2 SalesOrderList?$select=SalesOrderID"
+					+ "&$filter=not (SalesOrderID eq '0500000002' or SalesOrderID eq '0500000003')"
+					+ "&$skip=1&$top=2", {
 					value : [{SalesOrderID : "0500000004"}]
 				})
 				.expectChange("id", [, "0500000004"]);
@@ -8271,16 +8280,9 @@ sap.ui.define([
 		return this.createView(assert, sView, oModel).then(function () {
 			var oDeletePromise;
 
-			that.expectRequest({
-					batchNo : 2,
-					method : "DELETE",
-					url : "SalesOrderList('0500000002')"
-				})
-				.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList?$select=SalesOrderID"
-						+ "&$filter=not (SalesOrderID eq '0500000002')&$skip=2&$top=4"
-				}, {
+			that.expectRequest("#2 DELETE SalesOrderList('0500000002')")
+				.expectRequest("#2 SalesOrderList?$select=SalesOrderID"
+					+ "&$filter=not (SalesOrderID eq '0500000002')&$skip=2&$top=4", {
 					value : [{SalesOrderID : "0500000004"}]
 				})
 				.expectChange("id", [,, "0500000004"]);
@@ -8440,17 +8442,23 @@ sap.ui.define([
 	// BCP: 2080123400
 	//
 	// "Select all" is reset by #setContext (JIRA: CPOUI5ODATAV4-1943).
+	// Selected rows must not show up empty due to #setContext (SNOW: DINC0514119)
 	QUnit.test("BCP: 2080123400", function (assert) {
 		var oModel = this.createSalesOrdersModel({autoExpandSelect : true}),
+			oObjectPage,
 			oTable,
 			sView = '\
 <Table id="list" items="{/SalesOrderList}">\
 	<Text id="id" text="{SalesOrderID}"/>\
 </Table>\
-<Table id="detail" items="{path : \'SO_2_SOITEM\', parameters : {$$ownRequest : true}}" \
-		growing="true"> <!-- ensures that the rows and child bindings are kept alive -->\
-	<Text id="note" text="{Note}"/>\
-</Table>',
+<FlexBox id="objectPage">\
+	<!-- is updated by #setContext and triggers re-rendering, thus destroying the old context -->\
+	<Text id="objectPageID" text="{SalesOrderID}"/>\
+	<Table id="detail" items="{path : \'SO_2_SOITEM\', parameters : {$$ownRequest : true}}" \
+			growing="true"> <!-- ensures that the rows and child bindings are kept alive -->\
+		<Text id="note__VERBOSE" text="{Note}"/>\
+	</Table>\
+</FlexBox>',
 			that = this;
 
 		this.expectRequest("SalesOrderList?$select=SalesOrderID&$skip=0&$top=100", {
@@ -8460,20 +8468,25 @@ sap.ui.define([
 				]
 			})
 			.expectChange("id", ["1", "2"])
-			.expectChange("note", []);
+			.expectChange("objectPageID")
+			// "__VERBOSE" confirms that we want "change" events also when a row context is lost
+			.expectChange("note__VERBOSE", []);
 
 		return this.createView(assert, sView, oModel).then(function () {
+			oObjectPage = that.oView.byId("objectPage");
 			oTable = that.oView.byId("detail");
 
-			that.expectRequest("SalesOrderList('1')/SO_2_SOITEM"
+			that.expectChange("objectPageID", "1")
+				.expectRequest("SalesOrderList('1')/SO_2_SOITEM"
 					+ "?$select=ItemPosition,Note,SalesOrderID&$skip=0&$top=20", {
 					value : [
 						{ItemPosition : "10", Note : "Note 1", SalesOrderID : "1"}
 					]
 				})
-				.expectChange("note", ["Note 1"]);
+				.expectChange("note__VERBOSE", ["Note 1"]);
 
-			oTable.setBindingContext(that.oView.byId("list").getItems()[0].getBindingContext());
+			oObjectPage.setBindingContext(
+					that.oView.byId("list").getItems()[0].getBindingContext());
 
 			return that.waitForChanges(assert);
 		}).then(function () {
@@ -8483,7 +8496,8 @@ sap.ui.define([
 			const oHeaderContext = oTable.getBinding("items").getHeaderContext();
 			oHeaderContext.setSelected(true);
 
-			that.expectRequest("SalesOrderList('2')/SO_2_SOITEM"
+			that.expectChange("objectPageID", "2")
+				.expectRequest("SalesOrderList('2')/SO_2_SOITEM"
 					+ "?$select=ItemPosition,Note,SalesOrderID&$skip=0&$top=20",
 					new Promise(function (resolve) {
 						fnResolve = resolve.bind(null, {
@@ -8504,16 +8518,34 @@ sap.ui.define([
 							{ItemPosition : "10", Note : "Note 2", SalesOrderID : "2"}
 						]
 					})
-				.expectChange("note", ["Note 2"]);
+				.expectChange("note__VERBOSE", ["Note 2"]);
 
 			return Promise.all([
-				oTable.setBindingContext(oRowContext),
+				oObjectPage.setBindingContext(oRowContext),
 				resolveLater(function () {
 					checkSelected(assert, oHeaderContext, false);
 
 					resolveLater(fnResolve); // must not respond before requestSideEffects
 					return oRowContext.requestSideEffects(["SO_2_SOITEM"]);
 				}),
+				that.waitForChanges(assert)
+			]);
+		}).then(function () {
+			oTable.getBinding("items").getCurrentContexts()[0].setSelected(true);
+
+			that.expectChange("objectPageID", "1")
+				.expectRequest("SalesOrderList('1')/SO_2_SOITEM"
+					+ "?$select=ItemPosition,Note,SalesOrderID&$skip=0&$top=20", {
+					value : [
+						{ItemPosition : "10", Note : "Note 1 (updated)", SalesOrderID : "1"}
+					]
+				})
+				// .expectChange("note__VERBOSE", null) // NO! (SNOW: DINC0514119)
+				.expectChange("note__VERBOSE", ["Note 1 (updated)"]);
+
+			return Promise.all([
+				oObjectPage.setBindingContext(
+					that.oView.byId("list").getItems()[0].getBindingContext()),
 				that.waitForChanges(assert)
 			]);
 		});
@@ -10067,7 +10099,7 @@ sap.ui.define([
 			assert.throws(function () {
 				// code under test (JIRA: CPOUI5ODATAV4-2768)
 				oContext.getFilter();
-			}, Error("Key1: Unsupported type: undefined"), "no support for key aliases");
+			}, /Key1: Unsupported type: /, "no support for key aliases");
 		});
 	});
 
@@ -10422,6 +10454,180 @@ sap.ui.define([
 
 			return that.waitForChanges(assert);
 		});
+	});
+
+	//*********************************************************************************************
+	// Scenario: An entity and a complex type, which are both open types, are used for a list report
+	// (with auto-$expand/$select) and an object page (with late properties). See that dynamic
+	// property names are not an issue, not even for editing in connection with complex types and
+	// annotations.
+	// JIRA: CPOUI5ODATAV4-2996
+	QUnit.test("OpenType: 1/2", async function (assert) {
+		const oModel = this.createSpecialCasesModel({autoExpandSelect : true});
+		const sView = `
+<Table id="table" items="{path : '/EntitiesWithComplexKey', parameters : {$select : 'Alpha'}}">
+	<Text id="beta" text="{path : 'Beta', type : 'sap.ui.model.odata.type.Boolean'}"/>
+	<Text id="gamma" text="{= %{Key/Gamma} }"/>
+</Table>
+<FlexBox id="form">
+	<Input id="delta" value="{= %{Delta} }"/>
+	<Text id="zeta" text="{= %{Key/Epsilon/Zeta} }"/>
+</FlexBox>`;
+
+		this.expectRequest("EntitiesWithComplexKey?$select=Alpha,Beta,Key/Gamma,Key/P1,Key/P2"
+				+ "&$skip=0&$top=100", {
+				value : [{
+					Alpha : "n/a", // unused
+					Beta : true,
+					Key : {
+						Gamma : "gamma",
+						P1 : "p1",
+						P2 : "p2"
+					}
+				}]
+			})
+			.expectChange("beta", ["Yes"])
+			.expectChange("gamma", ["gamma"])
+			.expectChange("delta")
+			.expectChange("zeta");
+
+		await this.createView(assert, sView, oModel);
+
+		this.expectRequest("EntitiesWithComplexKey(Key1='p1',Key2=p2)"
+				+ "?$select=Delta,Key/Epsilon/Zeta", {
+				Delta : "delta",
+				Key : {
+					Epsilon : {
+						Zeta : "zeta"
+					}
+				}
+			})
+			.expectChange("delta", "delta")
+			.expectChange("zeta", "zeta");
+
+		const oListBinding = this.oView.byId("table").getBinding("items");
+		this.oView.byId("form").setBindingContext(oListBinding.getCurrentContexts()[0]);
+
+		await this.waitForChanges(assert, "late properties");
+
+		this.expectChange("delta", "Hello, World!")
+			.expectRequest({
+				method : "PATCH",
+				payload : {
+					Delta : "Hello, World!",
+					"Delta@complexAnnotation" : {
+						Eta : "eta"
+					},
+					Theta : {
+						"Iota@simpleAnnotation" : "iota"
+					}
+				},
+				url : "EntitiesWithComplexKey(Key1='p1',Key2=p2)"
+			}, {
+				Delta : "hello, world", // like Brian Kernighan said
+				Key : {
+					P1 : "p1",
+					P2 : "p2"
+				}
+
+			})
+			.expectChange("delta", "hello, world");
+
+		const oPropertyBinding = this.oView.byId("delta").getBinding("value");
+		// code under test
+		oPropertyBinding.setValue("Hello, World!");
+
+		await Promise.all([
+			// code under test
+			oPropertyBinding.getContext().setProperty("Delta@complexAnnotation/Eta", "eta"),
+			// code under test
+			oPropertyBinding.getContext().setProperty("Theta/Iota@simpleAnnotation", "iota"),
+			this.waitForChanges(assert, "edit")
+		]);
+	});
+
+	//*********************************************************************************************
+	// Scenario: An entity and a complex type, which are both open types, are used for a list report
+	// (with auto-$expand/$select) and an object page (with late properties). See that dynamic
+	// property names are not an issue, even when reached via some navigation property, but that
+	// being an open type is not "inherited".
+	// JIRA: CPOUI5ODATAV4-2996
+	QUnit.test("OpenType: 2/2", async function (assert) {
+		const oModel = this.createSpecialCasesModel({autoExpandSelect : true});
+		const sView = `
+<Table id="table" items="{/As}">
+	<Text id="beta" text="{= %{AtoEntityWithComplexKey/Beta} }"/>
+	<Text id="gamma" text="{= %{AtoEntityWithComplexKey/Key/Gamma} }"/>
+</Table>
+<FlexBox id="form" binding="{AtoEntityWithComplexKey}">
+	<Text id="delta" text="{= %{Delta} }"/>
+	<Text id="epsilon" text="{= %{Key/Epsilon} }"/>
+</FlexBox>`;
+
+		this.expectRequest("As?$select=AID"
+				+ "&$expand=AtoEntityWithComplexKey($select=Beta,Key/Gamma,Key/P1,Key/P2)"
+				+ "&$skip=0&$top=100", {
+				value : [{
+					AID : "aid",
+					AtoEntityWithComplexKey : {
+						Beta : "beta",
+						Key : {
+							Gamma : "gamma",
+							P1 : "p1",
+							P2 : "p2"
+						}
+					}
+				}]
+			})
+			.expectChange("beta", ["beta"])
+			.expectChange("gamma", ["gamma"])
+			.expectChange("delta")
+			.expectChange("epsilon");
+
+		await this.createView(assert, sView, oModel);
+
+		this.expectRequest("As(aid)/AtoEntityWithComplexKey"
+				+ "?$select=Delta,Key/Epsilon,Key/P1,Key/P2", {
+				Delta : "delta",
+				Key : {
+					Epsilon : "epsilon",
+					P1 : "p1",
+					P2 : "p2"
+				}
+			})
+			.expectChange("delta", "delta")
+			.expectChange("epsilon", "epsilon");
+
+		const oListBinding = this.oView.byId("table").getBinding("items");
+		const oContext = oListBinding.getCurrentContexts()[0];
+		this.oView.byId("form").setBindingContext(oContext);
+
+		await this.waitForChanges(assert, "late properties");
+
+		assert.deepEqual(oContext.getObject(), {
+			AID : "aid",
+			AtoEntityWithComplexKey : {
+				Beta : "beta",
+				Delta : "delta",
+				Key : {
+					Epsilon : "epsilon",
+					Gamma : "gamma",
+					P1 : "p1",
+					P2 : "p2"
+				}
+			}
+		});
+
+		this.oLogMock.expects("error").withExactArgs("Failed to enhance query options for "
+			+ "auto-$expand/$select as the path '/As(aid)/Messages/0/Delta'"
+			+ " does not point to a property",
+			undefined, "sap.ui.model.odata.v4.ODataParentBinding"
+		);
+		this.oLogMock.expects("error").withExactArgs("Not a valid property path: Messages/0/Delta",
+			undefined, sContext);
+
+		assert.strictEqual(await oContext.requestProperty("Messages/0/Delta"), undefined,
+			"being an open type is not inherited");
 	});
 
 	//*********************************************************************************************
@@ -16778,6 +16984,9 @@ sap.ui.define([
 
 	//*********************************************************************************************
 	// Scenario: Usage of Any/All filter values on the list binding
+	// JIRA: CPOUI5UISERVICESV3-597
+	//
+	// Usage of NotAny/NotAll filter (JIRA: CPOUI5MODELS-1938)
 	[{
 		filter : new Filter({
 			condition : new Filter("soitem/GrossAmount", FilterOperator.GT, "1000"),
@@ -16842,8 +17051,80 @@ sap.ui.define([
 		request : "SO_2_SOITEM/any(soitem:soitem/GrossAmount gt 1000 or"
 			+ " soitem/SOITEM_2_SCHDL/all(schedule:schedule/DeliveryDate lt 2017-01-01T05:50Z"
 			+ " and soitem/GrossAmount lt 2000))"
+	}, {
+		filter : new Filter({
+			condition : new Filter("soitem/GrossAmount", FilterOperator.GT, "1000"),
+			operator : FilterOperator.NotAll,
+			path : "SO_2_SOITEM",
+			variable : "soitem"
+		}),
+		request : "not SO_2_SOITEM/all(soitem:soitem/GrossAmount gt 1000)"
+	}, {
+		filter : new Filter({
+			condition : new Filter("soitem/GrossAmount", FilterOperator.GT, "1000"),
+			operator : FilterOperator.NotAny,
+			path : "SO_2_SOITEM",
+			variable : "soitem"
+		}),
+		request : "not SO_2_SOITEM/any(soitem:soitem/GrossAmount gt 1000)"
+	}, {
+		filter : new Filter({
+			condition : new Filter({
+				and : true,
+				filters : [
+					new Filter("soitem/GrossAmount", FilterOperator.GT, "1000"),
+					new Filter("soitem/NetAmount", FilterOperator.LE, "3000")
+				]
+			}),
+			operator : FilterOperator.NotAny,
+			path : "SO_2_SOITEM",
+			variable : "soitem"
+		}),
+		request : "not SO_2_SOITEM/any(soitem:soitem/GrossAmount gt 1000 and"
+			+ " soitem/NetAmount le 3000)"
+	}, {
+		filter : new Filter({
+			condition : new Filter({
+				filters : [
+					new Filter("soitem/GrossAmount", FilterOperator.GT, "1000"),
+					new Filter({operator : FilterOperator.NotAny, path : "soitem/SOITEM_2_SCHDL"})
+				]
+			}),
+			operator : FilterOperator.NotAny,
+			path : "SO_2_SOITEM",
+			variable : "soitem"
+		}),
+		request : "not SO_2_SOITEM/any(soitem:soitem/GrossAmount gt 1000 or"
+			+ " not soitem/SOITEM_2_SCHDL/any())"
+	}, {
+		filter : new Filter({
+			condition : new Filter({
+				filters : [
+					new Filter("soitem/GrossAmount", FilterOperator.GT, "1000"),
+					new Filter({
+						condition : new Filter({
+							and : true,
+							filters : [
+								new Filter("schedule/DeliveryDate", FilterOperator.LT,
+									"2017-01-01T05:50Z"),
+								new Filter("soitem/GrossAmount", FilterOperator.LT, "2000")
+							]
+						}),
+						operator : FilterOperator.NotAll,
+						path : "soitem/SOITEM_2_SCHDL",
+						variable : "schedule"
+					})
+				]
+			}),
+			operator : FilterOperator.NotAny,
+			path : "SO_2_SOITEM",
+			variable : "soitem"
+		}),
+		request : "not SO_2_SOITEM/any(soitem:soitem/GrossAmount gt 1000 or"
+			+ " not soitem/SOITEM_2_SCHDL/all(schedule:schedule/DeliveryDate lt 2017-01-01T05:50Z"
+			+ " and soitem/GrossAmount lt 2000))"
 	}].forEach(function (oFixture) {
-		QUnit.test("filter all/any on list binding " + oFixture.request, function (assert) {
+		QUnit.test("filter (not) all/any on list binding " + oFixture.request, function (assert) {
 			var sView = '\
 <Table id="table" items="{/SalesOrderList}">\
 	<Text id="text" text="{SalesOrderID}"/>\
@@ -17689,14 +17970,8 @@ sap.ui.define([
 	parameters : {$$groupId : \'$auto.2\'}}"\
 />';
 
-		this.expectRequest({
-				url : "EMPLOYEES('2')/Name",
-				batchNo : 1
-			}, {value : "Frederic Fall"})
-			.expectRequest({
-				url : "EMPLOYEES('3')/Name",
-				batchNo : 2
-			}, {value : "Jonathan Smith"})
+		this.expectRequest("#1 EMPLOYEES('2')/Name", {value : "Frederic Fall"})
+			.expectRequest("#2 EMPLOYEES('3')/Name", {value : "Jonathan Smith"})
 			.expectChange("text1", "Frederic Fall")
 			.expectChange("text2", "Jonathan Smith");
 
@@ -17878,7 +18153,7 @@ sap.ui.define([
 
 	//*********************************************************************************************
 	// Scenario: Object binding provides access to some collection and you then want to filter on
-	//   that collection; inspired by https://github.com/SAP/openui5/issues/1763
+	//   that collection; inspired by https://github.com/UI5/openui5/issues/1763
 	QUnit.test("Filter collection provided via object binding", function (assert) {
 		var sView = '\
 <FlexBox id="form" binding="{parameters : {$expand : \'TEAM_2_EMPLOYEES\'},\
@@ -18101,6 +18376,113 @@ sap.ui.define([
 
 			return that.waitForChanges(assert);
 		});
+	});
+
+	//*********************************************************************************************
+	// Scenario: Display the 1st name and $count of a collection-valued navigation property in a
+	// list. This worked even before JIRA: CPOUI5ODATAV4-1002. Make sure the request does not change
+	// in an incompatible way.
+[
+	// $count after $select
+	`<Table id="table" items="{/TEAMS}">
+		<Text id="id" text="{Team_Id}"/>
+		<Text id="name" text="{TEAM_2_EMPLOYEES/0/Name}"/>
+		<Text id="count" text="{TEAM_2_EMPLOYEES/$count}"/>
+	</Table>`,
+	// $count before $select
+	// object binding means $select does not use bIsProperty
+	`<Table id="table" items="{/TEAMS}">
+		<Text id="id" text="{Team_Id}"/>
+		<Text id="count" text="{TEAM_2_EMPLOYEES/$count}"/>
+		<Text binding="{TEAM_2_EMPLOYEES/0}" id="name" text="{Name}"/>
+	</Table>`,
+	// $expand as object means mCountQueryOptions does not use bAdd
+	// ($select is only used to have the same order inside the request in both cases)
+	`<Table id="table" items="{
+			path : '/TEAMS',
+			parameters : {$select : 'Team_Id', $expand : {TEAM_2_EMPLOYEES : {}}}
+		}">
+		<Text id="id" text="{Team_Id}"/>
+		<Text id="count" text="{TEAM_2_EMPLOYEES/$count}"/>
+		<Text id="name" text="{TEAM_2_EMPLOYEES/0/Name}"/>
+	</Table>`
+].forEach((sView, i) => {
+	QUnit.test("before CPOUI5ODATAV4-1002, #" + i, function (assert) {
+		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
+
+		// Note: RAP does not currently support $count inside $expand!
+		this.expectRequest("TEAMS?$select=Team_Id&$expand=TEAM_2_EMPLOYEES($select=ID,Name)"
+				+ "&$skip=0&$top=100", {
+				value : [{
+					Team_Id : "TEAM_00",
+					TEAM_2_EMPLOYEES : [{
+						ID : "0",
+						Name : "Frederic Fall"
+					}]
+				}, {
+					Team_Id : "TEAM_01",
+					TEAM_2_EMPLOYEES : [{
+						ID : "1",
+						Name : "Jonathan Smith"
+					}, {
+						ID : "0",
+						Name : "Frederic Fall"
+					}]
+				}, {
+					Team_Id : "TEAM_02",
+					TEAM_2_EMPLOYEES : [{
+						ID : "2",
+						Name : "Peter Burke"
+					}, {
+						ID : "1",
+						Name : "Jonathan Smith"
+					}, {
+						ID : "0",
+						Name : "Frederic Fall"
+					}]
+				}]
+			})
+			.expectChange("id", ["TEAM_00", "TEAM_01", "TEAM_02"])
+			.expectChange("count", ["1", "2", "3"])
+			.expectChange("name", ["Frederic Fall", "Jonathan Smith", "Peter Burke"]);
+
+		return this.createView(assert, sView, oModel);
+	});
+});
+
+	//*********************************************************************************************
+	// Scenario: Display the $count of a collection-valued navigation property in a list. Opt-in to
+	// new request with $count inside $expand.
+	// JIRA: CPOUI5ODATAV4-1002
+	QUnit.test("JIRA: CPOUI5ODATAV4-1002", function (assert) {
+		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
+		const sView = `
+<Table id="table" items="{/TEAMS}">
+	<Text id="id" text="{Team_Id}"/>
+	<Text id="count" text="{TEAM_2_EMPLOYEES/$count}"/>
+</Table>`;
+
+		//TODO $expand=TEAM_2_EMPLOYEES/$count
+		this.expectRequest("TEAMS?$select=Team_Id&$expand=TEAM_2_EMPLOYEES($count=true;$top=0)"
+				+ "&$skip=0&$top=100", {
+				value : [{
+					Team_Id : "TEAM_00",
+					"TEAM_2_EMPLOYEES@odata.count" : "10", // Edm.Int64
+					TEAM_2_EMPLOYEES : []
+				}, {
+					Team_Id : "TEAM_01",
+					"TEAM_2_EMPLOYEES@odata.count" : "11",
+					TEAM_2_EMPLOYEES : []
+				}, {
+					Team_Id : "TEAM_02",
+					"TEAM_2_EMPLOYEES@odata.count" : "12",
+					TEAM_2_EMPLOYEES : []
+				}]
+			})
+			.expectChange("id", ["TEAM_00", "TEAM_01", "TEAM_02"])
+			.expectChange("count", ["10", "11", "12"]);
+
+		return this.createView(assert, sView, oModel);
 	});
 
 	//*********************************************************************************************
@@ -18327,19 +18709,11 @@ sap.ui.define([
 			this.waitForChanges(assert, "1st GET")
 		]);
 
-		this.expectRequest({
-				batchNo : 2,
-				url : "TEAMS?$count=true&$skip=1&$top=2000",
-				method : "GET"
-			}, {
+		this.expectRequest("#2 TEAMS?$count=true&$skip=1&$top=2000", {
 				"@odata.count" : aValues.length.toString(),
 				value : aValues.slice(1, 2001)
 			})
-			.expectRequest({
-				batchNo : 2,
-				url : "TEAMS?$count=true&$skip=2001&$top=2999",
-				method : "GET"
-			}, {
+			.expectRequest("#2 TEAMS?$count=true&$skip=2001&$top=2999", {
 				"@odata.count" : aValues.length.toString(),
 				value : aValues.slice(2001, 5000)
 			});
@@ -20817,7 +21191,7 @@ sap.ui.define([
 	//*********************************************************************************************
 	// Scenario: ODataContextBinding for non-deferred function call which returns a collection. A
 	// dependent list binding for "value" with auto-$expand/$select displays the result.
-	// github.com/SAP/openui5/issues/1727
+	// github.com/UI5/openui5/issues/1727
 	QUnit.test("Context: function returns collection, auto-$expand/$select", function (assert) {
 		var oModel = this.createSalesOrdersModel({autoExpandSelect : true}),
 			sView = '\
@@ -22364,12 +22738,10 @@ sap.ui.define([
 					headers : {"If-Match" : "etag1"},
 					url : "SalesOrderList('1')"
 				}, createErrorInsideBatch())
-				.expectRequest({
-					batchNo : 7, // from the binding's reset due to the failed DELETE
-					url : "SalesOrderList?$count=true"
-						+ "&$filter=(LifecycleStatus eq 'N') and not (SalesOrderID eq '2')"
-						+ "&$select=GrossAmount,SalesOrderID&$orderby=GrossAmount&$skip=0&$top=4"
-				}, {
+				// from the binding's reset due to the failed DELETE
+				.expectRequest("#7 SalesOrderList?$count=true"
+					+ "&$filter=(LifecycleStatus eq 'N') and not (SalesOrderID eq '2')"
+					+ "&$select=GrossAmount,SalesOrderID&$orderby=GrossAmount&$skip=0&$top=4", {
 					"@odata.count" : "7",
 					value : [
 						{GrossAmount : "2", SalesOrderID : "3"},
@@ -24877,6 +25249,49 @@ sap.ui.define([
 			return that.waitForChanges(assert, "scroll to 'X-c'");
 		});
 	});
+
+	//*********************************************************************************************
+	// Scenario: List binding with aggregation, no visual grouping, and grand total at both top and
+	// bottom - or at top/bottom only. Grand total not shown because there is no data.
+	// JIRA: CPOUI5ODATAV4-2979
+[undefined, false, true].forEach((bGrandTotalAtBottomOnly) => {
+	const sTitle = "Data Aggregation: no data, grandTotalAtBottomOnly=" + bGrandTotalAtBottomOnly;
+
+	QUnit.test(sTitle, async function (assert) {
+		const oModel = this.createAggregationModel();
+
+		await this.createView(assert, "", oModel);
+
+		const oListBinding = oModel.bindList("/BusinessPartners", null, [], [], {
+			$$aggregation : {
+				aggregate : {
+					SalesNumber : {grandTotal : true}
+				},
+				grandTotalAtBottomOnly : bGrandTotalAtBottomOnly,
+				group : {Country : {}}
+			}
+		});
+
+		this.expectRequest("BusinessPartners?$apply=concat(aggregate(SalesNumber)"
+				+ ",groupby((Country),aggregate(SalesNumber))"
+					+ "/concat(aggregate($count as UI5__count),top("
+					+ (bGrandTotalAtBottomOnly ? 100 : 99)
+					+ ")))", {
+				value : [{
+					SalesNumber : 0 // think "sum" here ;-)
+				}, {
+					UI5__count : "0" // no data
+				}]
+			});
+
+		const [aContexts] = await Promise.all([
+			oListBinding.requestContexts(),
+			this.waitForChanges(assert)
+		]);
+
+		assert.deepEqual(aContexts.map(getNormalizedPath), [], "no data - no grand total");
+	});
+});
 
 	//*********************************************************************************************
 	// Scenario: sap.ui.table.Table with aggregation, no visual grouping, and grand total at both
@@ -28010,12 +28425,627 @@ sap.ui.define([
 	});
 
 	//*********************************************************************************************
+	// Scenario: A table with aggregation and visual grouping where a leaf is selected and thus
+	// kept alive, even when its parent is collapsed/expanded and the binding is refreshed. Do it
+	// with and without a leaf count. In the end, turn off leaf count and turn on grand total; this
+	// resets the cache due to the kept-alive element and must work fine.
+	// JIRA: CPOUI5ODATAV4-2969
+	// SNOW: DINC0463228
+[false, true].forEach((bCount) => {
+	const sTitle = "Data Aggregation: keep alive via selection; leaf count=" + bCount;
+
+	QUnit.test(sTitle, async function (assert) {
+		const oModel = this.createAggregationModel();
+		const sView = `
+<Text id="count" text="{$count}"/>
+<Text id="selectionCount" text="{$selectionCount}"/>
+<t:Table id="table" threshold="0" visibleRowCount="3"
+	rows="{path : '/BusinessPartners',
+		parameters : {
+			$$aggregation : {
+				aggregate : {
+					SalesNumber : {subtotals : true}
+				},
+				groupLevels : ['Country', 'Region']
+			},
+			$count : ${bCount}
+		}}">
+	<Text id="isSelected" text="{= %{@$ui5.context.isSelected} }"/>
+	<Text id="isExpanded" text="{= %{@$ui5.node.isExpanded} }"/>
+	<Text id="isTotal" text="{= %{@$ui5.node.isTotal} }"/>
+	<Text id="level" text="{= %{@$ui5.node.level} }"/>
+	<Text id="country" text="{Country}"/>
+	<Text id="region" text="{Region}"/>
+	<Text id="salesNumber" text="{SalesNumber}"/>
+</t:Table>`;
+		const sCountryUrl = bCount
+			? "BusinessPartners?$apply=concat("
+				+ "groupby((Country,Region))/aggregate($count as UI5__leaves)"
+				+ ",groupby((Country),aggregate(SalesNumber))"
+					+ "/concat(aggregate($count as UI5__count),top(3)))"
+			: "BusinessPartners?$apply=groupby((Country),aggregate(SalesNumber))"
+				+ "&$count=true&$skip=0&$top=3";
+		const aCountries = [
+			{Country : "A", SalesNumber : 100},
+			{Country : "B", SalesNumber : 200},
+			{Country : "C", SalesNumber : 300}
+		];
+		this.expectChange("count")
+			.expectChange("selectionCount")
+			.expectRequest(sCountryUrl, bCount ? {
+				value : [
+					{UI5__leaves : "123"},
+					{UI5__count : "26"},
+					...aCountries
+				]
+			} : {
+				"@odata.count" : "26",
+				value : aCountries
+			})
+			.expectChange("isSelected", [undefined, undefined, undefined])
+			.expectChange("isExpanded", [false, false, false])
+			.expectChange("isTotal", [true, true, true])
+			.expectChange("level", [1, 1, 1])
+			.expectChange("country", ["A", "B", "C"])
+			.expectChange("region", [null, null, null])
+			.expectChange("salesNumber", ["100", "200", "300"]);
+
+		await this.createView(assert, sView, oModel);
+
+		const oListBinding = this.oView.byId("table").getBinding("rows");
+		const oContextA = oListBinding.getCurrentContexts()[0];
+
+		if (bCount) {
+			this.expectChange("count", "123");
+			this.oView.byId("count").setBindingContext(oListBinding.getHeaderContext());
+		}
+		this.expectChange("selectionCount", "0");
+		this.oView.byId("selectionCount").setBindingContext(oListBinding.getHeaderContext());
+
+		await this.waitForChanges(assert, "set header context");
+
+		const sRegionUrl = "BusinessPartners"
+			+ "?$apply=filter(Country eq 'A')/groupby((Region),aggregate(SalesNumber))"
+			+ "&$count=true&$skip=0&$top=3";
+		this.expectChange("isExpanded", [true])
+			.expectRequest(sRegionUrl, {
+				"@odata.count" : "2",
+				value : [
+					{Region : "A1", SalesNumber : 20},
+					{Region : "A2", SalesNumber : 80}
+				]
+			})
+			.expectChange("isExpanded", [, undefined, undefined])
+			.expectChange("isTotal", [, false, false])
+			.expectChange("level", [, 2, 2])
+			.expectChange("country", [, "A", "A"])
+			.expectChange("region", [, "A1", "A2"])
+			.expectChange("salesNumber", [, "20", "80"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A'")
+		]);
+
+		const oContextA1 = oListBinding.getCurrentContexts()[1];
+		this.expectChange("selectionCount", "1")
+			.expectChange("isSelected", [, true]);
+
+		// code under test
+		oContextA1.setSelected(true);
+
+		await this.waitForChanges(assert, "select 'A1'");
+
+		this.expectChange("isSelected", [, undefined])
+			.expectChange("isExpanded", [false, false, false])
+			.expectChange("isTotal", [, true, true])
+			.expectChange("level", [, 1, 1])
+			.expectChange("country", [, "B", "C"])
+			.expectChange("region", [, null, null])
+			.expectChange("salesNumber", [, "200", "300"]);
+
+		oContextA.collapse();
+
+		await this.waitForChanges(assert, "collapse 'A'");
+
+		this.expectChange("isSelected", [, true])
+			.expectChange("isExpanded", [true, undefined, undefined])
+			.expectChange("isTotal", [, false, false])
+			.expectChange("level", [, 2, 2])
+			.expectChange("country", [, "A", "A"])
+			.expectChange("region", [, "A1", "A2"])
+			.expectChange("salesNumber", [, "20", "80"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A' again")
+		]);
+
+		assert.strictEqual(oListBinding.getCurrentContexts()[1], oContextA1,
+			"context has been kept alive");
+		checkSelected(assert, oContextA1, true, "'A1' still selected");
+
+		this.expectChange("selectionCount", "0")
+			.expectChange("isSelected", [, false]);
+
+		// code under test (SNOW: DINC0463228)
+		oContextA1.setSelected(false);
+
+		await this.waitForChanges(assert, "deselect 'A1'");
+
+		this.expectChange("selectionCount", "1")
+			.expectChange("isSelected", [, true]);
+
+		// code under test (SNOW: DINC0463228)
+		oContextA1.setSelected(true);
+
+		await this.waitForChanges(assert, "select 'A1' again");
+
+		this.expectChange("isSelected", [, undefined])
+			.expectChange("isExpanded", [false, false, false])
+			.expectChange("isTotal", [, true, true])
+			.expectChange("level", [, 1, 1])
+			.expectChange("country", [, "B", "C"])
+			.expectChange("region", [, null, null])
+			.expectChange("salesNumber", [, "200", "300"]);
+
+		// Note: while #requestRefresh does not keep the tree state and thus implicitly collapses,
+		// this still poses some addt'l complication w.r.t. _AC#isSelectionDifferent
+		oContextA.collapse();
+
+		await this.waitForChanges(assert, "collapse 'A' again");
+
+		this.expectChange("salesNumber", ["101", "202", "303"]);
+		if (bCount) {
+			this.expectChange("count", "321");
+		}
+
+		const aNewCountries = [
+			{Country : "A", SalesNumber : 101},
+			{Country : "B", SalesNumber : 202},
+			{Country : "C", SalesNumber : 303}
+		];
+		this.expectRequest(sCountryUrl, bCount ? {
+				value : [
+					{UI5__leaves : "321"}, // "side effect"
+					{UI5__count : "23"}, // "side effect"
+					...aNewCountries
+				]
+			} : {
+				"@odata.count" : "23", // "side effect"
+				value : aNewCountries
+			});
+
+		await Promise.all([
+			// code under test
+			oListBinding.requestRefresh(),
+			this.waitForChanges(assert, "refresh")
+		]);
+
+		assert.ok(oListBinding.getAllCurrentContexts().includes(oContextA1), "still alive");
+		checkSelected(assert, oContextA1, true);
+		assert.deepEqual(oContextA1.getObject(), {
+			"@$ui5.context.isSelected" : true,
+			"@$ui5.node.isTotal" : false,
+			// "@$ui5.node.level": 2, // intentionally missing
+			Country : "A",
+			Region : "A1",
+			SalesNumber : 20 // "last known good"
+		});
+
+		this.expectChange("isExpanded", [true])
+			.expectRequest(sRegionUrl, {
+				"@odata.count" : "2",
+				value : [
+					{Region : "A0", SalesNumber : 70},
+					{Region : "A1", SalesNumber : 31}
+				]
+			})
+			.expectChange("isSelected", [,, true])
+			.expectChange("isExpanded", [, undefined, undefined])
+			.expectChange("isTotal", [, false, false])
+			.expectChange("level", [, 2, 2])
+			.expectChange("country", [, "A", "A"])
+			.expectChange("region", [, "A0", "A1"])
+			.expectChange("salesNumber", [, "70", "31"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A' again after refresh")
+		]);
+
+		assert.strictEqual(oListBinding.getCurrentContexts()[2], oContextA1,
+			"context has been kept alive");
+		checkSelected(assert, oContextA1, true, "'A1' still selected");
+		assert.deepEqual(oContextA1.getObject(), {
+			"@$ui5.context.isSelected" : true,
+			"@$ui5.node.isTotal" : false,
+			"@$ui5.node.level" : 2,
+			Country : "A",
+			Region : "A1",
+			SalesNumber : 31 // updated
+		});
+
+		if (!bCount) {
+			return; // already off
+		}
+
+		this.expectRequest("BusinessPartners?$apply=concat(aggregate(SalesNumber)"
+				+ ",groupby((Country),aggregate(SalesNumber))"
+					+ "/concat(aggregate($count as UI5__count),top(2)))", {
+				value : [
+					{SalesNumber : 1234},
+					{UI5__count : "26"},
+					{Country : "A", SalesNumber : 100},
+					{Country : "B", SalesNumber : 200}
+				]
+			})
+			.expectChange("count", null)
+			.expectChange("isSelected", [,, undefined])
+			.expectChange("isExpanded", [, false, false])
+			.expectChange("isTotal", [, true, true])
+			.expectChange("level", [0, 1, 1])
+			.expectChange("country", [null,, "B"])
+			.expectChange("region", [, null, null])
+			.expectChange("salesNumber", ["1,234", "100", "200"]);
+		this.oLogMock.expects("error").withExactArgs("Failed to drill-down into $count, "
+			+ "invalid segment: $count",
+			oListBinding.getDownloadUrl(),
+			"sap.ui.model.odata.v4.lib._Cache");
+
+		oListBinding.suspend();
+		// code under test
+		oListBinding.changeParameters({$count : false});
+		const oAggregation = oListBinding.getAggregation();
+		oAggregation.aggregate.SalesNumber.grandTotal = true;
+		// code under test
+		oListBinding.setAggregation(oAggregation);
+
+		await Promise.all([
+			oListBinding.resumeAsync(),
+			this.waitForChanges(assert, "turn off leaf count, turn on grand total")
+		]);
+	});
+});
+
+	//*********************************************************************************************
+	// Scenario: A table with aggregation and visual grouping where a leaf is selected and thus
+	// kept alive, even when its parent is collapsed/expanded and the binding is refreshed. Do it
+	// with and without a leaf count, but always with a grand total. See that sorting also works
+	// fine (same should hold for filter/search). In the end, turn on leaf count and turn off grand
+	// total; this resets the cache due to the kept-alive element and must work fine.
+	// JIRA: CPOUI5ODATAV4-2969
+	// SNOW: DINC0463228
+[false, true].forEach((bCount) => {
+	const sTitle = "Data Aggregation: keep alive via selection; grand total; leaf count=" + bCount;
+
+	QUnit.test(sTitle, async function (assert) {
+		const oModel = this.createAggregationModel();
+		const sView = `
+<Text id="count" text="{$count}"/>
+<Text id="selectionCount" text="{$selectionCount}"/>
+<t:Table id="table" threshold="0" visibleRowCount="3"
+	rows="{path : '/BusinessPartners',
+		parameters : {
+			$$aggregation : {
+				aggregate : {
+					SalesNumber : {grandTotal : true, subtotals : true}
+				},
+				groupLevels : ['Country', 'Region']
+			},
+			$count : ${bCount}
+		}}">
+	<Text id="isSelected" text="{= %{@$ui5.context.isSelected} }"/>
+	<Text id="isExpanded" text="{= %{@$ui5.node.isExpanded} }"/>
+	<Text id="isTotal" text="{= %{@$ui5.node.isTotal} }"/>
+	<Text id="level" text="{= %{@$ui5.node.level} }"/>
+	<Text id="country" text="{Country}"/>
+	<Text id="region" text="{Region}"/>
+	<Text id="salesNumber" text="{SalesNumber}"/>
+</t:Table>`;
+		const sCountryUrl = bCount
+			? "BusinessPartners?$apply=concat("
+				+ "groupby((Country,Region))/aggregate($count as UI5__leaves)"
+				+ ",aggregate(SalesNumber)"
+				+ ",groupby((Country),aggregate(SalesNumber))"
+					+ "/concat(aggregate($count as UI5__count),top(2)))"
+			: "BusinessPartners?$apply=concat(aggregate(SalesNumber)"
+				+ ",groupby((Country),aggregate(SalesNumber))"
+					+ "/concat(aggregate($count as UI5__count),top(2)))";
+		const oResponse = {
+			value : [
+				{SalesNumber : 1234},
+				{UI5__count : "26"},
+				{Country : "A", SalesNumber : 100},
+				{Country : "B", SalesNumber : 200}
+			]
+		};
+		if (bCount) {
+			oResponse.value.unshift({UI5__leaves : "123"});
+		}
+		this.expectChange("count")
+			.expectChange("selectionCount")
+			.expectRequest(sCountryUrl, oResponse)
+			.expectChange("isSelected", [undefined, undefined, undefined])
+			.expectChange("isExpanded", [true, false, false])
+			.expectChange("isTotal", [true, true, true])
+			.expectChange("level", [0, 1, 1])
+			.expectChange("country", [null, "A", "B"])
+			.expectChange("region", [null, null, null])
+			.expectChange("salesNumber", ["1,234", "100", "200"]);
+
+		await this.createView(assert, sView, oModel);
+
+		const oListBinding = this.oView.byId("table").getBinding("rows");
+		const oContextA = oListBinding.getCurrentContexts()[1];
+
+		assert.strictEqual(oListBinding.getDownloadUrl(), "/aggregation/BusinessPartners"
+			+ "?$apply=groupby((Country,Region),aggregate(SalesNumber))");
+
+		if (bCount) {
+			this.expectChange("count", "123");
+			this.oView.byId("count").setBindingContext(oListBinding.getHeaderContext());
+		}
+		this.expectChange("selectionCount", "0");
+		this.oView.byId("selectionCount").setBindingContext(oListBinding.getHeaderContext());
+
+		await this.waitForChanges(assert, "set header context");
+
+		const sRegionUrl = "BusinessPartners"
+			+ "?$apply=filter(Country eq 'A')/groupby((Region),aggregate(SalesNumber))"
+			+ "&$count=true&$skip=0&$top=3";
+		this.expectChange("isExpanded", [, true])
+			.expectRequest(sRegionUrl, {
+				"@odata.count" : "1",
+				value : [
+					{Region : "A1", SalesNumber : 100}
+				]
+			})
+			.expectChange("isExpanded", [,, undefined])
+			.expectChange("isTotal", [,, false])
+			.expectChange("level", [,, 2])
+			.expectChange("country", [,, "A"])
+			.expectChange("region", [,, "A1"])
+			.expectChange("salesNumber", [,, "100"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A'")
+		]);
+
+		const oContextA1 = oListBinding.getCurrentContexts()[2];
+		this.expectChange("selectionCount", "1")
+			.expectChange("isSelected", [,, true]);
+
+		// code under test
+		oContextA1.setSelected(true);
+
+		await this.waitForChanges(assert, "select 'A1'");
+
+		this.expectChange("isSelected", [,, undefined])
+			.expectChange("isExpanded", [, false, false])
+			.expectChange("isTotal", [,, true])
+			.expectChange("level", [,, 1])
+			.expectChange("country", [,, "B"])
+			.expectChange("region", [,, null])
+			.expectChange("salesNumber", [,, "200"]);
+
+		oContextA.collapse();
+
+		await this.waitForChanges(assert, "collapse 'A'");
+
+		this.expectChange("isSelected", [,, true])
+			.expectChange("isExpanded", [, true, undefined])
+			.expectChange("isTotal", [,, false])
+			.expectChange("level", [,, 2])
+			.expectChange("country", [,, "A"])
+			.expectChange("region", [,, "A1"])
+			.expectChange("salesNumber", [,, "100"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A' again")
+		]);
+
+		assert.strictEqual(oListBinding.getCurrentContexts()[2], oContextA1,
+			"context has been kept alive");
+		checkSelected(assert, oContextA1, true, "'A1' still selected");
+
+		this.expectChange("selectionCount", "0")
+			.expectChange("isSelected", [,, false]);
+
+		// code under test (SNOW: DINC0463228)
+		oContextA1.setSelected(false);
+
+		await this.waitForChanges(assert, "deselect 'A1'");
+
+		this.expectChange("selectionCount", "1")
+			.expectChange("isSelected", [,, true]);
+
+		// code under test (SNOW: DINC0463228)
+		oContextA1.setSelected(true);
+
+		await this.waitForChanges(assert, "select 'A1' again");
+
+		this.expectChange("isSelected", [,, undefined])
+			.expectChange("isExpanded", [, false, false])
+			.expectChange("isTotal", [,, true])
+			.expectChange("level", [,, 1])
+			.expectChange("country", [,, "B"])
+			.expectChange("region", [,, null])
+			.expectChange("salesNumber", [,, "200"]);
+
+		// Note: while #requestRefresh does not keep the tree state and thus implicitly collapses,
+		// this still poses some addt'l complication w.r.t. _AC#isSelectionDifferent
+		oContextA.collapse();
+
+		await this.waitForChanges(assert, "collapse 'A' again");
+
+		this.expectChange("salesNumber", ["2,345", "101", "202"]);
+		if (bCount) {
+			this.expectChange("count", "321");
+		}
+
+		const oNewResponse = {
+			value : [
+				{SalesNumber : 2345}, // "side effect"
+				{UI5__count : "23"}, // "side effect"
+				{Country : "A", SalesNumber : 101},
+				{Country : "B", SalesNumber : 202}
+			]
+		};
+		if (bCount) {
+			oNewResponse.value.unshift({UI5__leaves : "321"}); // "side effect"
+		}
+		this.expectRequest(sCountryUrl, oNewResponse);
+
+		await Promise.all([
+			// code under test
+			oListBinding.requestRefresh(),
+			this.waitForChanges(assert, "refresh")
+		]);
+
+		this.expectChange("isExpanded", [, true])
+			.expectRequest(sRegionUrl, {
+				"@odata.count" : "1",
+				value : [
+					{Region : "A1", SalesNumber : 101}
+				]
+			})
+			.expectChange("isSelected", [,, true])
+			.expectChange("isExpanded", [,, undefined])
+			.expectChange("isTotal", [,, false])
+			.expectChange("level", [,, 2])
+			.expectChange("country", [,, "A"])
+			.expectChange("region", [,, "A1"])
+			.expectChange("salesNumber", [,, "101"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A' again after refresh")
+		]);
+
+		assert.strictEqual(oListBinding.getCurrentContexts()[2], oContextA1,
+			"context has been kept alive");
+		checkSelected(assert, oContextA1, true, "'A1' still selected");
+
+		const i = sCountryUrl.indexOf("/concat(aggregate($count as UI5__count),top(");
+		const sOrderedCountryUrl
+			= sCountryUrl.slice(0, i) + "/orderby(Country)" + sCountryUrl.slice(i);
+		if (bCount) {
+			this.expectChange("count", "123");
+		}
+		this.expectRequest(sOrderedCountryUrl, oResponse)
+			.expectChange("isSelected", [,, undefined])
+			.expectChange("isExpanded", [, false, false])
+			.expectChange("isTotal", [,, true])
+			.expectChange("level", [,, 1])
+			.expectChange("country", [,, "B"])
+			.expectChange("region", [,, null])
+			.expectChange("salesNumber", ["1,234", "100", "200"]);
+
+		// code under test
+		oListBinding.sort(new Sorter("Country"));
+
+		assert.strictEqual(oListBinding.getDownloadUrl(), "/aggregation/BusinessPartners"
+			+ "?$apply=groupby((Country,Region),aggregate(SalesNumber))/orderby(Country)");
+
+		await this.waitForChanges(assert, "sort");
+
+		assert.ok(oListBinding.getAllCurrentContexts().includes(oContextA1), "still alive");
+		checkSelected(assert, oContextA1, true);
+		assert.deepEqual(oContextA1.getObject(), {
+			"@$ui5.context.isSelected" : true,
+			"@$ui5.node.isTotal" : false,
+			// "@$ui5.node.level": 2, // intentionally missing
+			Country : "A",
+			Region : "A1",
+			SalesNumber : 101
+		});
+
+		this.expectChange("isSelected", [,, true])
+			.expectRequest(sRegionUrl, {
+				"@odata.count" : "1",
+				value : [
+					{Region : "A1", SalesNumber : 101}
+				]
+			})
+			.expectChange("isExpanded", [, true, undefined])
+			.expectChange("isTotal", [,, false])
+			.expectChange("level", [,, 2])
+			.expectChange("country", [,, "A"])
+			.expectChange("region", [,, "A1"])
+			.expectChange("salesNumber", [,, "101"]);
+
+		await Promise.all([
+			oContextA.expand(),
+			this.waitForChanges(assert, "expand 'A' again after sort")
+		]);
+
+		assert.strictEqual(oListBinding.getCurrentContexts()[2], oContextA1,
+			"context has been kept alive");
+		checkSelected(assert, oContextA1, true, "'A1' still selected");
+		assert.deepEqual(oContextA1.getObject(), {
+			"@$ui5.context.isSelected" : true,
+			"@$ui5.node.isTotal" : false,
+			"@$ui5.node.level" : 2,
+			Country : "A",
+			Region : "A1",
+			SalesNumber : 101
+		});
+
+		if (bCount) {
+			return; // already on
+		}
+
+		this.expectRequest("BusinessPartners?$apply=concat("
+				+ "groupby((Country,Region))/aggregate($count as UI5__leaves)"
+				+ ",groupby((Country),aggregate(SalesNumber))/orderby(Country)"
+					+ "/concat(aggregate($count as UI5__count),top(3)))", {
+				value : [
+					{UI5__leaves : "321"},
+					{UI5__count : "26"},
+					{Country : "A", SalesNumber : 100},
+					{Country : "B", SalesNumber : 200},
+					{Country : "C", SalesNumber : 300}
+				]
+			})
+			.expectChange("isSelected", [,, undefined])
+			.expectChange("isExpanded", [false, false, false])
+			.expectChange("isTotal", [,, true])
+			.expectChange("level", [1,, 1])
+			.expectChange("country", ["A", "B", "C"])
+			.expectChange("region", [,, null])
+			.expectChange("salesNumber", ["100", "200", "300"]);
+
+		oListBinding.suspend();
+		// code under test
+		oListBinding.changeParameters({$count : true});
+		const oAggregation = oListBinding.getAggregation();
+		oAggregation.aggregate.SalesNumber.grandTotal = false;
+		// code under test
+		oListBinding.setAggregation(oAggregation);
+
+		await Promise.all([
+			oListBinding.resumeAsync(),
+			this.waitForChanges(assert, "turn on leaf count, turn off grand total")
+		]);
+
+		this.expectChange("count", "321");
+		this.oView.byId("count").setBindingContext(oListBinding.getHeaderContext());
+
+		await this.waitForChanges(assert, "set header context");
+	});
+});
+
+	//*********************************************************************************************
 	// Scenario: Show the single root node of a recursive hierarchy, which happens to be a leaf.
 	// Show that auto-$expand/$select and late property requests work.
 	// JIRA: CPOUI5ODATAV4-1643
 	//
 	// Request various side effects that do not affect the hierarchy (JIRA: CPOUI5ODATAV4-1785).
-	// Check that refresh is not supported (JIRA: CPOUI5ODATAV4-1851).
+	// Check that refresh is not supported (JIRA: CPOUI5ODATAV4-1851)
+	// ...but a side-effects refresh of a single node is supported (SNOW: DINC0538031)
 	// Additionally, ODLB#getDownloadUrl is tested (JIRA: CPOUI5ODATAV4-1920, BCP: 2370011296).
 	// Retrieve "DistanceFromRoot" property path via ODLB#getAggregation (JIRA: CPOUI5ODATAV4-1961).
 	// See that Filter.NONE is not allowed (JIRA: CPOUI5ODATAV4-2321).
@@ -28078,19 +29108,13 @@ sap.ui.define([
 </t:Table>`,
 			that = this;
 
-		this.expectRequest({
-				batchNo : 1,
-				url : "Artists/$count"
-			}, 1)
-			.expectRequest({
-				batchNo : 1,
-				url : "Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
-					+ "HierarchyNodes=$root/Artists,HierarchyQualifier='"
-					+ sHierarchyQualifier + "',NodeProperty='_/NodeID',Levels=1)"
-					+ "&$select=ArtistID,IsActiveEntity,_/DrillState,_/NodeID"
-					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ "&$count=true&$skip=0&$top=3"
-			}, {
+		this.expectRequest("#1 Artists/$count", 1)
+			.expectRequest("#1 Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+				+ "HierarchyNodes=$root/Artists,HierarchyQualifier='"
+				+ sHierarchyQualifier + "',NodeProperty='_/NodeID',Levels=1)"
+				+ "&$select=ArtistID,IsActiveEntity,_/DrillState,_/NodeID"
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "1",
 				value : [{
 					"@odata.etag" : "etag0.0",
@@ -28290,7 +29314,7 @@ sap.ui.define([
 						BestFriend : {
 							ArtistID : "01",
 							IsActiveEntity : true,
-							Name : "Friend #01 (updated)"
+							Name : "Friend #01 (still)"
 						},
 						IsActiveEntity : true,
 						_ : {
@@ -28305,13 +29329,10 @@ sap.ui.define([
 				that.waitForChanges(assert, "side effect: BestFriend/Name for all rows")
 			]);
 		}).then(function () {
-			var sErrorMessage
-				= 'Unexpected structural change: _/NodeID from "0,true" to "-0,true-"';
-
 			checkTable("side effect: BestFriend/Name for all rows", assert, oTable, [
 				"/Artists(ArtistID='0',IsActiveEntity=true)"
 			], [
-				[true, undefined, 1, "Friend #01 (updated)"]
+				[true, undefined, 1, "Friend #01 (still)"]
 			]);
 			assert.strictEqual(oListBinding.getCount(), 1, "count of nodes"); // code under test
 
@@ -28321,15 +29342,57 @@ sap.ui.define([
 			}, new Error("Cannot refresh " + oRoot + " when using data aggregation"));
 
 			that.expectRequest("Artists(ArtistID='0',IsActiveEntity=true)"
-					+ "?$select=ArtistID,IsActiveEntity,Messages,_/NodeID,defaultChannel", {
+					+ "?$select=ArtistID,IsActiveEntity,Messages,defaultChannel"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)", {
 					"@odata.etag" : "etag0.3",
+					ArtistID : "0",
+					BestFriend : {
+						ArtistID : "01",
+						IsActiveEntity : true,
+						Name : "Friend #01 (updated)"
+					},
+					IsActiveEntity : true,
+					Messages : [],
+					defaultChannel : "360"
+				});
+
+			return Promise.all([
+				// code under test (SNOW: DINC0538031)
+				oRoot.requestSideEffects([""]),
+				that.waitForChanges(assert, "side-effects refresh of single node")
+			]);
+		}).then(function () {
+			var sErrorMessage
+				= 'Unexpected structural change: _/NodeID from "0,true" to "-0,true-"';
+
+			assert.deepEqual(oRoot.getObject(), {
+					"@$ui5.context.isSelected" : true,
+					"@$ui5.node.level" : 1,
+					"@odata.etag" : "etag0.3",
+					ArtistID : "0",
+					BestFriend : {
+						ArtistID : "01",
+						IsActiveEntity : true,
+						Name : "Friend #01 (updated)"
+					},
+					IsActiveEntity : true,
+					Messages : [],
+					_ : {
+						NodeID : "0,true"
+					},
+					defaultChannel : "360"
+				}, "NodeID kept");
+
+			that.expectRequest("Artists(ArtistID='0',IsActiveEntity=true)"
+					+ "?$select=ArtistID,IsActiveEntity,Messages,_/NodeID,defaultChannel", {
+					"@odata.etag" : "etag0.4",
 					ArtistID : "0",
 					IsActiveEntity : true,
 					Messages : [],
 					_ : { // in case we get a value, we will happily check it :-)
 						NodeID : "-0,true-"
 					},
-					defaultChannel : "360"
+					defaultChannel : "460"
 				})
 				.expectMessages([{
 					message : sErrorMessage,
@@ -28356,7 +29419,7 @@ sap.ui.define([
 				[true, undefined, 1, "Friend #01 (updated)"]
 			]);
 			assert.strictEqual(oListBinding.getCount(), 1, "count of nodes"); // code under test
-			assert.strictEqual(oRoot.getProperty("defaultChannel"), "260", "360 has been ignored");
+			assert.strictEqual(oRoot.getProperty("defaultChannel"), "360", "460 has been ignored");
 
 			that.expectMessages([]);
 			Messaging.removeAllMessages(); // clean up
@@ -28373,13 +29436,10 @@ sap.ui.define([
 
 			return that.waitForChanges(assert, "keep alive");
 		}).then(function () {
-			that.expectRequest({
-					batchNo : 7,
-					url : "Artists?$select=ArtistID,IsActiveEntity"
-							+ (bKeepAlive ? ",Messages" : "") + ",defaultChannel"
-						+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-						+ "&$filter=ArtistID eq '0' and IsActiveEntity eq true"
-				}, {
+			that.expectRequest("#8 Artists?$select=ArtistID,IsActiveEntity"
+						+ (bKeepAlive ? ",Messages" : "") + ",defaultChannel"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+					+ "&$filter=ArtistID eq '0' and IsActiveEntity eq true", {
 					value : [{
 						"@odata.etag" : "etag0.4",
 						ArtistID : "0",
@@ -28393,19 +29453,13 @@ sap.ui.define([
 						defaultChannel : "460"
 					}]
 				})
-				.expectRequest({
-					batchNo : 7,
-					url : "Artists/$count"
-				}, 3)
-				.expectRequest({
-					batchNo : 7,
-					url : "Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
-						+ "HierarchyNodes=$root/Artists,HierarchyQualifier='"
-						+ sHierarchyQualifier + "',NodeProperty='_/NodeID',Levels=1)"
-						+ "&$select=ArtistID,IsActiveEntity,_/DrillState,_/NodeID"
-						+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-						+ "&$count=true&$skip=0&$top=3"
-				}, {
+				.expectRequest("#8 Artists/$count", 3)
+				.expectRequest("#8 Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+					+ "HierarchyNodes=$root/Artists,HierarchyQualifier='"
+					+ sHierarchyQualifier + "',NodeProperty='_/NodeID',Levels=1)"
+					+ "&$select=ArtistID,IsActiveEntity,_/DrillState,_/NodeID"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+					+ "&$count=true&$skip=0&$top=3", {
 					"@odata.count" : "1",
 					value : [{
 						"@odata.etag" : "etag1.0",
@@ -28564,19 +29618,13 @@ sap.ui.define([
 					defaultChannel : "460"
 				}, "after expand");
 
-			that.expectRequest({
-					batchNo : 12,
-					url : "Artists/$count"
-				}, 3)
-				.expectRequest({
-					batchNo : 12,
-					url : "Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
-						+ "HierarchyNodes=$root/Artists,HierarchyQualifier='" + sHierarchyQualifier
-						+ "',NodeProperty='_/NodeID')&$select=ArtistID,IsActiveEntity"
-						+ ",_/DescendantCount,_/DistanceFromRoot,_/DrillState,_/NodeID"
-						+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-						+ "&$count=true&$skip=0&$top=3"
-				}, {
+			that.expectRequest("#13 Artists/$count", 3)
+				.expectRequest("#13 Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+					+ "HierarchyNodes=$root/Artists,HierarchyQualifier='" + sHierarchyQualifier
+					+ "',NodeProperty='_/NodeID')&$select=ArtistID,IsActiveEntity"
+					+ ",_/DescendantCount,_/DistanceFromRoot,_/DrillState,_/NodeID"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+					+ "&$count=true&$skip=0&$top=3", {
 					"@odata.count" : "3",
 					value : [{
 						"@odata.etag" : "etag1.1",
@@ -28664,9 +29712,13 @@ sap.ui.define([
 			// code under test (BCP: 2370045709)
 			oListBinding.changeParameters({
 				$$aggregation : {
-					expandTo : Number.MAX_SAFE_INTEGER,
+					expandTo : 1E16, // synonym for Number.MAX_SAFE_INTEGER
 					hierarchyQualifier : sHierarchyQualifier
 				}
+			});
+			assert.deepEqual(oListBinding.getAggregation(), {
+				expandTo : Number.MAX_SAFE_INTEGER, // #changeParameters has been ignored
+				hierarchyQualifier : sHierarchyQualifier
 			});
 			assert.strictEqual(oListBinding.getAggregation().expandTo, Number.MAX_SAFE_INTEGER);
 			// code under test
@@ -28855,15 +29907,12 @@ sap.ui.define([
 		checkSelected(assert, oNode0, true);
 		checkSelected(assert, oNode1, true);
 
-		this.expectRequest({ // ODLB#validateSelection
-				batchNo : 3,
-				url : "EMPLOYEES?custom=baz&$apply=" + sAncestors
+		this.expectRequest("#3 EMPLOYEES?custom=baz&$apply=" + sAncestors // ODLB#validateSelection
 				+ "/com.sap.vocabularies.Hierarchy.v1.TopLevels("
 				+ "HierarchyNodes=$root/EMPLOYEES,HierarchyQualifier='OrgChart',NodeProperty='ID')"
 				+ "&$filter=" + (sMethod === "requestSideEffects" ? "" : "ID eq 'New' or ")
 				+ "ID eq '0' or ID eq '1'&$select=ID"
-				+ "&$top=" + (sMethod === "requestSideEffects" ? "2" : "3")
-			}, {
+				+ "&$top=" + (sMethod === "requestSideEffects" ? "2" : "3"), {
 				// node "1" has been changed in the meantime and does not match the filter/search
 				// any more -> selection has to be removed
 				value : sMethod === "requestSideEffects"
@@ -28872,12 +29921,10 @@ sap.ui.define([
 			})
 			.expectChange("selected", [,, false]);
 		if (sMethod === "refresh" || sMethod === "requestSideEffects") {
-			this.expectRequest({ // ODLB#refreshKeptElements via "refresh"
-					batchNo : 3,
-					url : "EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&"
+			// ODLB#refreshKeptElements via "refresh"
+			this.expectRequest("#3 EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&"
 					+ "$filter=ID eq '0' or ID eq '1' or ID eq 'New'"
-					+ "&custom=baz&$select=ID&$top=3"
-				}, {
+					+ "&custom=baz&$select=ID&$top=3", {
 					value : [
 						{EMPLOYEE_2_MANAGER : /*not relevant*/null, ID : "New"},
 						{EMPLOYEE_2_MANAGER : null, ID : "0"},
@@ -28891,16 +29938,11 @@ sap.ui.define([
 			case "changeParameters": sOrderby = "/orderby(ID)/"; break;
 			default: sOrderby = "/orderby(Name)/";
 		}
-		this.expectRequest({ // count request
-				batchNo : 3,
-				url : "EMPLOYEES/$count?$filter=ID ge '0'&custom=baz&$search=covfefe"
-			}, 2)
-			.expectRequest({ // request for reloading the binding's content
-				batchNo : 3,
-				url : "EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&custom=baz&$apply="
-				+ sAncestors + sOrderby + sTopLevels
-				+ "&$select=DrillState,ID&$count=true&$skip=0&$top=3"
-			}, {
+		this.expectRequest("#3 EMPLOYEES/$count?$filter=ID ge '0'&custom=baz&$search=covfefe", 2)
+			// request for reloading the binding's content
+			.expectRequest("#3 EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&custom=baz"
+				+ "&$apply=" + sAncestors + sOrderby + sTopLevels
+				+ "&$select=DrillState,ID&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "2",
 				value : [
 					{DrillState : "leaf", ID : "New"},
@@ -28908,13 +29950,11 @@ sap.ui.define([
 				]
 			});
 		if (sMethod === "requestSideEffects") {
-			this.expectRequest({ // request for getting the tree state of the new node
-					batchNo : 3,
-					url : "EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&custom=baz&$apply="
-					+ sAncestors + sOrderby + sTopLevels
+			// request for getting the tree state of the new node
+			this.expectRequest("#3 EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&custom=baz"
+					+ "&$apply=" + sAncestors + sOrderby + sTopLevels
 					+ "&$select=DistanceFromRoot,DrillState,ID,LimitedRank&$filter=ID eq 'New'"
-					+ "&$top=1"
-				}, {
+					+ "&$top=1", {
 					value : [{
 						DistanceFromRoot : 0,
 						DrillState : "leaf",
@@ -28922,11 +29962,9 @@ sap.ui.define([
 						LimitedRank : 2
 					}]
 				})
-				.expectRequest({ // request for getting current values of the new node
-					batchNo : 3,
-					url : "EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&custom=baz&"
-					+ "$apply=" + sTopLevels + "&$select=ID&$filter=ID eq 'New'&$top=1"
-				}, {
+				// request for getting current values of the new node
+				.expectRequest("#3 EMPLOYEES?$expand=EMPLOYEE_2_MANAGER($select=TEAM_ID)&custom=baz"
+					+ "&$apply=" + sTopLevels + "&$select=ID&$filter=ID eq 'New'&$top=1", {
 					value : [{ID : "New"}]
 				});
 		}
@@ -29198,6 +30236,10 @@ sap.ui.define([
 	// Ensure that a Return Value Context is created and the structure of the path is same like the
 	// binding parameter
 	// JIRA: CPOUI5ODATAV4-2096
+	//
+	// Check that #setAggregation with an unchanged $$aggregation parameter does not throw due to
+	// pending changes of a kept-alive context.
+	// JIRA: CPOUI5ODATAV4-3054
 	QUnit.test("Recursive Hierarchy: edit w/ currency", function (assert) {
 		var sAction = "com.sap.gateway.default.iwbep.tea_busi.v0001.AcChangeTeamOfEmployee",
 			oChild,
@@ -29206,18 +30248,19 @@ sap.ui.define([
 			oRoot,
 			oRootAmountBinding,
 			oTable,
-			sView = '\
-<FlexBox id="form" binding="{path : \'/TEAMS(\\\'42\\\')\', suspended : true}" />\
-<t:Table id="table" rows="{TEAM_2_EMPLOYEES}" threshold="0" visibleRowCount="2">\
-	<Text text="{= %{@$ui5.node.isExpanded} }"/>\
-	<Text text="{= %{@$ui5.node.level} }"/>\
-	<Text text="{ID}"/>\
-	<Text text="{MANAGER_ID}"/>\
-	<Input value="{SALARY/YEARLY_BONUS_AMOUNT}"/>\
-	<Text text="{SALARY/BONUS_CURR}"/>\
-	<Text text="{TEAM_ID}"/>\
-	<Text text="{EMPLOYEE_2_TEAM/MEMBER_COUNT}"/>\
-</t:Table>',
+			sView = `
+<FlexBox id="form" binding="{path : '/TEAMS(\\\'42\\\')', suspended : true}" />
+<t:Table id="table" rows="{parameters : {$$ownRequest : true}, path : 'TEAM_2_EMPLOYEES'}"
+		threshold="0" visibleRowCount="2">
+	<Text text="{= %{@$ui5.node.isExpanded} }"/>
+	<Text text="{= %{@$ui5.node.level} }"/>
+	<Text text="{ID}"/>
+	<Text text="{MANAGER_ID}"/>
+	<Input value="{SALARY/YEARLY_BONUS_AMOUNT}"/>
+	<Text text="{SALARY/BONUS_CURR}"/>
+	<Text text="{TEAM_ID}"/>
+	<Text text="{EMPLOYEE_2_TEAM/MEMBER_COUNT}"/>
+</t:Table>`,
 			that = this;
 
 		return this.createView(assert, sView, oModel).then(function () {
@@ -29422,6 +30465,13 @@ sap.ui.define([
 				[true, 1, "0", "", "23.23", "GBP", "23", "10"],
 				[undefined, 2, "1", "0", "42.42", "USD", "42", "10"]
 			]);
+
+			oRoot.setKeepAlive(true);
+			oRoot.setProperty("SALARY/YEARLY_BONUS_AMOUNT", "4567", "doNotSubmit");
+			// code under test
+			oRoot.getBinding().setAggregation({hierarchyQualifier : "OrgChart"});
+
+			return that.waitForChanges(assert, "no changes expected!");
 		});
 	});
 
@@ -29498,14 +30548,8 @@ sap.ui.define([
 		//   4 Mu
 		//   5 Xi
 		// 9 Aleph (created later)
-		this.expectRequest({
-				batchNo : 1,
-				url : "EMPLOYEES/$count"
-			}, 24)
-			.expectRequest({
-				batchNo : 1,
-				url : sTopLevelsSelectUrl + "&$count=true&$skip=1&$top=3"
-			}, {
+		this.expectRequest("#1 EMPLOYEES/$count", 24)
+			.expectRequest("#1 " + sTopLevelsSelectUrl + "&$count=true&$skip=1&$top=3", {
 				"@odata.count" : "6",
 				value : [{
 					AGE : 55,
@@ -29643,10 +30687,7 @@ sap.ui.define([
 					url : "EMPLOYEES('2')",
 					payload : {Name : "κ (Kappa)"}
 				}) // 204 No Content
-				.expectRequest({
-					batchNo : 3,
-					url : "EMPLOYEES('2')?$select=AGE,ID,Name"
-				}, {
+				.expectRequest("#3 EMPLOYEES('2')?$select=AGE,ID,Name", {
 					AGE : 66, // artificial side effect
 					ID : "2",
 					Name : "Kappa: κ"
@@ -29845,19 +30886,13 @@ sap.ui.define([
 					MANAGER_ID : null,
 					Name : "Aleph: ℵ" // side effect
 				})
-				.expectRequest({
-					batchNo : 6,
-					url : "EMPLOYEES?$select=AGE,ID&$filter=ID eq '0'"
-				}, {
+				.expectRequest("#6 EMPLOYEES?$select=AGE,ID&$filter=ID eq '0'", {
 					value : [{
 						AGE : 160,
 						ID : "0"
 					}]
 				})
-				.expectRequest({
-					batchNo : 7,
-					url : sTopLevelsUrl + "&$filter=ID eq '9'&$select=LimitedRank"
-				}, {
+				.expectRequest("#7 " + sTopLevelsUrl + "&$filter=ID eq '9'&$select=LimitedRank", {
 					value : [{
 						LimitedRank : "6" // Edm.Int64
 					}]
@@ -30022,20 +31057,14 @@ sap.ui.define([
 					},
 					url : "EMPLOYEES('9')" + sNextSiblingAction
 				}) // 204 No Content
-				.expectRequest({
-					batchNo : 10,
-					url : sTopLevelsUrl.slice(0, -1) + ",ExpandLevels="
-						+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "0", Levels : 0}])
-						+ ")&$filter=ID eq '9'&$select=LimitedRank"
-				}, {
+				.expectRequest("#10 " + sTopLevelsUrl.slice(0, -1) + ",ExpandLevels="
+					+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "0", Levels : 0}])
+					+ ")&$filter=ID eq '9'&$select=LimitedRank", {
 					value : [{
 						LimitedRank : "0" // Edm.Int64
 					}]
 				})
-				.expectRequest({
-					batchNo : 10,
-					url : "EMPLOYEES?$select=AGE,ID,MANAGER_ID,Name&$filter=ID eq '9'"
-				}, {
+				.expectRequest("#10 EMPLOYEES?$select=AGE,ID,MANAGER_ID,Name&$filter=ID eq '9'", {
 					value : [{ // this response has no real effect, the one below wins!
 						AGE : -1, // no effect
 						ID : "9",
@@ -30043,16 +31072,10 @@ sap.ui.define([
 						Name : "copy of Aleph w/ no effect"
 					}]
 				})
-				.expectRequest({
-					batchNo : 10,
-					url : "EMPLOYEES/$count"
-				}, 24 + 1)
-				.expectRequest({
-					batchNo : 10,
-					url : sTopLevelsUrl.slice(0, -1) + ",ExpandLevels="
+				.expectRequest("#10 EMPLOYEES/$count", 24 + 1)
+				.expectRequest("#10 " + sTopLevelsUrl.slice(0, -1) + ",ExpandLevels="
 						+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "0", Levels : 0}])
-						+ ")" + sSelect + "&$count=true&$skip=0&$top=3"
-				}, {
+						+ ")" + sSelect + "&$count=true&$skip=0&$top=3", {
 					"@odata.count" : "2",
 					value : [{
 						AGE : 299, // side effect
@@ -30111,12 +31134,9 @@ sap.ui.define([
 					MANAGER_ID : null,
 					Name : "Beth, not Beta" // side effect
 				})
-				.expectRequest({
-					batchNo : 12,
-					url : sTopLevelsUrl.slice(0, -1) + ",ExpandLevels="
-						+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "0", Levels : 0}])
-						+ ")&$filter=ID eq '10'&$select=LimitedRank"
-				}, {
+				.expectRequest("#12 " + sTopLevelsUrl.slice(0, -1) + ",ExpandLevels="
+					+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "0", Levels : 0}])
+					+ ")&$filter=ID eq '10'&$select=LimitedRank", {
 					value : [{ // in between Aleph and Alpha
 						LimitedRank : "1" // Edm.Int64
 					}]
@@ -30273,18 +31293,13 @@ sap.ui.define([
 					NextSibling : {ID : "1"}
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 5,
-				url : sBaseUrl + "&$filter=ID eq '2'&$select=LimitedRank"
-			}, {
+			.expectRequest("#5 " + sBaseUrl + "&$filter=ID eq '2'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "1" // now in place
 				}]
 			})
-			.expectRequest({ // side-effects refresh
-				batchNo : 5,
-				url : sBaseUrl + sSelect + "&$count=true&$skip=0&$top=1"
-			}, {
+			// side-effects refresh
+			.expectRequest("#5 " + sBaseUrl + sSelect + "&$count=true&$skip=0&$top=1", {
 				"@odata.count" : "3",
 				value : [{
 					DescendantCount : "2",
@@ -30533,8 +31548,10 @@ sap.ui.define([
 	//
 	// Use a filter with spaces (BCP: 2380032202).
 	// Check prefetch for expand (JIRA: CPOUI5ODATAV4-2432)
+	// Side-effects refresh of single root node early on (SNOW: DINC0538031)
 	QUnit.test("Recursive Hierarchy: expand root, w/ filter, search & orderby", function (assert) {
 		var oModel = this.createTeaBusiModel123({autoExpandSelect : true, groupId : "$direct"}),
+			oRoot,
 			oTable,
 			sView = '\
 <Text id="count" text="{$count}"/>\
@@ -30594,7 +31611,53 @@ sap.ui.define([
 
 			return that.waitForChanges(assert, "$count");
 		}).then(function () {
-			var oRoot = oTable.getRows()[0].getBindingContext();
+			oRoot = oTable.getRows()[0].getBindingContext();
+			assert.deepEqual(oRoot.getObject(), {
+				"@$ui5.node.isExpanded" : false,
+				"@$ui5.node.level" : 1,
+				ID : "0"
+			});
+
+			that.expectRequest("EMPLOYEES('0')?sap-client=123"
+					+ "&$select=__CT__FAKE__Message/__FAKE__Messages", {
+					// special handling due to side-effect
+					__CT__FAKE__Message : {
+						__FAKE__Messages : [{
+							code : "1",
+							message : "Text after refresh",
+							numericSeverity : 3,
+							target : "ID",
+							transition : false
+						}]
+					}
+				})
+				.expectMessages([{
+					code : "1",
+					message : "Text after refresh",
+					target : "/EMPLOYEES('0')/ID",
+					type : "Warning"
+				}]);
+
+			return Promise.all([
+				// code under test (SNOW: DINC0538031)
+				oRoot.requestSideEffects([""]),
+				that.waitForChanges(assert, "side-effects refresh of single node")
+			]);
+		}).then(function () {
+			assert.deepEqual(oRoot.getObject(), {
+				"@$ui5.node.isExpanded" : false,
+				"@$ui5.node.level" : 1,
+				ID : "0",
+				__CT__FAKE__Message : {
+					__FAKE__Messages : [{
+						code : "1",
+						message : "Text after refresh",
+						numericSeverity : 3,
+						target : "ID",
+						transition : false
+					}]
+				}
+			}, "unchanged, except for messages");
 
 			that.expectRequest("EMPLOYEES?sap-client=123"
 					+ "&$apply=ancestors($root/EMPLOYEES,OrgChart,ID"
@@ -30843,10 +31906,7 @@ sap.ui.define([
 					MANAGER_ID : null,
 					Name : "Beth, not Beta" // side effect
 				})
-				.expectRequest({
-					batchNo : 5,
-					url : sTopLevelsUrl + "&$filter=ID eq 'B'&$select=LimitedRank"
-				}, {
+				.expectRequest("#5 " + sTopLevelsUrl + "&$filter=ID eq 'B'&$select=LimitedRank", {
 					value : [{
 						LimitedRank : "0" // Edm.Int64
 					}]
@@ -30903,8 +31963,7 @@ sap.ui.define([
 				[undefined, 1, "9", "", "Aleph", 169]
 			]);
 
-			that.expectRequest({batchNo : 7,
-					url : sTopLevelsSelectUrl + "&$skip=2&$top=1"}, {
+			that.expectRequest("#7 " + sTopLevelsSelectUrl + "&$skip=2&$top=1", {
 					value : [{
 						AGE : 155,
 						DescendantCount : "2",
@@ -30915,8 +31974,7 @@ sap.ui.define([
 						Name : "Beta"
 					}]
 				})
-				.expectRequest({batchNo : 7,
-					url : sTopLevelsSelectUrl + "&$skip=5&$top=2"}, {
+				.expectRequest("#7 " + sTopLevelsSelectUrl + "&$skip=5&$top=2", {
 					value : [{
 						AGE : 156,
 						DescendantCount : "0",
@@ -30971,10 +32029,7 @@ sap.ui.define([
 					MANAGER_ID : "0", // side effect
 					Name : "Gimel" // side effect
 				})
-				.expectRequest({
-					batchNo : 9,
-					url : sTopLevelsUrl + "&$filter=ID eq 'C'&$select=LimitedRank"
-				}, {
+				.expectRequest("#9 " + sTopLevelsUrl + "&$filter=ID eq 'C'&$select=LimitedRank", {
 					value : [{
 						LimitedRank : "5" // Edm.Int64
 					}]
@@ -32472,6 +33527,11 @@ sap.ui.define([
 	// * Delete Beta again. See that Alpha becomes a leaf.
 	// JIRA: CPOUI5ODATAV4-2224
 	// JIRA: CPOUI5ODATAV4-2345
+	//
+	// ODLB#getCount, provide updated $count after deleting nodes (JIRA: CPOUI5ODATAV4-3049)
+	// If a $batch with DELETE fails, the count is unchanged (JIRA: CPOUI5ODATAV4-3066)
+	// Wait for pending count promise with requestProperty("$count") (JIRA: CPOUI5ODATAV4-3067)
+	// Combine delete with a side-effects refresh in one $batch (JIRA: CPOUI5ODATAV4-3070)
 [false, true].forEach(function (bExpanded) {
 	const sState = bExpanded ? "expanded" : "collapsed";
 	QUnit.test(`Recursive Hierarchy: delete single ${sState} child`, async function (assert) {
@@ -32483,7 +33543,8 @@ sap.ui.define([
 		parameters : {
 			$$aggregation : {
 				hierarchyQualifier : 'OrgChart'
-			}
+			},
+			$count : true
 		}}">
 	<Text id="expanded" text="{= %{@$ui5.node.isExpanded} }"/>
 	<Text text="{= %{@$ui5.node.level} }"/>
@@ -32522,7 +33583,8 @@ sap.ui.define([
 		//   1 Beta (deleted while Gamma is loaded)
 		//     2 Gamma (allows expanding Beta)
 		// 3 Delta (only helps with the eventing)
-		this.expectRequest("EMPLOYEES?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
+		this.expectRequest("EMPLOYEES/$count", 4)
+			.expectRequest("EMPLOYEES?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
 				+ "(HierarchyNodes=$root/EMPLOYEES,HierarchyQualifier='OrgChart',NodeProperty='ID'"
 				+ ",Levels=1)"
 				+ "&$select=DrillState,ID,MANAGER_ID,Name&$count=true&$skip=0&$top=100", {
@@ -32544,6 +33606,12 @@ sap.ui.define([
 
 		await this.createView(assert, sView, oModel);
 
+		oTable = this.oView.byId("table");
+		const oListBinding = oTable.getBinding("items");
+
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oListBinding.getCount(), 4);
+
 		this.expectRequest("EMPLOYEES"
 				+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '0'),1)"
 				+ "&$select=DrillState,ID,MANAGER_ID,Name&$count=true&$skip=0&$top=100", {
@@ -32557,8 +33625,6 @@ sap.ui.define([
 			})
 			.expectChange("expanded", [true,, false])
 			.expectChange("name", [, "Beta", "Delta"]);
-
-		oTable = this.oView.byId("table");
 
 		await Promise.all([
 			oTable.getItems()[0].getBindingContext().expand(),
@@ -32599,8 +33665,11 @@ sap.ui.define([
 			expectTable("after collapse", false);
 		}
 
+		const oHeaderContext = oListBinding.getHeaderContext();
+
 		this.oLogMock.expects("error").withArgs("Failed to delete /EMPLOYEES('1')");
-		this.expectRequest("DELETE EMPLOYEES('1')", createErrorInsideBatch())
+		this.expectRequest("#4 DELETE EMPLOYEES('1')", createErrorInsideBatch())
+			.expectRequest("#4 EMPLOYEES/$count") // no response required
 			.expectMessages([{
 				code : "CODE",
 				message : "Request intentionally failed",
@@ -32611,37 +33680,89 @@ sap.ui.define([
 
 		await Promise.all([
 			// code under test
-			oBeta.delete().then(mustFail(assert), function (_oError) {}),
+			oBeta.delete().then(mustFail(assert), function () {}),
+			// code under test (JIRA: CPOUI5ODATAV4-3067)
+			oHeaderContext.requestProperty("$count").then(function (iResult) {
+				assert.strictEqual(iResult, 4);
+			}),
 			this.waitForChanges(assert, "failing to delete Beta")
 		]);
 
 		expectTable("after failed delete", bExpanded);
+		// code under test (JIRA: CPOUI5ODATAV4-3066)
+		assert.strictEqual(oListBinding.getCount(), 4);
 
 		if (bExpanded) {
 			this.expectChange("expanded", [, false]); // Beta is collapsed before being deleted
 		}
-		this.expectRequest("DELETE EMPLOYEES('1')")
+		this.expectRequest("#5 DELETE EMPLOYEES('1')")
+			.expectRequest("#5 EMPLOYEES/$count",
+				42) // dummy to show #getCount takes its value from here
 			.expectChange("expanded", [undefined]) // Alpha is now a leaf
 			.expectChange("name", [, "Delta"]);
 
 		await Promise.all([
 			oBeta.delete(), // code under test
+			// code under test (JIRA: CPOUI5ODATAV4-3067)
+			oHeaderContext.requestProperty("$count").then(function (iResult) {
+				assert.strictEqual(iResult, 42);
+			}),
 			this.waitForChanges(assert, "delete Beta")
 		]);
 
-		checkTable("after delete", assert, oTable, [
+		checkTable("after delete Beta", assert, oTable, [
 			"/EMPLOYEES('0')",
 			"/EMPLOYEES('3')"
 		], [
 			[undefined, 1, "0", "", "Alpha"], // now a leaf
 			[false, 1, "3", "", "Delta"]
-		], 2);
+		]);
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oListBinding.getCount(), 42);
+
+		const oDelta = oListBinding.getAllCurrentContexts()[1];
+
+		this.expectRequest("#6 DELETE EMPLOYEES('3')")
+			.expectRequest("#6 EMPLOYEES/$count", 1)
+			.expectRequest("#6 EMPLOYEES?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
+				+ "(HierarchyNodes=$root/EMPLOYEES,HierarchyQualifier='OrgChart',NodeProperty='ID'"
+				// TODO: ExpandLevels not needed, see CPOUI5ODATAV4-2550
+				+ ",Levels=1,ExpandLevels=" + JSON.stringify([{NodeID : "0", Levels : 1}]) + ")"
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,MANAGER_ID,Name"
+				+ "&$count=true&$skip=0&$top=100", {
+				"@odata.count" : "1",
+				value : [{
+					DescendantCount : "0",
+					DistanceFromRoot : "0",
+					DrillState : "leaf",
+					ID : "0",
+					MANAGER_ID : null,
+					Name : "Alpha"
+				}]
+			});
+
+		await Promise.all([
+			// code under test (JIRA: CPOUI5ODATAV4-3070)
+			oDelta.delete(),
+			oListBinding.getHeaderContext().requestSideEffects([""]),
+			this.waitForChanges(assert, "delete Delta")
+		]);
+
+		checkTable("after delete Delta", assert, oTable, [
+			"/EMPLOYEES('0')"
+		], [
+			[undefined, 1, "0", "", "Alpha"]
+		]);
 	});
 });
 
 	//*********************************************************************************************
 	// Scenario: Delete multiple nodes in a recursive hierarchy
 	// JIRA: CPOUI5ODATAV4-2302
+	//
+	// ODLB#getCount, provide updated $count after deleting nodes (JIRA: CPOUI5ODATAV4-3049)
+	// If a $batch with multiple DELETE fails, the count is unchanged (JIRA: CPOUI5ODATAV4-3066)
+	// Only one $count request for multiple deletes in one $batch (JIRA: CPOUI5ODATAV4-3065)
 	QUnit.test("Recursive Hierarchy: delete multiple nodes", async function (assert) {
 		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
 		const sView = `
@@ -32649,7 +33770,8 @@ sap.ui.define([
 		parameters : {
 			$$aggregation : {
 				hierarchyQualifier : 'OrgChart'
-			}
+			},
+			$count : true
 		}}">
 	<Text text="{= %{@$ui5.node.isExpanded} }"/>
 	<Text text="{= %{@$ui5.node.level} }"/>
@@ -32662,7 +33784,8 @@ sap.ui.define([
 		//   1 Beta (deleted)
 		//   2 Gamma (deleted)
 		//   3 Delta
-		this.expectRequest("EMPLOYEES?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
+		this.expectRequest("EMPLOYEES/$count", 4)
+			.expectRequest("EMPLOYEES?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
 				+ "(HierarchyNodes=$root/EMPLOYEES,HierarchyQualifier='OrgChart',NodeProperty='ID'"
 				+ ",Levels=1)"
 				+ "&$select=DrillState,ID,MANAGER_ID,Name&$count=true&$skip=0&$top=100", {
@@ -32676,6 +33799,12 @@ sap.ui.define([
 			});
 
 		await this.createView(assert, sView, oModel);
+
+		const oTable = this.oView.byId("table");
+		const oListBinding = oTable.getBinding("items");
+
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oListBinding.getCount(), 4);
 
 		this.expectRequest("EMPLOYEES"
 				+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '0'),1)"
@@ -32699,8 +33828,6 @@ sap.ui.define([
 				}]
 			});
 
-		const oTable = this.oView.byId("table");
-
 		await Promise.all([
 			oTable.getItems()[0].getBindingContext().expand(),
 			this.waitForChanges(assert, "expand Alpha")
@@ -32717,14 +33844,39 @@ sap.ui.define([
 			[undefined, 2, "2", "0", "Gamma"],
 			[undefined, 2, "3", "0", "Delta"]
 		]);
+		const [, oBeta, oGamma] = oListBinding.getAllCurrentContexts();
 
-		this.expectRequest("DELETE EMPLOYEES('1')")
-			.expectRequest("DELETE EMPLOYEES('2')");
+		this.oLogMock.expects("error").withArgs("Failed to delete /EMPLOYEES('1')");
+		this.oLogMock.expects("error").withArgs("Failed to delete /EMPLOYEES('2')");
+		this.expectRequest("#3 DELETE EMPLOYEES('1')", createErrorInsideBatch())
+			.expectRequest("#3 DELETE EMPLOYEES('2')") // no response required
+			.expectRequest("#3 EMPLOYEES/$count") // no response required
+			.expectMessages([{
+				code : "CODE",
+				message : "Request intentionally failed",
+				persistent : true,
+				technical : true,
+				type : "Error"
+			}]);
+
+		await Promise.all([
+			// code under test (JIRA: CPOUI5ODATAV4-3066)
+			oBeta.delete().then(mustFail(assert), function () {}),
+			oGamma.delete().then(mustFail(assert), function () {}),
+			this.waitForChanges(assert, "failed to delete Beta and Gamma")
+		]);
+
+		// code under test (JIRA: CPOUI5ODATAV4-3066)
+		assert.strictEqual(oListBinding.getCount(), 4);
+
+		this.expectRequest("#4 DELETE EMPLOYEES('1')")
+			.expectRequest("#4 DELETE EMPLOYEES('2')")
+			.expectRequest("#4 EMPLOYEES/$count", 2);
 
 		await Promise.all([
 			// code under test
-			oTable.getItems()[1].getBindingContext().delete(),
-			oTable.getItems()[2].getBindingContext().delete(),
+			oBeta.delete(),
+			oGamma.delete(),
 			this.waitForChanges(assert, "delete Beta and Gamma")
 		]);
 
@@ -32735,6 +33887,8 @@ sap.ui.define([
 			[true, 1, "0", "", "Alpha"],
 			[undefined, 2, "3", "0", "Delta"]
 		]);
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oListBinding.getCount(), 2);
 	});
 
 	//*********************************************************************************************
@@ -33506,6 +34660,9 @@ sap.ui.define([
 	// "Select all", deselect a node, collapse its parent. The (effectively kept-alive) node now is
 	// not part of the hierarchy. It still holds its data and is affected by side-effects requests.
 	// JIRA: CPOUI5ODATAV4-2624
+	// Side-effects refresh of single root node (SNOW: DINC0538031)
+	//
+	// Move a parent's single leaf child to the same parent (SNOW: DINC0548859)
 [false, true].forEach(function (bResetViaModel) {
 	const sTitle = `Recursive Hierarchy: create new children, move 'em, model=${bResetViaModel}`;
 	QUnit.test(sTitle, function (assert) {
@@ -33548,10 +34705,10 @@ sap.ui.define([
 				+ "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "1",
 				value : [{
-					"@odata.etag" : "etag0.0",
+					"@odata.etag" : "etag0.old",
 					ArtistID : "0",
 					IsActiveEntity : false,
-					Name : "Alpha",
+					Name : "Alpha (old)",
 					_ : {
 						DescendantCount : "0",
 						DistanceFromRoot : "0",
@@ -33560,13 +34717,17 @@ sap.ui.define([
 					}
 				}]
 			})
-			.expectChange("etag", ["etag0.0"])
-			.expectChange("name", ["Alpha"]);
+			.expectChange("etag", ["etag0.old"])
+			.expectChange("name", ["Alpha (old)"]);
 
 		return this.createView(assert, sView, oModel).then(function () {
 			oTable = that.oView.byId("table");
 			oRoot = oTable.getRows()[0].getBindingContext();
 			oListBinding = oRoot.getBinding();
+			assert.deepEqual(oListBinding.getAggregation(), {
+				expandTo : Number.MAX_SAFE_INTEGER, // normalized
+				hierarchyQualifier : "OrgChart"
+			});
 			assert.throws(function () {
 				// code under test
 				oListBinding.getHeaderContext().move({parent : null});
@@ -33583,9 +34744,28 @@ sap.ui.define([
 			checkTable("root is leaf", assert, oTable, [
 				sFriend + "(ArtistID='0',IsActiveEntity=false)"
 			], [
-				[undefined, undefined, 1, "etag0.0", "Alpha", "0,false"]
+				[undefined, undefined, 1, "etag0.old", "Alpha (old)", "0,false"]
 			]);
 			assert.strictEqual(oRoot.getIndex(), 0);
+			assert.deepEqual(oRoot.getObject("_"), {NodeID : "0,false"});
+
+			that.expectRequest(sFriend.slice(1) + "(ArtistID='0',IsActiveEntity=false)"
+					+ "?$select=ArtistID,IsActiveEntity,Messages,Name", {
+					"@odata.etag" : "etag0.0",
+					ArtistID : "0",
+					IsActiveEntity : false,
+					Messages : [],
+					Name : "Alpha"
+				})
+				.expectChange("etag", ["etag0.0"])
+				.expectChange("name", ["Alpha"]);
+
+			return Promise.all([
+				// code under test (SNOW: DINC0538031)
+				oRoot.requestSideEffects([""]),
+				that.waitForChanges(assert, "side-effects refresh of single node")
+			]);
+		}).then(function () {
 			assert.deepEqual(oRoot.getObject("_"), {NodeID : "0,false"});
 
 			// code under test (JIRA: CPOUI5ODATAV4-2272)
@@ -33656,11 +34836,9 @@ sap.ui.define([
 			]);
 			assert.strictEqual(oBeta.getIndex(), 1);
 
-			that.expectRequest({
-					batchNo : 3,
-					url : sBaseUrl + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+			that.expectRequest("#4 " + sBaseUrl
+					+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -33668,11 +34846,9 @@ sap.ui.define([
 						}
 					}]
 				})
-				.expectRequest({ // no "filter(sendsAutographs)" (SNOW: DINC0087713)
-					batchNo : 3,
-					url : sBaseUrlNoFilter + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-						+ "&$select=_/NodeID"
-				}, {
+				// no "filter(sendsAutographs)" (SNOW: DINC0087713)
+				.expectRequest("#4 " + sBaseUrlNoFilter
+					+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false&$select=_/NodeID", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -33721,7 +34897,7 @@ sap.ui.define([
 			that.expectChange("etag", [, undefined, "etag1.0"])
 				.expectChange("name", [, "Gamma", "Beta: β"])
 				.expectRequest({
-					batchNo : 4,
+					batchNo : 5,
 					method : "POST",
 					url : sFriend.slice(1),
 					payload : {
@@ -33735,11 +34911,9 @@ sap.ui.define([
 					Name : "Gamma: γ", // side effect
 					_ : null // not available w/ RAP for a non-hierarchical request
 				})
-				.expectRequest({
-					batchNo : 5,
-					url : sBaseUrl + "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+				.expectRequest("#6 " + sBaseUrl
+					+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -33747,11 +34921,9 @@ sap.ui.define([
 						}
 					}]
 				})
-				.expectRequest({ // no "filter(sendsAutographs)" (SNOW: DINC0087713)
-					batchNo : 5,
-					url : sBaseUrlNoFilter + "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
-						+ "&$select=_/NodeID"
-				}, {
+				// no "filter(sendsAutographs)" (SNOW: DINC0087713)
+				.expectRequest("#6 " + sBaseUrlNoFilter
+					+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false&$select=_/NodeID", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -33790,7 +34962,7 @@ sap.ui.define([
 			checkCreatedPersisted(assert, oGamma, oGammaCreated);
 
 			that.expectRequest({
-					batchNo : 6,
+					batchNo : 7,
 					headers : {
 						"If-Match" : "etag2.0",
 						Prefer : "return=minimal"
@@ -33801,11 +34973,10 @@ sap.ui.define([
 						"BestFriend@odata.bind" : "Artists(ArtistID='1',IsActiveEntity=false)"
 					}
 				}, null, {ETag : "n/a"}) // 204 No Content
-				.expectRequest({ // side-effects refresh
-					batchNo : 6,
-					url : sBaseUrl + "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+				// side-effects refresh
+				.expectRequest("#7 " + sBaseUrl
+					+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -33813,11 +34984,10 @@ sap.ui.define([
 						}
 					}]
 				})
-				.expectRequest({ // implicitly kept alive by selection
-					batchNo : 6,
-					url : sFriend.slice(1) + "?$filter=ArtistID eq '2' and IsActiveEntity eq false"
-						+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
-				}, {
+				// implicitly kept alive by selection
+				.expectRequest("#7 " + sFriend.slice(1)
+					+ "?$filter=ArtistID eq '2' and IsActiveEntity eq false"
+					+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID", {
 					value : [{
 						"@odata.etag" : "etag2.1*",
 						ArtistID : "2",
@@ -33828,12 +34998,10 @@ sap.ui.define([
 						}
 					}]
 				})
-				.expectRequest({ // side-effects refresh
-					batchNo : 6,
-					url : sBaseUrl + "&$select=ArtistID,IsActiveEntity,Name"
-						+ ",_/DescendantCount,_/DistanceFromRoot,_/DrillState,_/NodeID"
-						+ "&$count=true&$skip=0&$top=3"
-				}, {
+				// side-effects refresh
+				.expectRequest("#7 " + sBaseUrl + "&$select=ArtistID,IsActiveEntity,Name"
+					+ ",_/DescendantCount,_/DistanceFromRoot,_/DrillState,_/NodeID"
+					+ "&$count=true&$skip=0&$top=3", {
 					"@odata.count" : "3",
 					value : [{
 						"@odata.etag" : "etag0.1",
@@ -33926,7 +35094,7 @@ sap.ui.define([
 			}, new Error("Unsupported parent context: " + oGamma));
 
 			that.expectRequest({
-					batchNo : 7,
+					batchNo : 8,
 					headers : {
 						"If-Match" : "etag2.1",
 						Prefer : "return=minimal"
@@ -33937,11 +35105,9 @@ sap.ui.define([
 						"BestFriend@odata.bind" : "Artists(ArtistID='0',IsActiveEntity=false)"
 					}
 				}, null, {ETag : "etag2.2"}) // 204 No Content
-				.expectRequest({
-					batchNo : 7,
-					url : sBaseUrl + "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+				.expectRequest("#8 " + sBaseUrl
+					+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -34266,7 +35432,7 @@ sap.ui.define([
 			]);
 		}).then(function () {
 			that.expectRequest({
-					batchNo : 13,
+					batchNo : 14,
 					headers : {
 						"If-Match" : "etag1.4",
 						Prefer : "return=minimal"
@@ -34277,11 +35443,9 @@ sap.ui.define([
 						"BestFriend@odata.bind" : "Artists(ArtistID='2',IsActiveEntity=false)"
 					}
 				}, null, {ETag : "etag1.5"}) // 204 No Content
-				.expectRequest({
-					batchNo : 13,
-					url : sBaseUrl + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+				.expectRequest("#14 " + sBaseUrl
+					+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -34345,7 +35509,7 @@ sap.ui.define([
 			that.expectChange("etag", [undefined, "etag0.3", "etag2.4"])
 				.expectChange("name", ["Aleph", "Alpha #2", "Gamma #2"])
 				.expectRequest({
-					batchNo : 14,
+					batchNo : 15,
 					method : "POST",
 					url : sFriend.slice(1),
 					payload : {
@@ -34361,11 +35525,9 @@ sap.ui.define([
 				})
 				.expectChange("etag", ["etag9.0"])
 				.expectChange("name", ["Aleph: ℵ"])
-				.expectRequest({
-					batchNo : 15,
-					url : sBaseUrl + "&$filter=ArtistID eq '9' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+				.expectRequest("#16 " + sBaseUrl
+					+ "&$filter=ArtistID eq '9' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -34373,11 +35535,10 @@ sap.ui.define([
 						}
 					}]
 				})
-				.expectRequest({ // no "filter(sendsAutographs)" (SNOW: DINC0087713)
-					batchNo : 15,
-					url : sBaseUrlNoFilter + "&$filter=ArtistID eq '9' and IsActiveEntity eq false"
-						+ "&$select=_/NodeID"
-				}, {
+				// no "filter(sendsAutographs)" (SNOW: DINC0087713)
+				.expectRequest("#16 " + sBaseUrlNoFilter
+					+ "&$filter=ArtistID eq '9' and IsActiveEntity eq false"
+					+ "&$select=_/NodeID", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -34495,7 +35656,7 @@ sap.ui.define([
 			oBeta = oListBinding.getCurrentContexts()[2];
 
 			that.expectRequest({
-					batchNo : 18,
+					batchNo : 19,
 					headers : {
 						"If-Match" : "etag1.6",
 						Prefer : "return=minimal"
@@ -34506,11 +35667,9 @@ sap.ui.define([
 						"BestFriend@odata.bind" : null
 					}
 				}, null, {ETag : "etag1.7"}) // 204 No Content
-				.expectRequest({
-					batchNo : 18,
-					url : sBaseUrl + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-						+ "&$select=_/Limited_Rank"
-				}, {
+				.expectRequest("#19 " + sBaseUrl
+					+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
 					value : [{
 						"@odata.etag" : "n/a",
 						_ : {
@@ -34541,6 +35700,36 @@ sap.ui.define([
 					[undefined, undefined, 2, "etag2.5", "Gamma #3", "2,false"]
 				]);
 		}).then(function () {
+			that.expectRequest({
+					batchNo : 20,
+					headers : {
+						"If-Match" : "etag2.5",
+						Prefer : "return=minimal"
+					},
+					method : "PATCH",
+					url : "Artists(ArtistID='2',IsActiveEntity=false)",
+					payload : {
+						"BestFriend@odata.bind" : "Artists(ArtistID='0',IsActiveEntity=false)"
+					}
+				}, null, {ETag : "etag2.6"}) // 204 No Content
+				.expectRequest("#20 " + sBaseUrl
+					+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false"
+					+ "&$select=_/Limited_Rank", {
+					value : [{
+						"@odata.etag" : "n/a",
+						_ : {
+							Limited_Rank : "2" // no change
+						}
+					}]
+				})
+				.expectChange("etag", [,,, "etag2.6"]);
+
+			return Promise.all([
+				// code under test (SNOW: DINC0548859)
+				oGamma.move({parent : oRoot}),
+				that.waitForChanges(assert, "no real move - 2 (Gamma) to 0 (Alpha)")
+			]);
+		}).then(function () {
 			that.expectChange("etag", ["etag9.1", "etag1.7", "etag0.4"])
 				.expectChange("name", ["Aleph #2", "Beta #3", "Alpha #3"]);
 
@@ -34552,7 +35741,7 @@ sap.ui.define([
 
 			that.expectRequest(sFriend.slice(1) + "(ArtistID='2',IsActiveEntity=false)"
 					+ "?$select=Name,_/NodeID", {
-					"@odata.etag" : "etag2.6",
+					"@odata.etag" : "etag2.7",
 					Name : "Gamma: #4", // "side effect"
 					_ : null // not available w/ RAP for a non-hierarchical request
 				});
@@ -34568,7 +35757,7 @@ sap.ui.define([
 			assert.deepEqual(oGamma.getObject(), {
 				"@$ui5.context.isSelected" : true,
 				"@$ui5.node.level" : 2,
-				"@odata.etag" : "etag2.6",
+				"@odata.etag" : "etag2.7",
 				ArtistID : "2",
 				IsActiveEntity : false,
 				Name : "Gamma: #4",
@@ -34707,25 +35896,19 @@ sap.ui.define([
 				Name : "Aleph",
 				_ : null // not available w/ RAP for a non-hierarchical request
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : sBaseUrl + "&$filter=ArtistID eq '8' and IsActiveEntity eq false"
-					+ "&$select=_/" + sLimitedRank
-			}, {
+			.expectRequest("#3 " + sBaseUrl + "&$filter=ArtistID eq '8' and IsActiveEntity eq false"
+				+ "&$select=_/" + sLimitedRank, {
 				value : [{
 					_ : {
 						[sLimitedRank] : "10" // Edm.Int64
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 3,
-				// no "filter(...)/search(...)" (SNOW: DINC0087713)
-				url : sFriend.slice(1) + "?$apply="
+			// no "filter(...)/search(...)" (SNOW: DINC0087713)
+			.expectRequest("#3 " + sFriend.slice(1) + "?$apply="
 					+ "com.sap.vocabularies.Hierarchy.v1.TopLevels(HierarchyNodes=$root" + sFriend
 					+ ",HierarchyQualifier='" + sHierarchyQualifier + "',NodeProperty='_/NodeID')"
-					+ "&$filter=ArtistID eq '8' and IsActiveEntity eq false&$select=_/NodeID"
-			}, {
+					+ "&$filter=ArtistID eq '8' and IsActiveEntity eq false&$select=_/NodeID", {
 				value : [{
 					_ : {
 						NodeID : "8,false"
@@ -34868,25 +36051,20 @@ sap.ui.define([
 				Name : "New",
 				_ : null // not available w/ RAP for a non-hierarchical request
 			})
-			.expectRequest({
-				batchNo : 7,
-				url : sBaseUrl + "&$filter=ArtistID eq '9' and IsActiveEntity eq false"
-					+ "&$select=_/" + sLimitedRank
-			}, {
+			.expectRequest("#7 " + sBaseUrl
+				+ "&$filter=ArtistID eq '9' and IsActiveEntity eq false"
+				+ "&$select=_/" + sLimitedRank, {
 				value : [{
 					_ : {
 						[sLimitedRank] : "4" // Edm.Int64
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 7,
-				// no "filter(...)/search(...)" (SNOW: DINC0087713)
-				url : sFriend.slice(1) + "?$apply="
-					+ "com.sap.vocabularies.Hierarchy.v1.TopLevels(HierarchyNodes=$root" + sFriend
-					+ ",HierarchyQualifier='" + sHierarchyQualifier + "',NodeProperty='_/NodeID')"
-					+ "&$filter=ArtistID eq '9' and IsActiveEntity eq false&$select=_/NodeID"
-			}, {
+			// no "filter(...)/search(...)" (SNOW: DINC0087713)
+			.expectRequest("#7 " + sFriend.slice(1) + "?$apply="
+				+ "com.sap.vocabularies.Hierarchy.v1.TopLevels(HierarchyNodes=$root" + sFriend
+				+ ",HierarchyQualifier='" + sHierarchyQualifier + "',NodeProperty='_/NodeID')"
+				+ "&$filter=ArtistID eq '9' and IsActiveEntity eq false&$select=_/NodeID", {
 				value : [{
 					_ : {
 						NodeID : "9,false"
@@ -35478,6 +36656,8 @@ sap.ui.define([
 	//
 	// Determine the parent nodes of "Alpha", "Beta", "Kappa", and "Omega".
 	// JIRA: CPOUI5ODATAV4-2323
+	//
+	// Move a parent's single child to the same parent (SNOW: DINC0548859)
 [false, true].forEach((bMoveCollapsed) => {
 	const sTitle = `Recursive Hierarchy: move node w/ children, collapsed=${bMoveCollapsed}`;
 
@@ -35633,10 +36813,8 @@ sap.ui.define([
 						"EMPLOYEE_2_MANAGER@odata.bind" : "EMPLOYEES('9')"
 					}
 				}, createErrorInsideBatch())
-				.expectRequest({
-					batchNo : 2,
-					url : sBaseUrl + "&$filter=ID eq '0'&$select=LimitedRank"
-				}); // no response required
+				.expectRequest("#2 " + sBaseUrl + "&$filter=ID eq '0'&$select=LimitedRank");
+					// no response required
 
 			await Promise.all([
 				oAlpha.move({parent : oOmega}).then(mustFail(assert), function (oError) {
@@ -35809,6 +36987,60 @@ sap.ui.define([
 		assert.strictEqual(oBeta.getParent(), oAlpha, "JIRA: CPOUI5ODATAV4-2323");
 		assert.strictEqual(oAlpha.getParent(), oOmega, "JIRA: CPOUI5ODATAV4-2323");
 		assert.strictEqual(oOmega.getParent(), null, "JIRA: CPOUI5ODATAV4-2323");
+
+		// 9 Omega
+		//   0 Alpha (moved here - where it was before)
+		//     1 Beta
+		//       1.1 Gamma
+		//       2 Kappa
+		//       1.2 Zeta
+		//     3 Lambda
+		this.expectEvents(assert, "sap.ui.model.odata.v4.ODataListBinding: /EMPLOYEES", [
+				[, "change", {reason : "change"}]
+			])
+			.expectRequest({
+				batchNo : bMoveCollapsed ? 4 : 5,
+				headers : {
+					Prefer : "return=minimal"
+				},
+				method : "PATCH",
+				url : "EMPLOYEES('0')",
+				payload : {
+					"EMPLOYEE_2_MANAGER@odata.bind" : "EMPLOYEES('9')"
+				}
+			}) // 204 No Content
+			.expectRequest({
+				batchNo : bMoveCollapsed ? 4 : 5,
+				url : sBaseUrl + "&$filter=ID eq '0'&$select=LimitedRank"
+			}, {
+				value : [{
+					LimitedRank : "1" // Edm.Int64
+				}]
+			});
+
+		await Promise.all([
+			// code under test (SNOW: DINC0548859)
+			oAlpha.move({parent : oOmega}),
+			this.waitForChanges(assert, "no real move - 0 (Alpha) to 9 (Omega)")
+		]);
+
+		checkTable("after no real move - 0 (Alpha) to 9 (Omega)", assert, oTable, [
+			"/EMPLOYEES('9')",
+			"/EMPLOYEES('0')",
+			"/EMPLOYEES('1')",
+			"/EMPLOYEES('1.1')",
+			"/EMPLOYEES('2')",
+			"/EMPLOYEES('1.2')",
+			"/EMPLOYEES('3')"
+		], [
+			[true, 1, "9", "", "Omega", 69],
+			[true, 2, "0", ""/*TODO "9"*/, "Alpha", 60],
+			[true, 3, "1", "0", "Beta", 55],
+			[undefined, 4, "1.1", "1", "Gamma", 41],
+			[undefined, 4, "2", "0"/*TODO "1"*/, "Kappa", 56],
+			[undefined, 4, "1.2", "1", "Zeta", 42],
+			[undefined, 3, "3", "0", "Lambda", 57]
+		]);
 	});
 });
 
@@ -35974,23 +37206,17 @@ sap.ui.define([
 					"EMPLOYEE_2_MANAGER@odata.bind" : "EMPLOYEES('1')"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 3,
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "8", Levels : 0}, {NodeID : "1", Levels : 1}])
-					+ ")&$filter=ID eq '3'&$select=LimitedRank"
-			}, {
+			.expectRequest("#3 " + sBaseUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "8", Levels : 0}, {NodeID : "1", Levels : 1}])
+				+ ")&$filter=ID eq '3'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "3" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "8", Levels : 0}, {NodeID : "1", Levels : 1}])
-					+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
-					+ "&$count=true&$skip=0&$top=10"
-			}, {
+			.expectRequest("#3 " + sBaseUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "8", Levels : 0}, {NodeID : "1", Levels : 1}])
+				+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=10", {
 				"@odata.count" : "7",
 				value : [{
 					DescendantCount : "5",
@@ -36083,23 +37309,17 @@ sap.ui.define([
 					"EMPLOYEE_2_MANAGER@odata.bind" : "EMPLOYEES('8')"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 4,
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}])
-					+ ")&$filter=ID eq '1'&$select=LimitedRank"
-			}, {
+			.expectRequest("#4 " + sBaseUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "1", Levels : 1}])
+				+ ")&$filter=ID eq '1'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "4" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 4,
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}])
-					+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
-					+ "&$count=true&$skip=0&$top=10"
-			}, {
+			.expectRequest("#4 " + sBaseUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "1", Levels : 1}])
+				+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=10", {
 				"@odata.count" : "8",
 				value : [{
 					DescendantCount : "1",
@@ -36203,24 +37423,17 @@ sap.ui.define([
 					"EMPLOYEE_2_MANAGER@odata.bind" : "EMPLOYEES('9')"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 5,
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
-					+ ")&$filter=ID eq '1'&$select=LimitedRank"
-			}, {
+			.expectRequest("#5 " + sBaseUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
+				+ ")&$filter=ID eq '1'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "4" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 5,
-				// Note: Levels=2
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
-					+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
-					+ "&$count=true&$skip=0&$top=10"
-			}, {
+			.expectRequest("#5 " + sBaseUrl.slice(0, -1) + ",ExpandLevels=" // Note: Levels=2
+				+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
+				+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=10", {
 				"@odata.count" : "8",
 				value : [{
 					DescendantCount : "1",
@@ -36337,13 +37550,9 @@ sap.ui.define([
 					"EMPLOYEE_2_MANAGER@odata.bind" : "EMPLOYEES('9')"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 6,
-				// Note: Levels=2
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
-					+ ")&$filter=ID eq '0'&$select=LimitedRank"
-			}, {
+			.expectRequest("#6 " + sBaseUrl.slice(0, -1) + ",ExpandLevels=" // Note: Levels=2
+				+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
+				+ ")&$filter=ID eq '0'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "6" // Edm.Int64
 				}]
@@ -36377,14 +37586,11 @@ sap.ui.define([
 			[undefined, 4, "2", "Epsilon"]
 		]);
 
-		this.expectRequest({
-				batchNo : 7,
-				// Note: Levels=2; Theta properly expanded (again)
-				url : sBaseUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
-					+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
-					+ "&$count=true&$skip=0&$top=10"
-			}, {
+		// Note: Levels=2; Theta properly expanded (again)
+		this.expectRequest("#7 " + sBaseUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "1", Levels : 1}, {NodeID : "9", Levels : 1}])
+				+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=10", {
 				"@odata.count" : "0",
 				value : []
 			});
@@ -36543,18 +37749,12 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('1')"
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '1'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '1'&$select=LimitedRank", {
 						value : [{
 							LimitedRank : "5" // Edm.Int64
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "7",
 						value : [{
 							DescendantCount : "6",
@@ -36647,18 +37847,12 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('3')"
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '3'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '3'&$select=LimitedRank", {
 						value : [{
 							LimitedRank : "2" // Edm.Int64
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "7",
 						value : [{
 							DescendantCount : "6",
@@ -36751,18 +37945,12 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('3.1')"
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank", {
 						value : [{
 							LimitedRank : "2" // Edm.Int64
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "7",
 						value : [{
 							DescendantCount : "6",
@@ -36808,12 +37996,9 @@ sap.ui.define([
 							Name : "Eta"
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl
-							+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
-							+ "&$filter=ID eq '0' or ID eq '3' or ID eq '3.2'&$top=3"
-					}, {
+					.expectRequest("#10 " + sBaseUrl
+						+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
+						+ "&$filter=ID eq '0' or ID eq '3' or ID eq '3.2'&$top=3", {
 						value : [{
 							DescendantCount : "6",
 							DistanceFromRoot : "0",
@@ -36834,23 +38019,17 @@ sap.ui.define([
 							LimitedRank : "6"
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : "EMPLOYEES"
-							+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '0'),1)"
-							+ "&$select=ID,Name&$filter=ID eq '3'&$top=1"
-					}, {
+					.expectRequest("#10 " + "EMPLOYEES"
+						+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '0'),1)"
+						+ "&$select=ID,Name&$filter=ID eq '3'&$top=1", {
 						value : [{
 							ID : "3",
 							Name : "Delta"
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : "EMPLOYEES"
-							+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '3'),1)"
-							+ "&$select=ID,Name&$filter=ID eq '3.2'&$top=1"
-					}, {
+					.expectRequest("#10 " + "EMPLOYEES"
+						+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '3'),1)"
+						+ "&$select=ID,Name&$filter=ID eq '3.2'&$top=1", {
 						value : [{
 							ID : "3.2",
 							Name : "Eta"
@@ -36911,18 +38090,12 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('3.1')"
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank", {
 						value : [{
 							LimitedRank : "5" // Edm.Int64
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "7",
 						value : [{
 							DescendantCount : "4",
@@ -36968,12 +38141,9 @@ sap.ui.define([
 							Name : "Zeta"
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl
-							+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
-							+ "&$filter=ID eq '0' or ID eq '3' or ID eq '3.2'&$top=3"
-					}, {
+					.expectRequest("#10 " + sBaseUrl
+						+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
+						+ "&$filter=ID eq '0' or ID eq '3' or ID eq '3.2'&$top=3", {
 						value : [{
 							DescendantCount : "6",
 							DistanceFromRoot : "0",
@@ -36994,23 +38164,17 @@ sap.ui.define([
 							LimitedRank : "4"
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : "EMPLOYEES"
-							+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '0'),1)"
-							+ "&$select=ID,Name&$filter=ID eq '3'&$top=1"
-					}, {
+					.expectRequest("#10 EMPLOYEES"
+						+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '0'),1)"
+						+ "&$select=ID,Name&$filter=ID eq '3'&$top=1", {
 						value : [{
 							ID : "3",
 							Name : "Delta"
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : "EMPLOYEES"
-							+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '3'),1)"
-							+ "&$select=ID,Name&$filter=ID eq '3.2'&$top=1"
-					}, {
+					.expectRequest("#10 EMPLOYEES"
+						+ "?$apply=descendants($root/EMPLOYEES,OrgChart,ID,filter(ID eq '3'),1)"
+						+ "&$select=ID,Name&$filter=ID eq '3.2'&$top=1", {
 						value : [{
 							ID : "3.2",
 							Name : "Eta"
@@ -37065,18 +38229,12 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('3.1')"
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank", {
 						value : [{
 							LimitedRank : "5" // Edm.Int64
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "7",
 						value : [{
 							DescendantCount : "6",
@@ -37169,16 +38327,10 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('3.1')"
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '3.1'&$select=LimitedRank", {
 						value : [] // filtered out
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "3",
 						value : [{
 							DescendantCount : "2",
@@ -37255,18 +38407,12 @@ sap.ui.define([
 						},
 						url : "EMPLOYEES('1')" + sNextSiblingAction
 					}) // 204 No Content
-					.expectRequest({
-						batchNo : 10,
-						url : sBaseUrl + "&$filter=ID eq '1'&$select=LimitedRank"
-					}, {
+					.expectRequest("#10 " + sBaseUrl + "&$filter=ID eq '1'&$select=LimitedRank", {
 						value : [{
 							LimitedRank : "2" // Edm.Int64
 						}]
 					})
-					.expectRequest({
-						batchNo : 10,
-						url : sReadUrl + "&$count=true&$skip=0&$top=10"
-					}, {
+					.expectRequest("#10 " + sReadUrl + "&$count=true&$skip=0&$top=10", {
 						"@odata.count" : "7",
 						value : [{
 							DescendantCount : "6",
@@ -37422,10 +38568,7 @@ sap.ui.define([
 				},
 				url : "EMPLOYEES('2')"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 2,
-				url : sUrl + "&$filter=ID eq '2'&$select=LimitedRank"
-			}, {
+			.expectRequest("#2 " + sUrl + "&$filter=ID eq '2'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "3"
 				}]
@@ -37434,10 +38577,7 @@ sap.ui.define([
 			// 3 Gamma
 			// 4 Delta
 			// 2 Beta (moved here)
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl + sSelect + "&$skip=2&$top=1"
-			}, {
+			.expectRequest("#3 " + sUrl + sSelect + "&$skip=2&$top=1", {
 				value : [{
 					DescendantCount : "0",
 					DistanceFromRoot : "0",
@@ -37490,6 +38630,8 @@ sap.ui.define([
 	// various nodes and request side effects.
 	// (1) Expand Alpha (1 child Beta)
 	// (2) Request side effects -> Alpha gets a bonus item Delta
+	// (2.8) Request a late property for Beta
+	// (2.9) Side-effects refresh of single node Beta (SNOW: DINC0538031)
 	// (3) Expand Beta (1 child Gamma)
 	// (4) Check getDownloadUrl
 	// (5) Collapse Alpha
@@ -37650,6 +38792,58 @@ sap.ui.define([
 			[false, 2, "2", "Beta"],
 			[undefined, 2, "4", "Delta"]
 		], 4);
+
+		this.expectRequest(sFriend.slice(1) + "(ArtistID='2',IsActiveEntity=false)"
+				+ "?$select=sendsAutographs", {
+					sendsAutographs : true
+			});
+
+		await Promise.all([
+			oBeta.requestProperty("sendsAutographs").then((bSendsAutographs) => {
+				assert.strictEqual(bSendsAutographs, true);
+			}),
+			this.waitForChanges(assert, "(2.8) Request a late property for Beta")
+		]);
+
+		assert.deepEqual(oBeta.getObject(), {
+				"@$ui5.node.isExpanded" : false,
+				"@$ui5.node.level" : 2,
+				ArtistID : "2",
+				IsActiveEntity : false,
+				Name : "Beta",
+				sendsAutographs : true,
+				_ : {
+					NodeID : "2,false"
+				}
+			});
+
+		this.expectRequest(sFriend.slice(1) + "(ArtistID='2',IsActiveEntity=false)"
+				+ "?$select=ArtistID,IsActiveEntity,Messages,Name,sendsAutographs", {
+					ArtistID : "2",
+					IsActiveEntity : false,
+					Messages : [],
+					Name : "Beta",
+					sendsAutographs : false
+			});
+
+		await Promise.all([
+			oBeta.requestSideEffects([""]),
+			this.waitForChanges(assert,
+				"(2.9) Side-effects refresh of single node Beta (SNOW: DINC0538031)")
+		]);
+
+		assert.deepEqual(oBeta.getObject(), {
+				"@$ui5.node.isExpanded" : false,
+				"@$ui5.node.level" : 2,
+				ArtistID : "2",
+				IsActiveEntity : false,
+				Messages : [],
+				Name : "Beta",
+				sendsAutographs : false, // side effect
+				_ : {
+					NodeID : "2,false"
+				}
+			});
 
 		// 1 Alpha
 		//   2 Beta
@@ -38364,6 +39558,8 @@ sap.ui.define([
 	// JIRA: CPOUI5ODATAV4-2454
 	//
 	// Siblings of out-of-place nodes (JIRA: CPOUI5ODATAV4-2652)
+	//
+	// ODLB#getCount, provide updated $count after deleting nodes (JIRA: CPOUI5ODATAV4-3049)
 	QUnit.test("Recursive Hierarchy: out of place", async function (assert) {
 		const oModel = this.createSpecialCasesModel({autoExpandSelect : true});
 		const sFriend = "Artists(ArtistID='99',IsActiveEntity=false)/_Friend";
@@ -38568,14 +39764,11 @@ sap.ui.define([
 		// code under test (JIRA: CPOUI5ODATAV4-2652)
 		checkSiblingOrder(assert, /*in place*/[oBeta], /*out of place*/[oNew1, oNew2, oNew3]);
 
-		this.expectRequest(sCountUrl, 10)
-			.expectRequest({
-				batchNo : 15,
-				url : baseUrl(sExpandLevels)
-					+ "&$select=ArtistID,IsActiveEntity,Name,_/DescendantCount,_/DistanceFromRoot"
-					+ ",_/DrillState,_/NodeID"
-					+ "&$count=true&$skip=0&$top=3"
-			}, {
+		this.expectRequest("#15 " + sCountUrl, 10)
+			.expectRequest("#15 " + baseUrl(sExpandLevels)
+				+ "&$select=ArtistID,IsActiveEntity,Name,_/DescendantCount,_/DistanceFromRoot"
+				+ ",_/DrillState,_/NodeID"
+				+ "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "10",
 				value : [{
 					ArtistID : "1",
@@ -38609,22 +39802,19 @@ sap.ui.define([
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 15,
-				url : baseUrl(sExpandLevels)
-					+ "&$select=ArtistID,IsActiveEntity,_/DescendantCount,_/DistanceFromRoot"
-					+ ",_/DrillState,_/Limited_Rank"
-					+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-					+ " or ArtistID eq '11' and IsActiveEntity eq false"
-					+ " or ArtistID eq '12' and IsActiveEntity eq false"
-					+ " or ArtistID eq '13' and IsActiveEntity eq false"
-					+ " or ArtistID eq '14' and IsActiveEntity eq false"
-					+ " or ArtistID eq '15' and IsActiveEntity eq false"
-					+ " or ArtistID eq '16' and IsActiveEntity eq false"
-					+ " or ArtistID eq '2' and IsActiveEntity eq false"
-					+ " or ArtistID eq '3' and IsActiveEntity eq false"
-					+ "&$top=9"
-			}, {
+			.expectRequest("#15 " + baseUrl(sExpandLevels)
+				+ "&$select=ArtistID,IsActiveEntity,_/DescendantCount,_/DistanceFromRoot"
+				+ ",_/DrillState,_/Limited_Rank"
+				+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
+				+ " or ArtistID eq '11' and IsActiveEntity eq false"
+				+ " or ArtistID eq '12' and IsActiveEntity eq false"
+				+ " or ArtistID eq '13' and IsActiveEntity eq false"
+				+ " or ArtistID eq '14' and IsActiveEntity eq false"
+				+ " or ArtistID eq '15' and IsActiveEntity eq false"
+				+ " or ArtistID eq '16' and IsActiveEntity eq false"
+				+ " or ArtistID eq '2' and IsActiveEntity eq false"
+				+ " or ArtistID eq '3' and IsActiveEntity eq false"
+				+ "&$top=9", {
 				value : [{
 					ArtistID : "1",
 					IsActiveEntity : false,
@@ -38708,16 +39898,13 @@ sap.ui.define([
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 15,
-				url : sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
-					+ ",OrgChart,_/NodeID,filter(ArtistID eq '1' and IsActiveEntity eq false),1)"
-					+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
-					+ "&$filter=ArtistID eq '11' and IsActiveEntity eq false"
-					+ " or ArtistID eq '12' and IsActiveEntity eq false"
-					+ " or ArtistID eq '13' and IsActiveEntity eq false"
-					+ "&$top=3"
-			}, {
+			.expectRequest("#15 " + sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
+				+ ",OrgChart,_/NodeID,filter(ArtistID eq '1' and IsActiveEntity eq false),1)"
+				+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
+				+ "&$filter=ArtistID eq '11' and IsActiveEntity eq false"
+				+ " or ArtistID eq '12' and IsActiveEntity eq false"
+				+ " or ArtistID eq '13' and IsActiveEntity eq false"
+				+ "&$top=3", {
 				value : [{
 					ArtistID : "11",
 					IsActiveEntity : false,
@@ -38741,14 +39928,11 @@ sap.ui.define([
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 15,
-				url : sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
-					+ ",OrgChart,_/NodeID,filter(ArtistID eq '2' and IsActiveEntity eq false),1)"
-					+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
-					+ "&$filter=ArtistID eq '14' and IsActiveEntity eq false"
-					+ "&$top=1"
-			}, {
+			.expectRequest("#15 " + sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
+				+ ",OrgChart,_/NodeID,filter(ArtistID eq '2' and IsActiveEntity eq false),1)"
+				+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
+				+ "&$filter=ArtistID eq '14' and IsActiveEntity eq false"
+				+ "&$top=1", {
 				value : [{
 					ArtistID : "14",
 					IsActiveEntity : false,
@@ -38758,14 +39942,11 @@ sap.ui.define([
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 15,
-				url : sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
-					+ ",OrgChart,_/NodeID,filter(ArtistID eq '3' and IsActiveEntity eq false),1)"
-					+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
-					+ "&$filter=ArtistID eq '15' and IsActiveEntity eq false"
-					+ "&$top=1"
-			}, {
+			.expectRequest("#15 " + sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
+				+ ",OrgChart,_/NodeID,filter(ArtistID eq '3' and IsActiveEntity eq false),1)"
+				+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
+				+ "&$filter=ArtistID eq '15' and IsActiveEntity eq false"
+				+ "&$top=1", {
 				value : [{
 					ArtistID : "15",
 					IsActiveEntity : false,
@@ -38775,14 +39956,11 @@ sap.ui.define([
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 15,
-				url : sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
-					+ ",OrgChart,_/NodeID,filter(ArtistID eq '13' and IsActiveEntity eq false),1)"
-					+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
-					+ "&$filter=ArtistID eq '16' and IsActiveEntity eq false"
-					+ "&$top=1"
-			}, {
+			.expectRequest("#15 " + sFriend + "?custom=foo&$apply=descendants($root/" + sFriend
+				+ ",OrgChart,_/NodeID,filter(ArtistID eq '13' and IsActiveEntity eq false),1)"
+				+ "&$select=ArtistID,IsActiveEntity,Name,_/NodeID"
+				+ "&$filter=ArtistID eq '16' and IsActiveEntity eq false"
+				+ "&$top=1", {
 				value : [{
 					ArtistID : "16",
 					IsActiveEntity : false,
@@ -38861,13 +40039,20 @@ sap.ui.define([
 				[undefined, 1, "4", "Delta*"]
 			]);
 
-		this.expectRequest("DELETE Artists(ArtistID='11',IsActiveEntity=false)");
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oBinding.getCount(), 10);
+
+		this.expectRequest("DELETE Artists(ArtistID='11',IsActiveEntity=false)")
+			.expectRequest(sCountUrl, 42); // dummy to show #getCount takes its value from here
 
 		await Promise.all([
 			// code under test
 			oNew1.delete(),
 			this.waitForChanges(assert, "(5) delete New1")
 		]);
+
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oBinding.getCount(), 42);
 
 		// After deleting New1 & side-effects refresh
 		// Server:                          UI:
@@ -39072,6 +40257,9 @@ sap.ui.define([
 			oBinding.getHeaderContext().requestSideEffects([""]),
 			this.waitForChanges(assert, "(6) side-effects refresh")
 		]);
+
+		// code under test (JIRA: CPOUI5ODATAV4-3049)
+		assert.strictEqual(oBinding.getCount(), 9);
 
 		this.expectRequest(baseUrl(sExpandLevels)
 				+ "&$select=ArtistID,IsActiveEntity,Name,_/DescendantCount,_/DistanceFromRoot"
@@ -39292,6 +40480,7 @@ sap.ui.define([
 		]);
 
 		this.expectRequest("DELETE Artists(ArtistID='1',IsActiveEntity=false)")
+			.expectRequest(sCountUrl, 5)
 			.expectRequest(baseUrl(sExpandLevels)
 				+ "&$select=ArtistID,IsActiveEntity,Name,_/DescendantCount,_/DistanceFromRoot"
 				+ ",_/DrillState,_/NodeID"
@@ -39661,13 +40850,10 @@ sap.ui.define([
 		checkSiblingOrder(assert, /*in place*/[], /*out of place*/[oTheta]);
 		checkSiblingOrder(assert, /*in*/[oAlpha, oBeta, oGamma, oEpsilon], /*out*/[oEta, oZeta]);
 
-		this.expectRequest(sCountUrl, 8)
-			.expectRequest({
-				batchNo : 9,
-				url : sUrlWithExpandLevels
-					+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
-					+ "&$count=true&$skip=0&$top=4"
-			}, {
+		this.expectRequest("#9 " + sCountUrl, 8)
+			.expectRequest("#9 " + sUrlWithExpandLevels
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=4", {
 				"@odata.count" : "7",
 				value : [{
 					DescendantCount : "1",
@@ -39695,12 +40881,9 @@ sap.ui.define([
 					Name : "Gamma*"
 				}]
 			})
-			.expectRequest({
-				batchNo : 9,
-				url : sUrlWithExpandLevels
-					+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
-					+ "&$filter=ID eq '1' or ID eq '6' or ID eq '7' or ID eq '8'&$top=4"
-			}, {
+			.expectRequest("#9 " + sUrlWithExpandLevels
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
+				+ "&$filter=ID eq '1' or ID eq '6' or ID eq '7' or ID eq '8'&$top=4", {
 				value : [{
 					DescendantCount : "1",
 					DistanceFromRoot : "0",
@@ -39727,29 +40910,24 @@ sap.ui.define([
 					LimitedRank : "6"
 				}]
 			})
-			.expectRequest({
-				batchNo : 9,
-				// Important: this request contains no Levels=2 and no ExpandLevels
-				url : "EMPLOYEES?custom=foo&$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
-					+ "(HierarchyNodes=$root/EMPLOYEES,HierarchyQualifier='OrgChart'"
-					+ ",NodeProperty='ID',Levels=1)"
-					+ "&$select=ID,Name"
-					+ "&$filter=ID eq '6' or ID eq '7'&$top=2"
-			}, {
+			// Important: this request contains no Levels=2 and no ExpandLevels
+			.expectRequest("#9 EMPLOYEES?custom=foo"
+				+ "&$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels"
+				+ "(HierarchyNodes=$root/EMPLOYEES,HierarchyQualifier='OrgChart'"
+				+ ",NodeProperty='ID',Levels=1)"
+				+ "&$select=ID,Name"
+				+ "&$filter=ID eq '6' or ID eq '7'&$top=2", {
 				value : [
 					{ID : "6", Name : "Zeta*"},
 					{ID : "7", Name : "Eta*"}
 				]
 			})
-			.expectRequest({
-				batchNo : 9,
-				// Important: this request contains no Levels=2 and no ExpandLevels
-				url : "EMPLOYEES?custom=foo&$apply=descendants($root/EMPLOYEES"
-					+ ",OrgChart,ID,filter(ID eq '1'),1)"
-					+ "&$select=ID,Name"
-					+ "&$filter=ID eq '8'"
-					+ "&$top=1"
-			}, {
+			// Important: this request contains no Levels=2 and no ExpandLevels
+			.expectRequest("#9 EMPLOYEES?custom=foo&$apply=descendants($root/EMPLOYEES"
+				+ ",OrgChart,ID,filter(ID eq '1'),1)"
+				+ "&$select=ID,Name"
+				+ "&$filter=ID eq '8'"
+				+ "&$top=1", {
 				value : [{ID : "8", Name : "Theta*"}]
 			});
 
@@ -40475,21 +41653,15 @@ make root = ${bMakeRoot}`;
 					"BestFriend@odata.bind" : "Artists(ArtistID='3',IsActiveEntity=false)"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 3,
-				url : sBaseUrl + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-					+ "&$select=_/" + sLimitedRank
-			}, {
+			.expectRequest("#3 " + sBaseUrl + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
+				+ "&$select=_/" + sLimitedRank, {
 				value : [{
 					_ : {
 						[sLimitedRank] : "5" // Edm.Int64
 					}
 				}]
 			})
-			.expectRequest({
-				batchNo : 4,
-				url : sReadUrl + "&$skip=7&$top=2"
-			}, {
+			.expectRequest("#4 " + sReadUrl + "&$skip=7&$top=2", {
 				value : [{
 					ArtistID : "1.1.1",
 					IsActiveEntity : false,
@@ -40688,11 +41860,9 @@ make root = ${bMakeRoot}`;
 					"BestFriend@odata.bind" : "Artists(ArtistID='9',IsActiveEntity=false)"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 6,
-				url : sBaseUrl + "&$filter=ArtistID eq '10' and IsActiveEntity eq false"
-					+ "&$select=_/" + sLimitedRank
-			}, {
+			.expectRequest("#6 " + sBaseUrl
+				+ "&$filter=ArtistID eq '10' and IsActiveEntity eq false"
+				+ "&$select=_/" + sLimitedRank, {
 				value : [{
 					_ : { // Note: rank has not changed due to move
 						[sLimitedRank] : "12" // Edm.Int64
@@ -40726,11 +41896,9 @@ make root = ${bMakeRoot}`;
 					"BestFriend@odata.bind" : "Artists(ArtistID='9',IsActiveEntity=false)"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 7,
-				url : sBaseUrl + "&$filter=ArtistID eq '10.1' and IsActiveEntity eq false"
-					+ "&$select=_/" + sLimitedRank
-			}, {
+			.expectRequest("#7 " + sBaseUrl
+				+ "&$filter=ArtistID eq '10.1' and IsActiveEntity eq false"
+				+ "&$select=_/" + sLimitedRank, {
 				value : [{
 					_ : { // Note: rank has not changed due to move
 						[sLimitedRank] : "13" // Edm.Int64
@@ -40778,11 +41946,9 @@ make root = ${bMakeRoot}`;
 					"BestFriend@odata.bind" : "Artists(ArtistID='0',IsActiveEntity=false)"
 				}
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 8,
-				url : sBaseUrl + "&$filter=ArtistID eq '10.1' and IsActiveEntity eq false"
-					+ "&$select=_/" + sLimitedRank
-			}, {
+			.expectRequest("#8 " + sBaseUrl
+				+ "&$filter=ArtistID eq '10.1' and IsActiveEntity eq false"
+				+ "&$select=_/" + sLimitedRank, {
 				value : [{
 					_ : {
 						[sLimitedRank] : "10" // Edm.Int64
@@ -40847,11 +42013,9 @@ make root = ${bMakeRoot}`;
 						"BestFriend@odata.bind" : null
 					}
 				}) // 204 No Content
-				.expectRequest({
-					batchNo : 9,
-					url : sBaseUrl + "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
-						+ "&$select=_/" + sLimitedRank
-				}, {
+				.expectRequest("#9 " + sBaseUrl
+					+ "&$filter=ArtistID eq '1' and IsActiveEntity eq false"
+					+ "&$select=_/" + sLimitedRank, {
 					value : [{
 						_ : { // Note: 0, 8, or 10
 							[sLimitedRank] : "0" // Edm.Int64
@@ -41030,10 +42194,7 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('4')" + sNextSiblingAction
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 2,
-				url : sUrl + "&$filter=ID eq '4'&$select=LimitedRank"
-			}, {
+			.expectRequest("#2 " + sUrl + "&$filter=ID eq '4'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "2"
 				}]
@@ -41043,10 +42204,7 @@ make root = ${bMakeRoot}`;
 			//   4 Delta
 			//   3 Gamma
 			// 5 Epsilon
-			.expectRequest({
-				batchNo : 2,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=4"
-			}, {
+			.expectRequest("#2 " + sUrl + sSelect + "&$count=true&$skip=0&$top=4", {
 				"@odata.count" : "5",
 				value : [{
 					DescendantCount : "3",
@@ -41115,10 +42273,7 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('4')" + sNextSiblingAction
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl + "&$filter=ID eq '4'&$select=LimitedRank"
-			}, {
+			.expectRequest("#3 " + sUrl + "&$filter=ID eq '4'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "4"
 				}]
@@ -41128,10 +42283,7 @@ make root = ${bMakeRoot}`;
 			//   3 Gamma
 			// 5 Epsilon
 			// 4 Delta
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=4"
-			}, {
+			.expectRequest("#3 " + sUrl + sSelect + "&$count=true&$skip=0&$top=4", {
 				"@odata.count" : "5",
 				value : [{
 					DescendantCount : "2",
@@ -41322,12 +42474,9 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('2')" + sNextSiblingAction
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}])
-					+ ")" + "&$filter=ID eq '2'&$select=LimitedRank"
-			}, {
+			.expectRequest("#3 " + sUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "1", Levels : 1}])
+				+ ")" + "&$filter=ID eq '2'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "3"
 				}]
@@ -41336,13 +42485,10 @@ make root = ${bMakeRoot}`;
 			//   3 Gamma
 			// 4 Delta
 			// 2 Beta
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "1", Levels : 1}])
-					+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
-					+ "&$count=true&$skip=0&$top=2"
-			}, {
+			.expectRequest("#3 " + sUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "1", Levels : 1}])
+				+ ")&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=2", {
 				"@odata.count" : "4",
 				value : [{
 					DescendantCount : "1",
@@ -41478,10 +42624,7 @@ make root = ${bMakeRoot}`;
 				ID : "5",
 				Name : "Epsilon"
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl + "&$filter=ID eq '5'&$select=LimitedRank"
-			}, {
+			.expectRequest("#3 " + sUrl + "&$filter=ID eq '5'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "4"
 				}]
@@ -41530,10 +42673,7 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('2')" + sNextSiblingAction
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 4,
-				url : sUrl + "&$filter=ID eq '2'&$select=LimitedRank"
-			}, {
+			.expectRequest("#4 " + sUrl + "&$filter=ID eq '2'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "3"
 				}]
@@ -41543,10 +42683,7 @@ make root = ${bMakeRoot}`;
 			//   4 Delta (loaded now)
 			//   2 Beta (moved here)
 			// 5 Epsilon (created)
-			.expectRequest({
-				batchNo : 4,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=3"
-			}, {
+			.expectRequest("#4 " + sUrl + sSelect + "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "5",
 				value : [{
 					DescendantCount : "3",
@@ -41568,11 +42705,9 @@ make root = ${bMakeRoot}`;
 					Name : "Delta"
 				}]
 			})
-			.expectRequest({
-				batchNo : 4,
-				url : sUrl + "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
-					+ "&$filter=ID eq '5'&$top=1"
-			}, {
+			.expectRequest("#4 " + sUrl
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
+				+ "&$filter=ID eq '5'&$top=1", {
 				value : [{
 					DescendantCount : "0",
 					DistanceFromRoot : "0",
@@ -41581,10 +42716,8 @@ make root = ${bMakeRoot}`;
 					LimitedRank : "4"
 				}]
 			})
-			.expectRequest({
-				batchNo : 4,
-				url : sUrl.slice(0, -1) + ",Levels=1)&$select=ID,Name&$filter=ID eq '5'&$top=1"
-			}, {
+			.expectRequest("#4 " + sUrl.slice(0, -1) + ",Levels=1)&$select=ID,Name"
+				+ "&$filter=ID eq '5'&$top=1", {
 				value : [{
 					ID : "5",
 					Name : "Epsilon"
@@ -41648,10 +42781,7 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('2')"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 6,
-				url : sUrl + "&$filter=ID eq '2'&$select=LimitedRank"
-			}, {
+			.expectRequest("#6 " + sUrl + "&$filter=ID eq '2'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "2"
 				}]
@@ -41698,18 +42828,12 @@ make root = ${bMakeRoot}`;
 				},
 				url : "$-1"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 7,
-				url : sUrl + "&$filter=ID eq '5'&$select=LimitedRank"
-			}, {
+			.expectRequest("#7 " + sUrl + "&$filter=ID eq '5'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "5" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 7,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=3"
-			}, {
+			.expectRequest("#7 " + sUrl + sSelect + "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "6",
 				value : [{
 					DescendantCount : "4",
@@ -41731,12 +42855,9 @@ make root = ${bMakeRoot}`;
 					Name : "Beta"
 				}]
 			})
-			.expectRequest({
-				batchNo : 7,
-				url : sUrl + "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
-					+ "&$filter=ID eq '5'"
-					+ "&$top=1"
-			}, {
+			.expectRequest("#7 " + sUrl
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
+				+ "&$filter=ID eq '5'&$top=1", {
 				value : [{
 					DescendantCount : "0",
 					DistanceFromRoot : "0",
@@ -41745,20 +42866,14 @@ make root = ${bMakeRoot}`;
 					LimitedRank : "5"
 				}]
 			})
-			.expectRequest({
-				batchNo : 7,
-				url : sUrl.slice(0, -1) + ",Levels=1)"
-					+ "&$select=ID,Name&$filter=ID eq '5'&$top=1"
-			}, {
+			.expectRequest("#7 " + sUrl.slice(0, -1) + ",Levels=1)&$select=ID,Name"
+				+ "&$filter=ID eq '5'&$top=1", {
 				value : [{
 					ID : "5",
 					Name : "Epsilon"
 				}]
 			})
-			.expectRequest({
-				batchNo : 8,
-				url : sUrl + "&$filter=ID eq '_6'&$select=LimitedRank"
-			}, {
+			.expectRequest("#8 " + sUrl + "&$filter=ID eq '_6'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "4" // Edm.Int64
 				}]
@@ -41813,18 +42928,12 @@ make root = ${bMakeRoot}`;
 				},
 				url : "$-1"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 9,
-				url : sUrl + "&$filter=ID eq '5'&$select=LimitedRank"
-			}, {
+			.expectRequest("#9 " + sUrl + "&$filter=ID eq '5'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "6" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 9,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=3"
-			}, {
+			.expectRequest("#9 " + sUrl + sSelect + "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "7",
 				value : [{
 					DescendantCount : "4",
@@ -41846,12 +42955,9 @@ make root = ${bMakeRoot}`;
 					Name : "Beta"
 				}]
 			})
-			.expectRequest({
-				batchNo : 9,
-				url : sUrl + "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
-					+ "&$filter=ID eq '5'"
-					+ "&$top=1"
-			}, {
+			.expectRequest("#9 " + sUrl
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,LimitedRank"
+				+ "&$filter=ID eq '5'&$top=1", {
 				value : [{
 					DescendantCount : "0",
 					DistanceFromRoot : "0",
@@ -41860,20 +42966,14 @@ make root = ${bMakeRoot}`;
 					LimitedRank : "6"
 				}]
 			})
-			.expectRequest({
-				batchNo : 9,
-				url : sUrl.slice(0, -1) + ",Levels=1)"
-					+ "&$select=ID,Name&$filter=ID eq '5'&$top=1"
-			}, {
+			.expectRequest("#9 " + sUrl.slice(0, -1) + ",Levels=1)&$select=ID,Name"
+				+ "&$filter=ID eq '5'&$top=1", {
 				value : [{
 					ID : "5",
 					Name : "Epsilon"
 				}]
 			})
-			.expectRequest({
-				batchNo : 10,
-				url : sUrl + "&$filter=ID eq '_7'&$select=LimitedRank"
-			}, {
+			.expectRequest("#10 " + sUrl + "&$filter=ID eq '_7'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "5" // Edm.Int64
 				}]
@@ -41922,18 +43022,12 @@ make root = ${bMakeRoot}`;
 				},
 				url : "$-1"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 11,
-				url : sUrl + "&$filter=ID eq '5'&$select=LimitedRank"
-			}, {
+			.expectRequest("#11 " + sUrl + "&$filter=ID eq '5'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "6" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 11,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=3"
-			}, {
+			.expectRequest("#11 " + sUrl + sSelect + "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "8",
 				value : [{
 					DescendantCount : "4",
@@ -41955,10 +43049,7 @@ make root = ${bMakeRoot}`;
 					Name : "Beta"
 				}]
 			})
-			.expectRequest({
-				batchNo : 12,
-				url : sUrl + "&$filter=ID eq '_8'&$select=LimitedRank"
-			}, {
+			.expectRequest("#12 " + sUrl + "&$filter=ID eq '_8'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "7" // Edm.Int64
 				}]
@@ -42066,19 +43157,13 @@ make root = ${bMakeRoot}`;
 				url : sFriend.slice(1)
 					+ "(ArtistID='2',IsActiveEntity=false)/special.cases.ChangeNextSibling"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 2,
-				url : sUrl
-					+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false&$select=_/Limited_Rank"
-			}, {
+			.expectRequest("#2 " + sUrl
+				+ "&$filter=ArtistID eq '2' and IsActiveEntity eq false&$select=_/Limited_Rank", {
 				value : [{
 					_ : {Limited_Rank : "0"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 2,
-				url : sUrl + sSelect + "&$count=true&$skip=0&$top=3"
-			}, {
+			.expectRequest("#2 " + sUrl + sSelect + "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "2",
 				value : [{
 					ArtistID : "2",
@@ -42425,16 +43510,10 @@ make root = ${bMakeRoot}`;
 				ID : "6",
 				Name : "Zeta"
 			})
-			.expectRequest({
-				batchNo : 9,
-				url : "EMPLOYEES/$count?$filter=Is_Manager"
-			}, 6)
-			.expectRequest({
-				batchNo : 9,
-				url : sUrl.slice(0, -1)
-					+ ",ExpandLevels=" + JSON.stringify([{NodeID : "5", Levels : 1}]) + ")"
-					+ sSelect + "&$count=true&$skip=3&$top=2"
-			}, {
+			.expectRequest("#9 EMPLOYEES/$count?$filter=Is_Manager", 6)
+			.expectRequest("#9 " + sUrl.slice(0, -1)
+				+ ",ExpandLevels=" + JSON.stringify([{NodeID : "5", Levels : 1}]) + ")"
+				+ sSelect + "&$count=true&$skip=3&$top=2", {
 				"@odata.count" : "6",
 				value : [{
 					DescendantCount : "1",
@@ -42450,12 +43529,9 @@ make root = ${bMakeRoot}`;
 					Name : "Zeta"
 				}]
 			})
-			.expectRequest({
-				batchNo : 10,
-				url : sUrl.slice(0, -1)
-					+ ",ExpandLevels=" + JSON.stringify([{NodeID : "5", Levels : 1}]) + ")"
-					+ "&$filter=ID eq '6'&$select=LimitedRank"
-			}, {
+			.expectRequest("#10 " + sUrl.slice(0, -1)
+				+ ",ExpandLevels=" + JSON.stringify([{NodeID : "5", Levels : 1}]) + ")"
+				+ "&$filter=ID eq '6'&$select=LimitedRank", {
 				value : [{LimitedRank : "4"}]
 			});
 
@@ -42496,16 +43572,10 @@ make root = ${bMakeRoot}`;
 				ID : "7",
 				Name : "Eta"
 			})
-			.expectRequest({
-				batchNo : 11,
-				url : "EMPLOYEES/$count?$filter=Is_Manager"
-			}, 7)
-			.expectRequest({
-				batchNo : 11,
-				url : sUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "5", Levels : 1}, {NodeID : "6", Levels : 1}]) + ")"
-					+ sSelect + "&$count=true&$skip=3&$top=2"
-			}, {
+			.expectRequest("#11 EMPLOYEES/$count?$filter=Is_Manager", 7)
+			.expectRequest("#11 " + sUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "5", Levels : 1}, {NodeID : "6", Levels : 1}]) + ")"
+				+ sSelect + "&$count=true&$skip=3&$top=2", {
 				"@odata.count" : "7",
 				value : [{
 					DescendantCount : "2",
@@ -42521,12 +43591,9 @@ make root = ${bMakeRoot}`;
 					Name : "Zeta"
 				}]
 			})
-			.expectRequest({
-				batchNo : 12,
-				url : sUrl.slice(0, -1) + ",ExpandLevels="
-					+ JSON.stringify([{NodeID : "5", Levels : 1}, {NodeID : "6", Levels : 1}]) + ")"
-					+ "&$filter=ID eq '7'&$select=LimitedRank"
-			}, {
+			.expectRequest("#12 " + sUrl.slice(0, -1) + ",ExpandLevels="
+				+ JSON.stringify([{NodeID : "5", Levels : 1}, {NodeID : "6", Levels : 1}]) + ")"
+				+ "&$filter=ID eq '7'&$select=LimitedRank", {
 				value : [{LimitedRank : "5"}]
 			});
 
@@ -42790,18 +43857,12 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('1.1')"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 2,
-				url : sUrl + "&$filter=ID eq '1.1'&$select=LimitedRank"
-			}, {
+			.expectRequest("#2 " + sUrl + "&$filter=ID eq '1.1'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "4" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : sUrl + sSelect + "&$skip=1&$top=1"
-			}, {
+			.expectRequest("#3 " + sUrl + sSelect + "&$skip=1&$top=1", {
 				value : [{
 					DescendantCount : "0",
 					DistanceFromRoot : "1",
@@ -43448,33 +44509,24 @@ make root = ${bMakeRoot}`;
 		const oZeta = oTable.getRows()[0].getBindingContext();
 		const oEta = oTable.getRows()[1].getBindingContext();
 
-		this.expectRequest({
-				batchNo : 3,
-				url : "EMPLOYEES?custom=foo"
-					+ "&$apply=ancestors($root/EMPLOYEES,OrgChart,ID,filter(ID eq '2'),1)"
-					+ "&$select=ID,Name"
-			}, {
+		this.expectRequest("#3 EMPLOYEES?custom=foo"
+				+ "&$apply=ancestors($root/EMPLOYEES,OrgChart,ID,filter(ID eq '2'),1)"
+				+ "&$select=ID,Name", {
 				value : [{
 					ID : "0",
 					Name : "Alpha"
 				}]
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : "EMPLOYEES?custom=foo"
-					+ "&$apply=ancestors($root/EMPLOYEES,OrgChart,ID,filter(ID eq '5'),1)"
-					+ "&$select=ID,Name"
-			}, {
+			.expectRequest("#3 EMPLOYEES?custom=foo"
+				+ "&$apply=ancestors($root/EMPLOYEES,OrgChart,ID,filter(ID eq '5'),1)"
+				+ "&$select=ID,Name", {
 				value : [{
 					ID : "0",
 					Name : "Alpha"
 				}]
 			})
-			.expectRequest({
-				batchNo : 4,
-				url : sUrl + "&$filter=ID eq '0'"
-					+ "&$select=DescendantCount,DistanceFromRoot,DrillState,LimitedRank"
-			}, {
+			.expectRequest("#4 " + sUrl + "&$filter=ID eq '0'"
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,LimitedRank", {
 				value : [{
 					DescendantCount : "6",
 					DistanceFromRoot : "0",
@@ -44185,25 +45237,19 @@ make root = ${bMakeRoot}`;
 		assert.strictEqual(oOmicron.getParent(), undefined);
 		assert.strictEqual(oPi.getParent(), undefined);
 
-		this.expectRequest({
-				batchNo : 11,
-				url : "Artists?$apply=ancestors("
-						+ "$root/Artists,OrgChart,_/NodeID,"
-						+ "filter(ArtistID eq '4.1' and IsActiveEntity eq false),1)"
-					+ "&$select=ArtistID,IsActiveEntity,Name"
-			}, {
+		this.expectRequest("#11 Artists?$apply=ancestors("
+					+ "$root/Artists,OrgChart,_/NodeID,"
+					+ "filter(ArtistID eq '4.1' and IsActiveEntity eq false),1)"
+				+ "&$select=ArtistID,IsActiveEntity,Name", {
 				value : [{
 					ArtistID : "4",
 					IsActiveEntity : false,
 					Name : "Xi"
 				}]
 			})
-			.expectRequest({
-				batchNo : 12,
-				url : sUrl + "&$filter=ArtistID eq '4' and IsActiveEntity eq false"
-					+ "&$select=_/DescendantCount,_/DistanceFromRoot,_/DrillState,"
-						+ "_/Limited_Rank,_/NodeID"
-			}, {
+			.expectRequest("#12 " + sUrl + "&$filter=ArtistID eq '4' and IsActiveEntity eq false"
+				+ "&$select=_/DescendantCount,_/DistanceFromRoot,_/DrillState,"
+					+ "_/Limited_Rank,_/NodeID", {
 				value : [{
 					_ : {
 						DescendantCount : "2",
@@ -44764,29 +45810,21 @@ make root = ${bMakeRoot}`;
 				url : sFriend.slice(1)
 					+ "(ArtistID='4',IsActiveEntity=false)/special.cases.ChangeNextSibling"
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 8,
-				url : sBaseUrl + "&$filter=ArtistID eq '4' and IsActiveEntity eq false"
-					+ "&$select=_/Limited_Rank"
-			}, {
+			.expectRequest("#8 " + sBaseUrl + "&$filter=ArtistID eq '4' and IsActiveEntity eq false"
+				+ "&$select=_/Limited_Rank", {
 				value : [{
 					_ : {Limited_Rank : "3"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 8,
-				url : sBaseUrl + "&$filter=ArtistID eq '3' and IsActiveEntity eq false"
-					+ "&$select=_/Limited_Rank"
-			}, {
+			.expectRequest("#8 " + sBaseUrl + "&$filter=ArtistID eq '3' and IsActiveEntity eq false"
+				+ "&$select=_/Limited_Rank", {
 				value : [{
 					_ : {Limited_Rank : "5"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 8,
-				url : sFriend.slice(1) + "?$filter=ArtistID eq '3' and IsActiveEntity eq false"
-					+ "&custom=foo&$select=ArtistID,IsActiveEntity,Name,_/NodeID" + sExpand
-			}, {
+			.expectRequest("#8 " + sFriend.slice(1)
+				+ "?$filter=ArtistID eq '3' and IsActiveEntity eq false"
+				+ "&custom=foo&$select=ArtistID,IsActiveEntity,Name,_/NodeID" + sExpand, {
 				value : [{
 					"@odata.etag" : "etag3.2",
 					ArtistID : "3",
@@ -44800,10 +45838,7 @@ make root = ${bMakeRoot}`;
 					_ : null // not available w/ RAP for a non-hierarchical request
 				}]
 			})
-			.expectRequest({
-				batchNo : 8,
-				url : sBaseUrl + sSelect + sExpand + "&$count=true&$skip=0&$top=2"
-			}, {
+			.expectRequest("#8 " + sBaseUrl + sSelect + sExpand + "&$count=true&$skip=0&$top=2", {
 				"@odata.count" : "7",
 				value : [{
 					"@odata.etag" : "etag0.2",
@@ -45179,14 +46214,11 @@ make root = ${bMakeRoot}`;
 </t:Table>`;
 		const that = this;
 
-		this.expectRequest({
-				batchNo : 1,
-				url : "Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
-					+ "HierarchyNodes=$root/Artists,HierarchyQualifier='OrgChart'"
-					+ ",NodeProperty='_/NodeID',Levels=1)"
-					+ "&$select=ArtistID,IsActiveEntity,Name,_/DrillState,_/NodeID"
-					+ "&$count=true&$skip=0&$top=3"
-			}, {
+		this.expectRequest("#1 Artists?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+				+ "HierarchyNodes=$root/Artists,HierarchyQualifier='OrgChart'"
+				+ ",NodeProperty='_/NodeID',Levels=1)"
+				+ "&$select=ArtistID,IsActiveEntity,Name,_/DrillState,_/NodeID"
+				+ "&$count=true&$skip=0&$top=3", {
 				"@odata.count" : "1",
 				value : [{
 					ArtistID : "0",
@@ -45812,6 +46844,105 @@ make root = ${bMakeRoot}`;
 			oModel.submitBatch("update"),
 			oEquipmentContext.created(),
 			this.waitForChanges(assert, "create Equipment and submit")
+		]);
+	});
+
+	//*********************************************************************************************
+	// Scenario: A recursive hierarchy is bound relative to a context. The hierarchy is in unified
+	// cache (via createInPlace). When expanding a node, the hierarchy is refreshed via a
+	// side-effects refresh which contains ExpandLevels. When resolving the hierarchy with another
+	// context, the ExpandLevels is cleared.
+	// SNOW: DINC0592197
+	QUnit.test("Recursive Hierarchy: DINC0592197", async function (assert) {
+		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
+		const sView = `
+<Table id="table" items="{path : 'TEAM_2_EMPLOYEES',
+		parameters : {$$aggregation : {createInPlace : true, hierarchyQualifier : 'OrgChart'}}}">
+	<Text id="name" text="{Name}"/>
+</Table>`;
+
+		this.expectChange("name", []);
+
+		await this.createView(assert, sView, oModel);
+		const oTable = this.oView.byId("table");
+
+		this.expectRequest("TEAMS('TEAM_01')/TEAM_2_EMPLOYEES"
+				+ "?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+				+ "HierarchyNodes=$root/TEAMS('TEAM_01')/TEAM_2_EMPLOYEES"
+				+ ",HierarchyQualifier='OrgChart',NodeProperty='ID',Levels=1)"
+				+ "&$select=DrillState,ID,Name&$count=true&$skip=0&$top=100", {
+				"@odata.count" : "1",
+				value : [{
+					DrillState : "collapsed",
+					ID : "1",
+					Name : "Alpha"
+				}]
+			})
+			.expectChange("name", ["Alpha"]);
+
+		oTable.bindElement("/TEAMS('TEAM_01')");
+
+		await this.waitForChanges(assert, "bind TEAM_01");
+		const [oAlpha] = oTable.getBinding("items").getCurrentContexts();
+
+		this.expectRequest("TEAMS('TEAM_01')/TEAM_2_EMPLOYEES"
+				+ "?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+				+ "HierarchyNodes=$root/TEAMS('TEAM_01')/TEAM_2_EMPLOYEES"
+				+ ",HierarchyQualifier='OrgChart',NodeProperty='ID',Levels=1"
+				+ ",ExpandLevels=" + JSON.stringify([{NodeID : "1", Levels : 1}]) + ")"
+				+ "&$select=DescendantCount,DistanceFromRoot,DrillState,ID,Name"
+				+ "&$count=true&$skip=0&$top=100", {
+				"@odata.count" : "2",
+				value : [{
+					DescendantCount : "1",
+					DistanceFromRoot : "0",
+					DrillState : "expanded",
+					ID : "1",
+					Name : "Alpha"
+				}, {
+					DescendantCount : "0",
+					DistanceFromRoot : "1",
+					DrillState : "leaf",
+					ID : "2",
+					Name : "Beta"
+				}]
+			})
+			.expectChange("name", [, "Beta"]);
+
+		await Promise.all([
+			oAlpha.expand(),
+			this.waitForChanges(assert, "expand Alpha")
+		]);
+		checkTable("after expand Alpha", assert, oTable, [
+			oAlpha, // "/TEAMS('TEAM_01')/TEAM_2_EMPLOYEES('1')",
+			"/TEAMS('TEAM_01')/TEAM_2_EMPLOYEES('2')"
+		], [
+			["Alpha"],
+			["Beta"]
+		]);
+
+		this.expectRequest("TEAMS('TEAM_02')/TEAM_2_EMPLOYEES"
+				+ "?$apply=com.sap.vocabularies.Hierarchy.v1.TopLevels("
+				+ "HierarchyNodes=$root/TEAMS('TEAM_02')/TEAM_2_EMPLOYEES"
+				+ ",HierarchyQualifier='OrgChart',NodeProperty='ID',Levels=1)"
+				+ "&$select=DrillState,ID,Name&$count=true&$skip=0&$top=100", {
+				"@odata.count" : "1",
+				value : [{
+					DrillState : "leaf",
+					ID : "3",
+					Name : "Gamma"
+				}]
+			})
+			.expectChange("name", ["Gamma"]);
+
+		// code under test
+		oTable.bindElement("/TEAMS('TEAM_02')");
+
+		await this.waitForChanges(assert, "bind TEAM_02");
+		checkTable("after bind TEAM_02", assert, oTable, [
+			"/TEAMS('TEAM_02')/TEAM_2_EMPLOYEES('3')"
+		], [
+			["Gamma"]
 		]);
 	});
 
@@ -47150,18 +48281,15 @@ make root = ${bMakeRoot}`;
 			[false, 1, "2", "Theta"]
 		]);
 
-		this.expectRequest({
-				batchNo : 3,
-				url : "Artists?custom=foo&$apply=" + sFilterSearch
-					+ "/descendants($root/Artists,OrgChart,_/NodeID"
-					+ ",filter(ArtistID eq '1' and IsActiveEntity eq false))"
-					+ "&$filter=ArtistID eq '1.1' and IsActiveEntity eq false"
-					+ " or ArtistID eq '1.2' and IsActiveEntity eq false"
-					+ " or ArtistID eq '1.3' and IsActiveEntity eq false"
-					+ " or ArtistID eq '2.1' and IsActiveEntity eq false"
-					+ "&$select=ArtistID,IsActiveEntity&$top=4"
+		this.expectRequest("#3 Artists?custom=foo&$apply=" + sFilterSearch
+				+ "/descendants($root/Artists,OrgChart,_/NodeID"
+				+ ",filter(ArtistID eq '1' and IsActiveEntity eq false))"
+				+ "&$filter=ArtistID eq '1.1' and IsActiveEntity eq false"
+				+ " or ArtistID eq '1.2' and IsActiveEntity eq false"
+				+ " or ArtistID eq '1.3' and IsActiveEntity eq false"
+				+ " or ArtistID eq '2.1' and IsActiveEntity eq false"
+				+ "&$select=ArtistID,IsActiveEntity&$top=4", {
 				// sort order changed intentionally, without $orderby response needs not be sorted!
-			}, {
 				value : [{
 					ArtistID : "1.3",
 					IsActiveEntity : false
@@ -47173,20 +48301,14 @@ make root = ${bMakeRoot}`;
 					IsActiveEntity : false
 				}]
 			})
-			.expectRequest({
-				batchNo : 4,
-				url : sCountRequestUrl
-			}, 10)
-			.expectRequest({
-				batchNo : 4,
-				url : sUrl + ",ExpandLevels="
-					+ JSON.stringify([
-						{NodeID : "2.1,false", Levels : 0},
-						{NodeID : "2,false", Levels : 0},
-						{NodeID : "1,false", Levels : null}
-					])
-					+ ")&$count=true&$skip=0&$top=10"
-			}, {
+			.expectRequest("#4 " + sCountRequestUrl, 10)
+			.expectRequest("#4 " + sUrl + ",ExpandLevels="
+				+ JSON.stringify([
+					{NodeID : "2.1,false", Levels : 0},
+					{NodeID : "2,false", Levels : 0},
+					{NodeID : "1,false", Levels : null}
+				])
+				+ ")&$count=true&$skip=0&$top=10", {
 				"@odata.count" : "8",
 				value : [{
 					ArtistID : "1",
@@ -48735,18 +49857,12 @@ make root = ${bMakeRoot}`;
 				},
 				url : "$-1" // Note: "$-1" references the previous request
 			}) // 204 No Content
-			.expectRequest({
-				batchNo : 2,
-				url : sBaseUrl + "&$filter=ID eq '1'&$select=LimitedRank"
-			}, {
+			.expectRequest("#2 " + sBaseUrl + "&$filter=ID eq '1'&$select=LimitedRank", {
 				value : [{ // Note: Beta's position did change
 					LimitedRank : "3" // Edm.Int64
 				}]
 			})
-			.expectRequest({
-				batchNo : 2,
-				url : sListUrl
-			}, {
+			.expectRequest("#2 " + sListUrl, {
 				"@odata.count" : "5",
 				value : [{
 					DescendantCount : "1",
@@ -48780,10 +49896,7 @@ make root = ${bMakeRoot}`;
 					Name : "Epsilon"
 				}]
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : sBaseUrl + "&$filter=ID eq '_1'&$select=LimitedRank"
-			}, {
+			.expectRequest("#3 " + sBaseUrl + "&$filter=ID eq '_1'&$select=LimitedRank", {
 				value : [{
 					LimitedRank : "1" // Edm.Int64
 				}]
@@ -48841,8 +49954,7 @@ make root = ${bMakeRoot}`;
 
 			assert.strictEqual(oPropertyBinding.getValue(), 42);
 			that.oLogMock.expects("error")
-				.withExactArgs("Read-only path must not be updated", oMatcher,
-					"sap.ui.model.odata.v4.ODataMetaModel");
+				.withExactArgs("Read-only path must not be updated", oMatcher, sODataMetaModel);
 			that.oLogMock.expects("error")
 				.withExactArgs("Failed to update path /MANAGERS('1')/@$ui5.foo", oMatcher, sODPrB);
 
@@ -53608,10 +54720,8 @@ make root = ${bMakeRoot}`;
 					headers : {"If-Match" : "ETag0", Prefer : "return=minimal"},
 					payload : {NetAmount : "-1"}
 				}, createErrorInsideBatch({message : "Value -1 not allowed"}))
-				.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('42')?sap-client=123&$select=GrossAmount"
-				}) // no response required since the PATCH fails
+				.expectRequest("#2 SalesOrderList('42')?sap-client=123&$select=GrossAmount")
+					// no response required since the PATCH fails
 				.expectMessages([{
 					code : "CODE",
 					message : "Value -1 not allowed",
@@ -53695,10 +54805,8 @@ make root = ${bMakeRoot}`;
 					}],
 					SalesOrderID : "42"
 				})
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList('42')?sap-client=123&$select=GrossAmount,NetAmount"
-				}, {
+				.expectRequest("#4 SalesOrderList('42')?sap-client=123"
+					+ "&$select=GrossAmount,NetAmount", {
 					// "@odata.etag" : "ETag2",
 					GrossAmount : "0.00", // side effect
 					NetAmount : "0.00", // "side effect": decimal places added
@@ -53862,12 +54970,9 @@ make root = ${bMakeRoot}`;
 					headers : {"If-Match" : "ETag0"},
 					payload : {Name : "TAFKAP"}
 				}, {/* response does not matter here */})
-				.expectRequest({
-					batchNo : 2,
-					url : "Artists(ArtistID='42',IsActiveEntity=true)"
-						+ "?$select=DraftAdministrativeData"
-						+ "&$expand=DraftAdministrativeData($select=DraftID,InProcessByUser)"
-				}, {
+				.expectRequest("#2 Artists(ArtistID='42',IsActiveEntity=true)"
+					+ "?$select=DraftAdministrativeData"
+					+ "&$expand=DraftAdministrativeData($select=DraftID,InProcessByUser)", {
 					DraftAdministrativeData : {
 						DraftID : "23",
 						InProcessByUser : "bar"
@@ -54186,10 +55291,7 @@ make root = ${bMakeRoot}`;
 				url : "TEAMS('TEAM_01')",
 				payload : {Name : "New Team"}
 			}, null, {ETag : "etag1.1"}) // no response required
-			.expectRequest({
-				batchNo : 2,
-				url : "TEAMS?$select=Budget,Name,Team_Id&$filter=Team_Id eq 'TEAM_01'"
-			}, {
+			.expectRequest("#2 TEAMS?$select=Budget,Name,Team_Id&$filter=Team_Id eq 'TEAM_01'", {
 				value : [{
 					"@odata.etag" : "etag1.1",
 					Budget : "42",
@@ -54197,10 +55299,7 @@ make root = ${bMakeRoot}`;
 					Team_Id : "TEAM_01"
 				}]
 			})
-			.expectRequest({
-				batchNo : 2,
-				url : "TEAMS?$select=Budget,Name,Team_Id&$skip=0&$top=100"
-			}, {
+			.expectRequest("#2 TEAMS?$select=Budget,Name,Team_Id&$skip=0&$top=100", {
 				value : [{
 					"@odata.etag" : "etag1.1",
 					Budget : "n/a",
@@ -55723,11 +56822,8 @@ make root = ${bMakeRoot}`;
 					headers : {"If-Match" : "ETag"},
 					payload : {}
 				})
-				.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('1')?$select=SO_2_SOITEM"
-						+ "&$expand=SO_2_SOITEM($select=ItemPosition,SalesOrderID)"
-				}, {
+				.expectRequest("#2 SalesOrderList('1')?$select=SO_2_SOITEM"
+					+ "&$expand=SO_2_SOITEM($select=ItemPosition,SalesOrderID)", {
 					"@odata.etag" : "ETag",
 					SO_2_SOITEM : [{ItemPosition : "0010*", SalesOrderID : "1"}]
 				})
@@ -55915,10 +57011,7 @@ make root = ${bMakeRoot}`;
 				},
 				url : "EMPLOYEES('4')"
 			}, {/* don't care */})
-			.expectRequest({
-				batchNo : 4,
-				url : "EMPLOYEES('3')?$select=STATUS"
-			}, {
+			.expectRequest("#4 EMPLOYEES('3')?$select=STATUS", {
 				STATUS : "Busy"
 			})
 			.expectChange("status0", "Busy");
@@ -56974,7 +58067,7 @@ make root = ${bMakeRoot}`;
 				}]
 			})
 			.expectChange("weightMeasure", "12.340") // Scale=3 in property metadata => 3 decimals
-			.expectChange("weight", "12.340 KG")
+			.expectChange("weight", "12.340\u00a0KG")
 			.expectChange("weight0", "12.340")
 			.expectChange("weight1", "12.340");
 
@@ -57013,7 +58106,7 @@ make root = ${bMakeRoot}`;
 		}).then(function () {
 			oControl = that.oView.byId("weight");
 
-			that.expectChange("weight", "23.400 KG")
+			that.expectChange("weight", "23.400\u00a0KG")
 				.expectChange("weight0", "23.400")
 				.expectChange("weight1", "23.400")
 				.expectChange("weightMeasure", "23.400")
@@ -57032,8 +58125,8 @@ make root = ${bMakeRoot}`;
 			// fnTypeChangedCallback and v4.ODataPropertyBinding#setType itself fires changes also.
 			// This is ok because the usecase for changing a binding part's type of a composite
 			// binding is very rare.
-			that.expectChange("weight", "23.40 KG")
-				.expectChange("weight", "23.40 KG");
+			that.expectChange("weight", "23.40\u00a0KG")
+				.expectChange("weight", "23.40\u00a0KG");
 
 			// code under test: change scale of amount part from 3 to 2
 			oControl.getBinding("value").getBindings()[0].setType(
@@ -57041,7 +58134,7 @@ make root = ${bMakeRoot}`;
 
 			return that.waitForChanges(assert, "JIRA: CPOUI5MODELS-1606");
 		}).then(function () {
-			that.expectChange("weight", "34.51 KG")
+			that.expectChange("weight", "34.51\u00a0KG")
 				.expectChange("weightMeasure", "34.510")
 				.expectChange("weight0", "34.510")
 				.expectChange("weight1", "34.510")
@@ -57076,7 +58169,7 @@ make root = ${bMakeRoot}`;
 			return that.waitForChanges(assert);
 		}).then(function () {
 			// Check that the previous setValue led to the correct result
-			assert.strictEqual(oControl.getValue(), "0.00 KG");
+			assert.strictEqual(oControl.getValue(), "0.00\u00a0KG");
 
 			that.expectMessages([{
 					message : "EnterNumberFraction 5",
@@ -57086,7 +58179,7 @@ make root = ${bMakeRoot}`;
 
 			TestUtils.withNormalizedMessages(function () {
 				// code under test
-				oControl.setValue("12.123456 KG");
+				oControl.setValue("12.123456\u00a0KG");
 			});
 
 			return that.waitForChanges(assert);
@@ -58067,12 +59160,9 @@ make root = ${bMakeRoot}`;
 </FlexBox>',
 			that = this;
 
-		this.expectRequest({
-				batchNo : 1,
-				url : "SalesOrderList('1')?$select=SalesOrderID"
-					+ "&$expand=SO_2_SOITEM($select=ItemPosition,Messages,Quantity,SalesOrderID;"
-						+ "$expand=SOITEM_2_PRODUCT($select=ProductID))"
-			}, {
+		this.expectRequest("#1 SalesOrderList('1')?$select=SalesOrderID"
+				+ "&$expand=SO_2_SOITEM($select=ItemPosition,Messages,Quantity,SalesOrderID;"
+					+ "$expand=SOITEM_2_PRODUCT($select=ProductID))", {
 				SalesOrderID : "1",
 				SO_2_SOITEM : [{
 					ItemPosition : "10",
@@ -58108,12 +59198,10 @@ make root = ${bMakeRoot}`;
 					SalesOrderID : "1",
 					ItemPosition : "20"
 				})
-				.expectRequest({
-					batchNo : 3,
-					url : "SalesOrderList('1')/SO_2_SOITEM(SalesOrderID='1',ItemPosition='20')"
-						+ "?$select=ItemPosition,Messages,Quantity,SalesOrderID"
-						+ "&$expand=SOITEM_2_PRODUCT($select=ProductID)"
-				}, {
+				.expectRequest("#3 SalesOrderList('1')"
+					+ "/SO_2_SOITEM(SalesOrderID='1',ItemPosition='20')"
+					+ "?$select=ItemPosition,Messages,Quantity,SalesOrderID"
+					+ "&$expand=SOITEM_2_PRODUCT($select=ProductID)", {
 					ItemPosition : "20",
 					Messages : [{
 						code : "23",
@@ -59905,11 +60993,9 @@ make root = ${bMakeRoot}`;
 				});
 				aItems.length = 2;
 			} // else: "First new row" not part of this read range
-			that.expectRequest({
-					batchNo : 2,
-					url : "SalesOrderList('1')/SO_2_SOITEM"
-						+ "?$count=true&$select=ItemPosition,Note,SalesOrderID&$skip=0&$top=2"
-				}, { // ignored if !bSuccess; else bEmpty does not play a role anymore
+			that.expectRequest("#2 SalesOrderList('1')/SO_2_SOITEM"
+					+ "?$count=true&$select=ItemPosition,Note,SalesOrderID&$skip=0&$top=2", {
+					// ignored if !bSuccess; else bEmpty does not play a role anymore
 					"@odata.count" : "4",
 					value : aItems
 				});
@@ -59921,22 +61007,18 @@ make root = ${bMakeRoot}`;
 					}
 				} else {
 					// we cannot tell if "First new row" is affected by our imaginative $filter...
-					that.expectRequest({
-							batchNo : 3,
-							url : "SalesOrderList('1')/SO_2_SOITEM?$count=true"
-								+ "&$filter=not (SalesOrderID eq '1' and ItemPosition eq '0')"
-								+ "&$top=0"
-						}, {
+					that.expectRequest("#3 SalesOrderList('1')/SO_2_SOITEM?$count=true"
+							+ "&$filter=not (SalesOrderID eq '1' and ItemPosition eq '0')"
+							+ "&$top=0", {
 							"@odata.count" : "4", ///... looks like it is
 							value : []
 						})
 						.expectChange("count", "5");
 				}
-				that.expectRequest({ // see /*bSkipRefresh*/false
-						batchNo : 3,
-						url : "SalesOrderList('1')/SO_2_SOITEM(SalesOrderID='1',ItemPosition='0')"
-							+ "?$select=ItemPosition,Note,SalesOrderID"
-					}, {
+				// see /*bSkipRefresh*/false
+				that.expectRequest("#3 SalesOrderList('1')"
+						+ "/SO_2_SOITEM(SalesOrderID='1',ItemPosition='0')"
+						+ "?$select=ItemPosition,Note,SalesOrderID", {
 						ItemPosition : "0",
 						Note : "First **new** row",
 						SalesOrderID : "1"
@@ -60244,11 +61326,8 @@ make root = ${bMakeRoot}`;
 				Note : "Created as well",
 				SalesOrderID : "44"
 			})
-			.expectRequest({
-				batchNo : 3,
-				url : "BusinessPartnerList('4711')?$select=BP_2_SO"
-					+ "&$expand=BP_2_SO($select=Note,SalesOrderID)"
-			}, {
+			.expectRequest("#3 BusinessPartnerList('4711')?$select=BP_2_SO"
+				+ "&$expand=BP_2_SO($select=Note,SalesOrderID)", {
 				BusinessPartnerID : "4711",
 				BP_2_SO : [{
 					Note : "Unrealistic",
@@ -60294,11 +61373,8 @@ make root = ${bMakeRoot}`;
 				payload : {Note : "Created as well"},
 				url : "BusinessPartnerList('4711')/BP_2_SO"
 			}) // no response required
-			.expectRequest({
-				batchNo : 3,
-				url : "BusinessPartnerList('4711')?$select=BP_2_SO"
-					+ "&$expand=BP_2_SO($select=Note,SalesOrderID)"
-			}) // no response required
+			.expectRequest("#3 BusinessPartnerList('4711')?$select=BP_2_SO"
+				+ "&$expand=BP_2_SO($select=Note,SalesOrderID)") // no response required
 			.expectMessages([{
 				message : "Communication error: 500 ",
 				persistent : true,
@@ -60494,10 +61570,8 @@ make root = ${bMakeRoot}`;
 					payload : {Note : "Created"},
 					url : "SalesOrderList"
 				}, oError)
-				.expectRequest({
-					batchNo : 3,
-					url : "SalesOrderList?$select=Note,SalesOrderID&$skip=1&$top=2"
-				}) // no response required
+				.expectRequest("#3 SalesOrderList?$select=Note,SalesOrderID&$skip=1&$top=2")
+					// no response required
 				.expectMessages([{
 					code : "CODE",
 					message : "Request intentionally failed",
@@ -60604,11 +61678,8 @@ make root = ${bMakeRoot}`;
 					Note : "Created",
 					SalesOrderID : "43"
 				})
-				.expectRequest({
-					batchNo : 3,
-					url : "BusinessPartnerList('4711')?$select=BP_2_SO"
-						+ "&$expand=BP_2_SO($select=Note,SalesOrderID)"
-				}, {
+				.expectRequest("#3 BusinessPartnerList('4711')?$select=BP_2_SO"
+					+ "&$expand=BP_2_SO($select=Note,SalesOrderID)", {
 					BusinessPartnerID : "4711",
 					BP_2_SO : [{
 						Note : "Created",
@@ -60693,10 +61764,8 @@ make root = ${bMakeRoot}`;
 					payload : {CompanyName : "SAP SE"},
 					url : "BusinessPartnerList('4711')"
 				}, {/* response does not matter here */})
-				.expectRequest({
-					batchNo : 3,
-					url : "BusinessPartnerList('4711')?$select=BusinessPartnerID,CompanyName"
-				}, {
+				.expectRequest("#3 BusinessPartnerList('4711')"
+					+ "?$select=BusinessPartnerID,CompanyName", {
 					BusinessPartnerID : "4711",
 					CompanyName : "SAP SE"
 				});
@@ -61571,6 +62640,61 @@ make root = ${bMakeRoot}`;
 
 			return that.waitForChanges(assert);
 		});
+	});
+
+	//*********************************************************************************************
+	// Scenario: Using the "More" button in a table, a duplicate row is encountered due to parallel
+	// activity by some other users.
+	// JIRA: CPOUI5ODATAV4-2869
+	// SNOW:  DINC0541281
+	QUnit.test("DINC0541281", async function (assert) {
+		const sView = `
+<Table id="table" items="{/EMPLOYEES}" growing="true" growingThreshold="2">
+	<Text id="text" text="{Name}"/>
+</Table>`;
+
+		this.expectRequest("EMPLOYEES?$skip=0&$top=2", {
+				value : [
+					{ID : "1", Name : "Peter Burke"},
+					{ID : "2", Name : "Frederic Fall"}
+				]
+			})
+			.expectChange("text", ["Peter Burke", "Frederic Fall"]);
+
+		await this.createView(assert, sView);
+
+		this.expectRequest("EMPLOYEES?$skip=2&$top=2", {
+				value : [
+					{ID : "2", Name : "Frederic Fall (NEW)"},
+					{ID : "3", Name : "John Field"}
+				]
+			})
+			.expectChange("text", [,, "Frederic Fall (NEW)", "John Field"]);
+
+		const oTable = this.oView.byId("table");
+
+		// code under test
+		oTable.requestItems();
+
+		await this.waitForChanges(assert);
+
+		checkTable("with duplicate row", assert, oTable, [
+			"/EMPLOYEES('1')",
+			"/EMPLOYEES('2')",
+			"/EMPLOYEES('2')",
+			"/EMPLOYEES('3')"
+		], [
+			["Peter Burke"],
+			["Frederic Fall"], // UI not yet updated!
+			["Frederic Fall (NEW)"],
+			["John Field"]
+		], 14, /*bLengthFinal*/false);
+		const oListBinding = oTable.getBinding("items");
+		const aAllCurrentContexts = oListBinding.getAllCurrentContexts();
+		assert.notStrictEqual(aAllCurrentContexts[1], aAllCurrentContexts[2],
+			"two instances for same path :-(");
+		assert.notStrictEqual(oListBinding.oCache.aElements[1], oListBinding.oCache.aElements[2],
+			"not a public API - don't try this at home, kids!");
 	});
 
 	//*********************************************************************************************
@@ -62854,6 +63978,8 @@ make root = ${bMakeRoot}`;
 	// second request or only for the first. No error message for the third request. See that each
 	// handler is called with the correct (or none) errors.
 	// SNOW: DINC0032238
+	//
+	// ODM#setContinueOnError must not violate constraints w.r.t. change sets (SNOW: DINC0512589)
 [true, false].forEach(function (bConfirm) {
 	[true, false].forEach(function (bDifferentContentIDs) {
 		const sTitle = "CPOUI5ODATAV4-943: handling=strict, confirm=" + bConfirm
@@ -63006,6 +64132,11 @@ make root = ${bMakeRoot}`;
 				.invoke("$auto", false, onStrictHandlingFailed0);
 			oAction1Promise = that.oModel.bindContext(sAction + "(...)", aContexts[1])
 				.invoke("$auto", false, onStrictHandlingFailed1);
+			assert.throws(function () {
+				// code under test (SNOW: DINC0512589; no effect on 3rd action!)
+				that.oModel.setContinueOnError("$auto");
+			}, new Error("Each request with strict handling must belong to its own change set due"
+				+ ' to the "odata.continue-on-error" preference'));
 			oAction2Promise = that.oModel.bindContext(sAction + "(...)", aContexts[2])
 				.invoke("$auto", false, onStrictHandlingFailed2);
 
@@ -64047,18 +65178,28 @@ make root = ${bMakeRoot}`;
 	// Add and modify annotations for the value list model via local annotation files, including one
 	// in a referenced scope and one in a nested value list model.
 	// JIRA: CPOUI5ODATAV4-2732
+	//
+	// By accident, a qualified name of the data service is requested from a value help service's
+	// meta model. This must not include the data service's scheme into the value help service. If
+	// it would be included, requesting the value list info again results in a cryptic error
+	// "Unexpected annotation ... with namespace of data service ...".
+	// SNOW: DINC0506022
 [false, true].forEach(function (bAutoExpandSelect) {
 	var sTitle = "$$sharedRequest and ODMM#getOrCreateSharedModel, bAutoExpandSelect = "
 			+ bAutoExpandSelect;
 
 	QUnit.test(sTitle, function (assert) {
-		var oModel = this.createSalesOrdersModel({
+		var iOldLogLevel = Log.getLevel(sODataMetaModel),
+			sVH_ProductTypeCode = "/sap/opu/odata4/sap/zui5_testv4/f4/sap/d_pr_type-fv/0001"
+				+ ";ps=%27default-zui5_epm_sample-0002%27"
+				+ ";va=%27com.sap.gateway.default.zui5_epm_sample.v0002.ET-PRODUCT.TYPE_CODE%27"
+				+ "/$metadata",
+			oModel = this.createSalesOrdersModel({
 				annotationURI : "/sap/opu/odata4/annotations_zui5_epm_sample.xml"
 			}, {
 				"/sap/opu/odata4/annotations_zui5_epm_sample.xml"
 					: {source : "odata/v4/data/annotations_zui5_epm_sample.xml"},
-				"/sap/opu/odata4/sap/zui5_testv4/f4/sap/d_pr_type-fv/0001;ps=%27default-zui5_epm_sample-0002%27;va=%27com.sap.gateway.default.zui5_epm_sample.v0002.ET-PRODUCT.TYPE_CODE%27/$metadata"
-					: {source : "odata/v4/data/VH_ProductTypeCode.xml"},
+				[sVH_ProductTypeCode] : {source : "odata/v4/data/VH_ProductTypeCode.xml"},
 				"/sap/opu/odata4/sap/zui5_testv4/f4/sap/d_pr_type-fv-ext/0001/$metadata"
 					: {source : "odata/v4/data/VH_ProductTypeCode_ext.xml"},
 				// fake "nested" value help
@@ -64168,6 +65309,25 @@ make root = ${bMakeRoot}`;
 				.requestObject("/com.sap.gateway.f4.FIELD_VALUE.v0001.D_PR_TYPE_FV/DESCRIPTION"
 					+ "@com.sap.vocabularies.Common.v1.Label");
 			assert.strictEqual(sLabel, "Description's NESTED New Label");
+
+			const sSchema = "com.sap.gateway.default.zui5_epm_sample.v0002.";
+			const sTypeCodePath = "/" + sSchema + "Product/TypeCode";
+
+			// do not rely on ERROR vs. DEBUG due to minified sources
+			Log.setLevel(Log.Level.DEBUG, sODataMetaModel);
+			that.oLogMock.expects("warning").withExactArgs("Must not access schema '" + sSchema
+				+ "' from meta model for " + sVH_ProductTypeCode, sTypeCodePath, sODataMetaModel);
+
+			// code under test (SNOW: DINC0506022)
+			await oValueListModel.getMetaModel().requestObject(sTypeCodePath)
+				.then(function (vValue) {
+					assert.strictEqual(vValue, undefined, "MUST not be found!");
+
+					// MUST not fail due to schema inclusion of data service into VH service
+					return oModel.getMetaModel().requestValueListInfo(sTypeCodePath);
+				});
+		}).finally(function () {
+			Log.setLevel(iOldLogLevel, sODataMetaModel);
 		});
 	});
 });
@@ -64418,6 +65578,9 @@ make root = ${bMakeRoot}`;
 	// Selection on inactive context which is then deleted and destroyed (JIRA: CPOUI5ODATAV4-1943).
 	// Selection is cleared on successful deletion (JIRA: CPOUI5ODATAV4-2053).
 	// $selectionCount, ODLB#getSelectionCount (JIRA: CPOUI5ODATAV4-1945)
+	//
+	// Show that a persisted creation row does not loose its special handling with refresh single.
+	// SNOW: DINC0562822
 [false, true].forEach(function (bAPI) {
 	QUnit.test("Multiple creation rows, grid table, SubmitMode.API = " + bAPI, function (assert) {
 		var oBinding,
@@ -64654,6 +65817,55 @@ make root = ${bMakeRoot}`;
 			assert.strictEqual(oContext3.isInactive(), false);
 			assert.strictEqual(oContext3.isTransient(), false);
 			assert.strictEqual(iEventCount, 2, "no further createActivate events");
+
+			that.expectRequest("SalesOrderList('42')"
+				+ "/SO_2_SOITEM(SalesOrderID='42',ItemPosition='0030')"
+				+ "?$select=ItemPosition,Note,SalesOrderID", {
+					ItemPosition : "0030",
+					Note : "Note 3.0",
+					SalesOrderID : "42"
+				})
+				.expectChange("note", [,, "Note 3.0"]);
+
+			// code under test (SNOW: DINC0562822)
+			oContext3.refresh();
+
+			return that.waitForChanges(assert);
+		}).then(function () {
+			that.expectRequest("SalesOrderList('42')/SO_2_SOITEM?"
+					+ "$select=ItemPosition,Note,SalesOrderID"
+					+ "&$filter=SalesOrderID eq '42' and ItemPosition eq '0020'"
+					+ " or SalesOrderID eq '42' and ItemPosition eq '0030'&$top=2", {
+					value : [{
+						ItemPosition : "0020", Note : "Note 2.1", SalesOrderID : "42"
+					}, {
+						ItemPosition : "0030", Note : "Note 3.1", SalesOrderID : "42"
+					}]
+				})
+				// #refreshKeptElements updates "on the fly" -> #getIndex returns wrong value
+				.expectChange("note", ["Note 2.1", "Note 3.1"])
+				.expectRequest("SalesOrderList('42')/SO_2_SOITEM?$count=true"
+					+ "&$select=ItemPosition,Note,SalesOrderID"
+					+ "&$filter=not (SalesOrderID eq '42' and ItemPosition eq '0020'"
+					+ " or SalesOrderID eq '42' and ItemPosition eq '0030')"
+					+ "&$skip=0&$top=110", {
+					"@odata.count" : "1",
+					value : [{
+						ItemPosition : "0010", Note : "Note 1.1", SalesOrderID : "42"
+					}]
+				})
+				.expectChange("note", ["Note 1.1"]);
+
+			return Promise.all([
+				oBinding.getHeaderContext().requestSideEffects([""], "$auto"),
+				that.waitForChanges(assert)
+			]);
+		}).then(function () {
+			assert.deepEqual(oBinding.getAllCurrentContexts().map(getPath), [
+				"/SalesOrderList('42')/SO_2_SOITEM(SalesOrderID='42',ItemPosition='0030')",
+				"/SalesOrderList('42')/SO_2_SOITEM(SalesOrderID='42',ItemPosition='0020')",
+				"/SalesOrderList('42')/SO_2_SOITEM(SalesOrderID='42',ItemPosition='0010')"
+			]);
 		});
 	});
 });
@@ -64853,6 +66065,10 @@ make root = ${bMakeRoot}`;
 	// JIRA: CPOUI5ODATAV4-2321
 	//
 	// Test v4.Context#getFilter (JIRA: CPOUI5ODATAV4-2768)
+	//
+	// If a list binding has no $$aggregation set, calling ODLB#setAggregation with undefined has no
+	// effects, even if Filter.NONE was set.
+	// SNOW: DINC0512612
 [
 	{desc : "grid table", table : "t:Table", parameters : "", rows : "rows", top : 110},
 	{desc : "responsive table", table : "Table", parameters : "", rows : "items", top : 100},
@@ -65000,6 +66216,9 @@ make root = ${bMakeRoot}`;
 			// code under test
 			oBinding.setAggregation({hierarchyQualifier : "X"});
 		}, new Error("Cannot combine Filter.NONE with $$aggregation"));
+
+		// code under test (SNOW: DINC0512612) - unchanged aggregation (undefined -> undefined)
+		oBinding.setAggregation();
 
 		this.expectRequest("SalesOrderList?$filter=SalesOrderID eq '42'"
 			+ "&$select=Note,SalesOrderID",
@@ -65976,18 +67195,13 @@ make root = ${bMakeRoot}`;
 					method : "DELETE",
 					url : "SalesOrderList('1')"
 				}, createErrorInsideBatch(null, 404))
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList?$count=true"
-						+ "&$filter=(GrossAmount gt 123) and not (SalesOrderID eq '1')&$top=0"
-				}) // response does not matter, fails with DELETE in same $batch
+				.expectRequest("#4 SalesOrderList?$count=true"
+					+ "&$filter=(GrossAmount gt 123) and not (SalesOrderID eq '1')&$top=0"
+				) // response does not matter, fails with DELETE in same $batch
 				.expectChange("objectPageGrossAmount", null)
 				.expectChange("objectPageNote", null)
-				.expectRequest({
-					batchNo : 5,
-					url : "SalesOrderList?$count=true"
-						+ "&$filter=(GrossAmount gt 123) and not (SalesOrderID eq '1')&$top=0"
-				}, {
+				.expectRequest("#5 SalesOrderList?$count=true"
+					+ "&$filter=(GrossAmount gt 123) and not (SalesOrderID eq '1')&$top=0", {
 					"@odata.count" : "38",
 					value : []
 				});
@@ -66349,18 +67563,12 @@ make root = ${bMakeRoot}`;
 		var that = this;
 
 		return this.createKeepAliveScenario(assert, false).then(function (oKeptContext) {
-			that.expectRequest({
-					batchNo : 3,
-					url : "SalesOrderList?$filter=SalesOrderID eq '1'"
-						+ "&$select=GrossAmount,Note,SalesOrderID"
-				}, {
+			that.expectRequest("#3 SalesOrderList?$filter=SalesOrderID eq '1'"
+					+ "&$select=GrossAmount,Note,SalesOrderID", {
 					value : [{GrossAmount : "199", Note : "After refresh", SalesOrderID : "1"}]
 				})
-				.expectRequest({
-					batchNo : 3,
-					url : "SalesOrderList?$filter=(GrossAmount le 150) and SalesOrderID eq '1'"
-						+ "&$count=true&$top=0"
-				}, {
+				.expectRequest("#3 SalesOrderList"
+					+ "?$filter=(GrossAmount le 150) and SalesOrderID eq '1'&$count=true&$top=0", {
 					"@odata.count" : "0",
 					value : []
 				})
@@ -66368,21 +67576,15 @@ make root = ${bMakeRoot}`;
 				.expectChange("objectPageNote", "After refresh")
 				.expectChange("grossAmount", ["199.00"]) // FIXME: JIRA: CPOUI5ODATAV4-524
 				// as context is no longer part of the collection the list requests a new context
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList?$count=true&$filter=GrossAmount le 150"
-						+ "&$select=GrossAmount,SalesOrderID&$skip=1&$top=1"
-				}, {
+				.expectRequest("#4 SalesOrderList?$count=true&$filter=GrossAmount le 150"
+					+ "&$select=GrossAmount,SalesOrderID&$skip=1&$top=1", {
 					"@odata.count" : "41",
 					value : [{GrossAmount : "120", SalesOrderID : "4"}]
 				})
 				.expectChange("id", [, "4"])
 				.expectChange("grossAmount", [, "120.00"])
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList('1')/SO_2_SOITEM"
-						+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100"
-				}, {
+				.expectRequest("#4 SalesOrderList('1')/SO_2_SOITEM"
+					+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100", {
 					value : [/*does not matter*/]
 				});
 
@@ -66407,29 +67609,20 @@ make root = ${bMakeRoot}`;
 		var that = this;
 
 		return this.createKeepAliveScenario(assert, false).then(function (oKeptContext) {
-			that.expectRequest({
-					batchNo : 3,
-					url : "SalesOrderList?$filter=SalesOrderID eq '1'"
-						+ "&$select=GrossAmount,Note,SalesOrderID"
-				}, {
+			that.expectRequest("#3 SalesOrderList?$filter=SalesOrderID eq '1'"
+					+ "&$select=GrossAmount,Note,SalesOrderID", {
 					value : [{GrossAmount : "140", Note : "After refresh", SalesOrderID : "1"}]
 				})
-				.expectRequest({
-					batchNo : 3,
-					url : "SalesOrderList?$filter=(GrossAmount le 150) and SalesOrderID eq '1'"
-						+ "&$count=true&$top=0"
-				}, {
+				.expectRequest("#3 SalesOrderList"
+					+ "?$filter=(GrossAmount le 150) and SalesOrderID eq '1'&$count=true&$top=0", {
 					"@odata.count" : "1",
 					value : []
 				})
 				.expectChange("objectPageGrossAmount", "140.00")
 				.expectChange("objectPageNote", "After refresh")
 				.expectChange("grossAmount", ["140.00"])
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList('1')/SO_2_SOITEM"
-						+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100"
-				}, {
+				.expectRequest("#4 SalesOrderList('1')/SO_2_SOITEM"
+					+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100", {
 					value : [/*does not matter*/]
 				});
 
@@ -66452,29 +67645,21 @@ make root = ${bMakeRoot}`;
 
 		return this.createKeepAliveScenario(assert, false, fnOnBeforeDestroy)
 			.then(function (oKeptContext) {
-				that.expectRequest({
-						batchNo : 3,
-						url : "SalesOrderList?$filter=SalesOrderID eq '1'"
-							+ "&$select=GrossAmount,Note,SalesOrderID"
-					}, {
+				that.expectRequest("#3 SalesOrderList?$filter=SalesOrderID eq '1'"
+						+ "&$select=GrossAmount,Note,SalesOrderID", {
 						value : []
 					})
-					.expectRequest({
-						batchNo : 3,
-						url : "SalesOrderList?$filter=(GrossAmount le 150) and SalesOrderID eq '1'"
-							+ "&$count=true&$top=0"
-					}, {
+					.expectRequest("#3 SalesOrderList"
+						+ "?$filter=(GrossAmount le 150) and SalesOrderID eq '1'"
+						+ "&$count=true&$top=0", {
 						"@odata.count" : "0",
 						value : []
 					})
 					.expectChange("objectPageGrossAmount", null)
 					.expectChange("objectPageNote", null)
 					// as context is no longer part of aContexts the list requests a new context
-					.expectRequest({
-						batchNo : 4,
-						url : "SalesOrderList?$count=true&$filter=GrossAmount le 150"
-							+ "&$select=GrossAmount,SalesOrderID&$skip=1&$top=1"
-					}, {
+					.expectRequest("#4 SalesOrderList?$count=true&$filter=GrossAmount le 150"
+						+ "&$select=GrossAmount,SalesOrderID&$skip=1&$top=1", {
 						"@odata.count" : "41",
 						value : [{GrossAmount : "120", SalesOrderID : "4"}]
 					})
@@ -66928,12 +68113,9 @@ make root = ${bMakeRoot}`;
 				oKeptContext2.setKeepAlive(true);
 			}
 
-			that.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList"
-						+ "?$filter=SalesOrderID eq '1' or SalesOrderID eq '2'"
-						+ "&$select=GrossAmount,Note,SalesOrderID&$top=2"
-				}, {
+			that.expectRequest("#4 SalesOrderList"
+					+ "?$filter=SalesOrderID eq '1' or SalesOrderID eq '2'"
+					+ "&$select=GrossAmount,Note,SalesOrderID&$top=2", {
 					value : [{
 						GrossAmount : "50",
 						Note : "After refresh",
@@ -66946,11 +68128,8 @@ make root = ${bMakeRoot}`;
 				})
 				.expectChange("objectPageGrossAmount", "50.00")
 				.expectChange("objectPageNote", "After refresh")
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList?$count=true&$filter=GrossAmount gt 123"
-						+ "&$select=GrossAmount,SalesOrderID&$skip=0&$top=2"
-				}, {
+				.expectRequest("#4 SalesOrderList?$count=true&$filter=GrossAmount gt 123"
+					+ "&$select=GrossAmount,SalesOrderID&$skip=0&$top=2", {
 					"@odata.count" : "27",
 					value : [{
 						GrossAmount : "149.1",
@@ -66961,11 +68140,8 @@ make root = ${bMakeRoot}`;
 					}]
 				})
 				.expectChange("grossAmount", ["149.10", "789.10"])
-				.expectRequest({
-					batchNo : 4,
-					url : "SalesOrderList('1')/SO_2_SOITEM"
-						+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100"
-				}, {
+				.expectRequest("#4 SalesOrderList('1')/SO_2_SOITEM"
+					+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100", {
 					value : [{
 						ItemPosition : "0020",
 						SalesOrderID : "1"
@@ -66988,11 +68164,9 @@ make root = ${bMakeRoot}`;
 				oKeptContext3.setKeepAlive(true, fnOnBeforeDestroy);
 			}
 
-			that.expectRequest({
-					batchNo : 5,
-					url : "SalesOrderList?$filter=SalesOrderID eq '1' or SalesOrderID eq '2'"
-						+ " or SalesOrderID eq '3'&$select=GrossAmount,Note,SalesOrderID&$top=3"
-				}, {
+			that.expectRequest("#5 SalesOrderList"
+					+ "?$filter=SalesOrderID eq '1' or SalesOrderID eq '2' or SalesOrderID eq '3'"
+					+ "&$select=GrossAmount,Note,SalesOrderID&$top=3", {
 					value : [{
 						GrossAmount : "50.2",
 						Note : "After refresh 2",
@@ -67005,11 +68179,8 @@ make root = ${bMakeRoot}`;
 				})
 				.expectChange("objectPageGrossAmount", "50.20")
 				.expectChange("objectPageNote", "After refresh 2")
-				.expectRequest({
-					batchNo : 5,
-					url : "SalesOrderList?$count=true&$filter=GrossAmount gt 123"
-						+ "&$select=GrossAmount,SalesOrderID&$skip=0&$top=2"
-				}, {
+				.expectRequest("#5 SalesOrderList?$count=true&$filter=GrossAmount gt 123"
+					+ "&$select=GrossAmount,SalesOrderID&$skip=0&$top=2", {
 					"@odata.count" : "26",
 					value : [{
 						GrossAmount : "149.2",
@@ -67021,11 +68192,8 @@ make root = ${bMakeRoot}`;
 				})
 				.expectChange("id", [, "4"])
 				.expectChange("grossAmount", ["149.20", "789.20"])
-				.expectRequest({
-					batchNo : 5,
-					url : "SalesOrderList('1')/SO_2_SOITEM"
-						+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100"
-				}, {
+				.expectRequest("#5 SalesOrderList('1')/SO_2_SOITEM"
+					+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100", {
 					value : [{
 						ItemPosition : "0030",
 						SalesOrderID : "1"
@@ -67392,20 +68560,14 @@ make root = ${bMakeRoot}`;
 						+ " with start index 0 and length 100",
 						sinon.match("Not found"), sODLB);
 
-				that.expectRequest({
-						batchNo : 3,
-						url : "SalesOrderList?$filter=SalesOrderID eq '1'"
-							+ "&$select=GrossAmount,Note,SalesOrderID"
-					}, {
+				that.expectRequest("#3 SalesOrderList?$filter=SalesOrderID eq '1'"
+						+ "&$select=GrossAmount,Note,SalesOrderID", {
 						value : []
 					})
 					.expectChange("objectPageGrossAmount", null)
 					.expectChange("objectPageNote", null)
-					.expectRequest({
-						batchNo : 3,
-						url : "SalesOrderList?$count=true&$filter=GrossAmount le 150"
-							+ "&$select=GrossAmount,SalesOrderID&$skip=0&$top=2"
-					}, {
+					.expectRequest("#3 SalesOrderList?$count=true&$filter=GrossAmount le 150"
+						+ "&$select=GrossAmount,SalesOrderID&$skip=0&$top=2", {
 						"@odata.count" : "41",
 						value : [{
 							GrossAmount : 149.1,
@@ -67417,11 +68579,8 @@ make root = ${bMakeRoot}`;
 					})
 					.expectChange("id", [, "3"])
 					.expectChange("grossAmount", ["149.10", "99.00"])
-					.expectRequest({
-						batchNo : 3,
-						url : "SalesOrderList('1')/SO_2_SOITEM"
-							+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100"
-					}, oError)
+					.expectRequest("#3 SalesOrderList('1')/SO_2_SOITEM"
+						+ "?$select=ItemPosition,SalesOrderID&$skip=0&$top=100", oError)
 					.expectMessages([{
 						code : "CODE",
 						message : "Not found",
@@ -67654,7 +68813,7 @@ make root = ${bMakeRoot}`;
 				};
 
 			if (bLate) {
-				that.expectRequest("Artists(ArtistID='A1',IsActiveEntity=true)"
+				that.expectRequest("#" + iBatchNo + " Artists(ArtistID='A1',IsActiveEntity=true)"
 						+ "?$select=HasDraftEntity,Messages,lastUsedChannel",
 						oResponse);
 			} else { // if not late, the list's properties are also part of the request
@@ -67670,7 +68829,8 @@ make root = ${bMakeRoot}`;
 						defaultChannel : "Channel 1"
 					}));
 			}
-			that.expectRequest("Artists(ArtistID='A1',IsActiveEntity=true)/_Publication"
+			that.expectRequest("#" + iBatchNo
+					+ " Artists(ArtistID='A1',IsActiveEntity=true)/_Publication"
 					+ "?$select=PublicationID&$skip=0&$top=100",
 					{value : [{PublicationID : "P1"}]}
 				)
@@ -68333,11 +69493,8 @@ make root = ${bMakeRoot}`;
 			.expectChange("friend");
 
 		return this.createView(assert, sView, oModel).then(function () {
-			that.expectRequest({
-					batchNo : 1,
-					url : "Artists?$select=ArtistID,IsActiveEntity,Name"
-						+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)&$skip=0&$top=1"
-				}, {
+			that.expectRequest("#1 Artists?$select=ArtistID,IsActiveEntity,Name"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)&$skip=0&$top=1", {
 					value : [{
 						ArtistID : "1",
 						IsActiveEntity : true,
@@ -68349,12 +69506,9 @@ make root = ${bMakeRoot}`;
 						}
 					}]
 				})
-				.expectRequest({
-					batchNo : 1,
-					url : "Artists(ArtistID='3',IsActiveEntity=false)"
-						+ "?$select=ArtistID,IsActiveEntity,Name"
-						+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-				}, {
+				.expectRequest("#1 Artists(ArtistID='3',IsActiveEntity=false)"
+					+ "?$select=ArtistID,IsActiveEntity,Name"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)", {
 					ArtistID : "3",
 					IsActiveEntity : false,
 					Name : "The Beatles",
@@ -68879,6 +70033,10 @@ make root = ${bMakeRoot}`;
 	// JIRA: CPOUI5ODATAV4-1566
 	//
 	// Selection must not make a difference here (JIRA: CPOUI5ODATAV4-2053).
+	//
+	// If a list binding has no $$aggregation set, calling ODLB#setAggregation with undefined has no
+	// effects, even if pending changes exist.
+	// SNOW: DINC0512612
 	QUnit.test("JIRA: CPOUI5ODATAV4-1104 - do not ignore indirect kept-alive", function (assert) {
 		var oInactiveCreationRow,
 			oItemsTableBinding,
@@ -68953,6 +70111,9 @@ make root = ${bMakeRoot}`;
 				// code under test
 				oKeptAliveItem.refresh();
 			}, new Error("Cannot refresh entity due to pending changes: " + oKeptAliveItem));
+
+			// code under test (SNOW: DINC0512612) - unchanged aggregation (undefined -> undefined)
+			oListReportBinding.setAggregation();
 
 			return that.waitForChanges(assert);
 		}).then(function () {
@@ -70678,6 +71839,7 @@ make root = ${bMakeRoot}`;
 	// and a refresh of a relative binding w/ $$ownRequest (JIRA: CPOUI5ODATAV4-2500)
 	//
 	// Show that a created persisted can stay kept alive during refresh (JIRA: CPOUI5ODATAV4-1386)
+	// Show that a single refresh of a persisted enity does not change anything (SNOW: DINC0562822)
 [
 	"changeParameters", "filter", "refresh", "resume", "sideEffectsRefresh", "sort"
 ].forEach(function (sMethod) {
@@ -70757,6 +71919,22 @@ make root = ${bMakeRoot}`;
 
 			return that.waitForChanges(assert, "2x transient");
 		}).then(function () {
+			assert.strictEqual(oBinding.hasPendingChanges(), true);
+			assert.strictEqual(oBinding.hasPendingChanges(true), false);
+
+			oContextA.setKeepAlive(true); // JIRA: CPOUI5ODATAV4-1386
+
+			that.expectRequest(sTeams + "('TEAM_A')?$select=Name,Team_Id", {
+					Name : "New 'A' Team",
+					Team_Id : "TEAM_A"
+				});
+
+			return Promise.all([
+				// code under test (SNOW: DINC0562822)
+				oContextA.requestRefresh(),
+				that.waitForChanges(assert, "requestRefresh")
+			]);
+		}).then(function () {
 			var oPromise,
 				oResult = {
 					value : [{
@@ -70773,11 +71951,6 @@ make root = ${bMakeRoot}`;
 						Team_Id : "TEAM_A"
 					}]
 				};
-
-			assert.strictEqual(oBinding.hasPendingChanges(), true);
-			assert.strictEqual(oBinding.hasPendingChanges(true), false);
-
-			oContextA.setKeepAlive(true); // JIRA: CPOUI5ODATAV4-1386
 
 			switch (sMethod) {
 				case "changeParameters":
@@ -71609,10 +72782,7 @@ make root = ${bMakeRoot}`;
 					payload : {Name : "New Team C", Team_Id : "TEAM_C"}
 				}, {Name : "n/c", Team_Id : "TEAM_C"})
 				// .expectChange("name", "New 'C' Team", -1) // would happen w/ bSkipRefresh
-				.expectRequest({
-					batchNo : 2,
-					url : "TEAMS?$select=Name,Team_Id&$skip=0&$top=5"
-				}, {
+				.expectRequest("#2 TEAMS?$select=Name,Team_Id&$skip=0&$top=5", {
 					value : [
 						{Name : "n/a", Team_Id : "TEAM_A"},
 						{Name : "'#1' Team", Team_Id : "TEAM_01"},
@@ -71624,14 +72794,12 @@ make root = ${bMakeRoot}`;
 				.expectChange("id", ["TEAM_B", "TEAM_A", "TEAM_01", "TEAM_02", "TEAM_C"])
 				.expectChange("name",
 					["New 'B' Team", "New 'A' Team", "'#1' Team", "'#2' Team", "New 'C' Team"])
-				.expectRequest({ //TODO how to avoid this artefact?
-					// _CollectionCache#read computes iCreatedPersisted = 2 because oBackup has not
-					// yet been deleted (because oRefreshPromise not yet resolved); this extends
-					// the prefetch unnecessarily here :-(
-					batchNo : 3,
-					url : "TEAMS?$select=Name,Team_Id"
-						+ "&$filter=not (Team_Id eq 'TEAM_A' or Team_Id eq 'TEAM_B')&$skip=3&$top=2"
-				}, {
+				//TODO how to avoid this artefact?
+				// _CollectionCache#read computes iCreatedPersisted = 2 because oBackup has not
+				// yet been deleted (because oRefreshPromise not yet resolved); this extends
+				// the prefetch unnecessarily here :-(
+				.expectRequest("#3 TEAMS?$select=Name,Team_Id"
+					+ "&$filter=not (Team_Id eq 'TEAM_A' or Team_Id eq 'TEAM_B')&$skip=3&$top=2", {
 					value : [
 						{Name : "'#3' Team", Team_Id : "TEAM_03"},
 						{Name : "'#4' Team", Team_Id : "TEAM_04"}
@@ -73193,13 +74361,10 @@ make root = ${bMakeRoot}`;
 					PublicationID : "2"
 				}
 			}, createErrorInsideBatch({target : "Price"}))
-			.expectRequest({
-				batchNo : 2,
-				method : "GET",
-				url : "Artists(ArtistID='1',IsActiveEntity=false)?$select=BestFriend"
-					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity"
-						+ ";$expand=BestPublication($select=CurrencyCode,Price,PublicationID))"
-			}) // no response required
+			.expectRequest("#2 Artists(ArtistID='1',IsActiveEntity=false)?$select=BestFriend"
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity"
+					+ ";$expand=BestPublication($select=CurrencyCode,Price,PublicationID))")
+				// no response required
 			.expectMessages([{
 				code : "CODE",
 				message : "Request intentionally failed",
@@ -73305,13 +74470,9 @@ make root = ${bMakeRoot}`;
 						PublicationID : "2"
 					}
 				}, null, {ETag : "etag3"}) // 204 No Content
-				.expectRequest({
-					batchNo : 3,
-					method : "GET",
-					url : "Artists(ArtistID='1',IsActiveEntity=false)?$select=BestFriend"
-						+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity"
-						+ ";$expand=BestPublication($select=CurrencyCode,Price,PublicationID))"
-				}, {
+				.expectRequest("#3 Artists(ArtistID='1',IsActiveEntity=false)?$select=BestFriend"
+					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity"
+					+ ";$expand=BestPublication($select=CurrencyCode,Price,PublicationID))", {
 					BestFriend : {
 						ArtistID : "2",
 						BestPublication : {
@@ -73461,36 +74622,23 @@ make root = ${bMakeRoot}`;
 		};
 		if (bRefresh) {
 			if (bKeepAlive) { // ODLB#refreshKeptElements
-				this.expectRequest({
-						batchNo : 2,
-						method : "GET",
-						url : "SalesOrderList?$select=BuyerID,SalesOrderID" + sExpand
-							+ "&$filter=SalesOrderID eq '1'"
-					}, {
+				this.expectRequest("#2 SalesOrderList?$select=BuyerID,SalesOrderID" + sExpand
+						+ "&$filter=SalesOrderID eq '1'", {
 						value : [oSalesOrder]
 					});
 			}
-			this.expectRequest({
-					batchNo : 2,
-					method : "GET",
-					url : "SalesOrderList?$select=BuyerID,SalesOrderID" + sExpand
-						+ "&$skip=0&$top=100"
-				}, { // w/ keep-alive, simulate that ('1') does not match filter anymore ;-)
+			this.expectRequest("#2 SalesOrderList?$select=BuyerID,SalesOrderID" + sExpand
+					+ "&$skip=0&$top=100", {
+					// w/ keep-alive, simulate that ('1') does not match filter anymore ;-)
 					value : bKeepAlive ? [] : [oSalesOrder]
 				});
 			if (bKeepAlive) { // _Cache#refreshSingleNoCollection
-				this.expectRequest({
-						batchNo : 2,
-						method : "GET",
-						url : "SalesOrderList('1')?$select=SO_2_BP" + sExpand
-					}, oSalesOrder); // Note: no BuyerID,SalesOrderID needed => updateSelected
+				this.expectRequest("#2 SalesOrderList('1')?$select=SO_2_BP" + sExpand,
+						oSalesOrder); // Note: no BuyerID,SalesOrderID needed => updateSelected
 			}
 		} else { // _Cache#refreshSingleNoCollection merged with #requestSideEffects
-			this.expectRequest({
-					batchNo : 2,
-					method : "GET",
-					url : "SalesOrderList('1')?$select=BuyerID" + sExpand
-				}, oSalesOrder); // Note: no SalesOrderID needed, but never mind => updateSelected
+			this.expectRequest("#2 SalesOrderList('1')?$select=BuyerID" + sExpand,
+					oSalesOrder); // Note: no SalesOrderID needed, but never mind => updateSelected
 		}
 		this.expectChange("buyerId", ["2"])
 			.expectChange("postalCode", ["12345"]);
@@ -74826,6 +75974,9 @@ make root = ${bMakeRoot}`;
 	//*********************************************************************************************
 	// Scenario: An object page with an items table. Request a side effect for a single row and one
 	// for the root object which refreshes the items table. This must not fail due to call order.
+	// SNOW: DINC0012327
+	//
+	// Items table refresh must not prevent side effects for header data (SNOW: DINC0539551)
 	QUnit.test("DINC0012327", async function (assert) {
 		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
 		const sView = `
@@ -74889,6 +76040,28 @@ make root = ${bMakeRoot}`;
 			oTeamContext.requestSideEffects(["TEAM_2_EMPLOYEES"]),
 			oEmployeeContext.requestSideEffects(["Name"]),
 			this.waitForChanges(assert)
+		]);
+
+		this.expectRequest("TEAMS('TEAM_01')/TEAM_2_EMPLOYEES?$select=ID,Name&$skip=0&$top=100", {
+				value : [{
+					ID : "2",
+					Name : "Frederic Summer"
+				}]
+			})
+			.expectChange("employeeName", ["Frederic Summer"])
+			.expectRequest("TEAMS('TEAM_01')?$select=Name", {
+				Name : "Team #1 (updated)"
+			})
+			.expectChange("teamName", "Team #1 (updated)");
+
+		const oHeaderContext = oEmployeeContext.getBinding().getHeaderContext();
+
+		await Promise.all([
+			oHeaderContext.requestSideEffects([""]), // recomputes the ODLB's cache
+			// code under test (SNOW: DINC0539551)
+			oHeaderContext.requestSideEffects(["EMPLOYEE_2_TEAM/Name"]), // must not be stifled
+			this.waitForChanges(assert, "side-effects refresh for items table must not prevent side"
+				+ " effects for header data")
 		]);
 	});
 
@@ -76261,7 +77434,7 @@ make root = ${bMakeRoot}`;
 	//
 	// Check that v4.Context#hasPendingChanges also works for unbound properties (1) and test a
 	// workaround for the missing v4.Context#resetChanges (2)
-	// (https://github.com/SAP/openui5/issues/3562)
+	// (https://github.com/UI5/openui5/issues/3562)
 	QUnit.test("BCP: 2270093727", function (assert) {
 		var oModel = this.createSalesOrdersModel({autoExpandSelect : true}),
 			sView = '\
@@ -76676,11 +77849,7 @@ make root = ${bMakeRoot}`;
 				}, new Promise(function (resolve) {
 					fnResolvePatch = resolve;
 				}))
-				.expectRequest({
-					batchNo : 2,
-					method : "DELETE",
-					url : "SalesOrderList('4')"
-				}, new Promise(function (resolve) {
+				.expectRequest("#2 DELETE SalesOrderList('4')", new Promise(function (resolve) {
 					fnResolveDelete = resolve;
 				}));
 
@@ -77186,11 +78355,7 @@ make root = ${bMakeRoot}`;
 				method : "DELETE",
 				url : "SalesOrderList('2')"
 			})
-			.expectRequest({
-				batchNo : -7,
-				method : "DELETE",
-				url : "SalesOrderList('3')"
-			})
+			.expectRequest("#-7 DELETE SalesOrderList('3')")
 			.expectChange("id", ["4", "5", "6"]);
 
 		await Promise.all([
@@ -77229,6 +78394,83 @@ make root = ${bMakeRoot}`;
 			oModel.delete("/SalesOrderList('6')", "$direct"),
 			this.waitForChanges(assert)
 		]);
+	});
+
+	//*********************************************************************************************
+	// Scenario: Create an operation binding for a collection-bound action relative to the header
+	// context of a new list binding that has not yet finished its auto-$expand/$select. See that
+	// $$inheritExpandSelect does not causes issues, but can inherit some hardcoded $select.
+	// SNOW: CS20250010102074
+	//
+	// @see "Fiori Elements Safeguard: Test 2 (Create)" for a similar scenario "but w/o
+	//   $$inheritExpandSelect because nothing can be inherited" :-(
+	// @see "DINC0333115: bound action w/o entity data" for a similar scenario w/ ODCB
+	QUnit.test("CS20250010102074: $$inheritExpandSelect on new ODLB", async function (assert) {
+		const oModel = this.createSpecialCasesModel({autoExpandSelect : true});
+
+		await this.createView(assert, "", oModel);
+
+		const oListBinding = oModel.bindList("/Artists", null, [], [], {$select : "Messages"});
+		const oOperationBinding = oModel.bindContext("special.cases.Create(...)",
+			oListBinding.getHeaderContext(), {$$inheritExpandSelect : true});
+
+		this.expectRequest({
+				method : "POST",
+				payload : {
+					Name : "Jane Doe"
+				},
+				url : "Artists/special.cases.Create?$select=Messages"
+			}, {
+				ArtistID : "23",
+				IsActiveEntity : false,
+				Messages : []
+			});
+
+		const [oReturnValueContext] = await Promise.all([
+			oOperationBinding.setParameter("Name", "Jane Doe")
+				// code under test
+				.invoke(),
+			this.waitForChanges(assert)
+		]);
+
+		assert.strictEqual(oReturnValueContext.getPath(),
+			"/Artists(ArtistID='23',IsActiveEntity=false)", "some quick check");
+	});
+
+	//*********************************************************************************************
+	// Scenario: Create an operation binding for a bound action relative to a new context where no
+	// data has been loaded because ODM#getKeepAliveContext has just been called. Use
+	// bIgnoreETag to invoke the action unconditionally without a GET request beforehand.
+	// SNOW: DINC0524072
+	QUnit.test("DINC0524072: bound action on fresh #getKeepAliveContext", async function (assert) {
+		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
+
+		await this.createView(assert, "", oModel);
+
+		const oContext = oModel.getKeepAliveContext("/EMPLOYEES('0')");
+		assert.deepEqual(oContext.getObject(), undefined, "initially undefined...");
+		assert.deepEqual(await oContext.requestObject(), {}, "...then empty");
+
+		const sAction = "com.sap.gateway.default.iwbep.tea_busi.v0001.AcChangeTeamOfEmployee";
+		const oAction = oModel.bindContext(sAction + "(...)", oContext);
+
+		this.expectRequest({
+				batchNo : 1,
+				headers : {"If-Match" : "*"},
+				method : "POST",
+				payload : {TeamID : "42"},
+				url : "EMPLOYEES('0')/" + sAction
+			}, {/* don't care */})
+			.expectRequest("#1 EMPLOYEES('0')?$select=ID", {ID : "0"});
+
+		await Promise.all([
+			oAction.setParameter("TeamID", "42")
+				// code under test
+				.invoke(/*sGroupId*/undefined, /*bIgnoreETag*/true),
+			this.waitForChanges(assert)
+		]);
+
+		assert.deepEqual(oContext.getObject(), {ID : "0"});
 	});
 
 	//*********************************************************************************************
@@ -77995,45 +79237,37 @@ make root = ${bMakeRoot}`;
 		if (sMethod !== "requestSideEffects") {
 			// side-effects refresh keeps position of all created entries regardless of the filter,
 			// therefore no validation for created entries is needed
-			this.expectRequest({ // ODLB#validateSelection
-					batchNo : 4,
-					url : "SalesOrderList?$filter=SalesOrderID eq '4' or SalesOrderID eq '3'"
-						+ "&$search=foo&$select=SalesOrderID&$top=2"
-				}, { // SalesOrderList('3') doesn't match $search
+			// ODLB#validateSelection
+			this.expectRequest("#4 SalesOrderList"
+					+ "?$filter=SalesOrderID eq '4' or SalesOrderID eq '3'"
+					+ "&$search=foo&$select=SalesOrderID&$top=2", {
+					// SalesOrderList('3') doesn't match $search
 					value : [{SalesOrderID : "4"}]
 				});
 		}
 		if (sMethod === "refresh" || sMethod === "requestSideEffects") {
-			this.expectRequest({ // ODLB#refreshKeptElements via "refresh"
-					batchNo : 4,
-					url : "SalesOrderList?$select=Note,SalesOrderID"
-						+ "&$filter=SalesOrderID eq '3' or SalesOrderID eq '4'&$top=2"
-				}, {
+			// ODLB#refreshKeptElements via "refresh"
+			this.expectRequest("#4 SalesOrderList?$select=Note,SalesOrderID"
+					+ "&$filter=SalesOrderID eq '3' or SalesOrderID eq '4'&$top=2", {
 					value : [
 						{Note : "SO 3 (bar) - created persisted", SalesOrderID : "3"},
 						{Note : "SO 4 (foo) - created persisted", SalesOrderID : "4"}
 					]
 				});
 		}
-		if (sMethod === "requestSideEffects") {
-			this.expectRequest({ // "refresh"
-					batchNo : 4,
-					url : "SalesOrderList?$search=foo&$select=Note,SalesOrderID"
-						+ "&$filter=not (SalesOrderID eq '3' or SalesOrderID eq '4')"
-						+ "&$skip=0&$top=99"
-				}, {
+		if (sMethod === "requestSideEffects") { // "refresh"
+			this.expectRequest("#4 SalesOrderList?$search=foo&$select=Note,SalesOrderID"
+					+ "&$filter=not (SalesOrderID eq '3' or SalesOrderID eq '4')"
+					+ "&$skip=0&$top=99", {
 					value : [
 						{Note : "SO 1 (foo)", SalesOrderID : "1"}
 					]
 				});
-		} else {
-			this.expectRequest({ // "refresh"
-					batchNo : 4,
-					url : "SalesOrderList?$search=foo&$select=Note,SalesOrderID"
-						+ (sMethod === "sort" || sMethod === "changeParameters"
-							? "&$orderby=SalesOrderID" : "")
-						+ "&$skip=0&$top=99"
-				}, {
+		} else { // "refresh"
+			this.expectRequest("#4 SalesOrderList?$search=foo&$select=Note,SalesOrderID"
+					+ (sMethod === "sort" || sMethod === "changeParameters"
+						? "&$orderby=SalesOrderID" : "")
+					+ "&$skip=0&$top=99", {
 					value : [
 						{Note : "SO 1 (foo)", SalesOrderID : "1"},
 						{Note : "SO 4 (foo) - created persisted", SalesOrderID : "4"}
@@ -79023,6 +80257,10 @@ make root = ${bMakeRoot}`;
 	// corresponds to the affected context index (to be used as #requestContexts parameter) instead
 	// of the actual $skip index.
 	// JIRA: CPOUI5ODATAV4-2696
+	//
+	// Messages contained in a successful $$separate response are handled automatically and they are
+	// not passed to the "separateReceived" event handler.
+	// JIRA: CPOUI5ODATAV4-2878
 [false, true].forEach(function (bAutoExpandSelect) {
 	QUnit.test("$$separate: autoExpandSelect=" + bAutoExpandSelect, async function (assert) {
 		const oModel = this.createSpecialCasesModel({autoExpandSelect : bAutoExpandSelect});
@@ -79109,7 +80347,12 @@ make root = ${bMakeRoot}`;
 						IsActiveEntity : true
 					}, {
 						ArtistID : "20",
-						BestFriend : {ArtistID : "F2", IsActiveEntity : true, Name : "Friend B"},
+						BestFriend : {
+							ArtistID : "F2",
+							IsActiveEntity : true,
+							Messages : [{code : "CODE", message : "MESSAGE", numericSeverity : 2}],
+							Name : "Friend B"
+						},
 						IsActiveEntity : true
 					}]
 				});
@@ -79165,7 +80408,13 @@ make root = ${bMakeRoot}`;
 		});
 
 		this.expectChange("friend", ["Friend A", "Friend B"])
-			.expectChange("friendBusy__AS_COMPOSITE", [false, false]);
+			.expectChange("friendBusy__AS_COMPOSITE", [false, false])
+			.expectMessages([{
+				code : "CODE",
+				message : "MESSAGE",
+				persistent : true,
+				type : "Information"
+			}]);
 
 		fnResolveBestFriend();
 
@@ -79186,13 +80435,11 @@ make root = ${bMakeRoot}`;
 			Name : "Artist A"
 			// SiblingEntity missing
 		});
+		// Success messages are not passed as "messagesOnError" parameter to the event handler
 		checkEvents([{property : "BestFriend", start : 0, length : 2}]);
 
-		this.expectRequest({
-				batchNo : 4,
-				url : "Artists(ArtistID='20',IsActiveEntity=true)/SiblingEntity?custom=foo"
-					+ "&$select=ArtistID,IsActiveEntity,defaultChannel"
-			}, {
+		this.expectRequest("#4 Artists(ArtistID='20',IsActiveEntity=true)/SiblingEntity?custom=foo"
+				+ "&$select=ArtistID,IsActiveEntity,defaultChannel", {
 				ArtistID : "S2",
 				IsActiveEntity : true,
 				defaultChannel : "~defaultChannel~"
@@ -79222,32 +80469,25 @@ make root = ${bMakeRoot}`;
 		checkEvents([{property : "SiblingEntity", start : 0, length : 2}]);
 
 		let fnResolveMain;
-		this.expectRequest({
-				batchNo : 5,
-				url : sUrl + "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=2&$top=1"
-			}, {
+		this.expectRequest("#5 " + sUrl
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=2&$top=1", {
 				value : [{
 					ArtistID : "30",
 					BestFriend : {ArtistID : "F3", IsActiveEntity : true, Name : "Friend C"},
 					IsActiveEntity : true
 				}]
 			})
-			.expectRequest({
-				batchNo : 6,
-				url : sUrl + "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=2&$top=1"
-			}, {
+			.expectRequest("#6 " + sUrl
+				+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=2&$top=1", {
 				value : [{
 					ArtistID : "30",
 					IsActiveEntity : true,
 					SiblingEntity : {ArtistID : "S3", IsActiveEntity : true, Name : "Sibling C"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 7,
-				url : sMainUrl + "&$skip=2&$top=1"
-			}, new Promise(function (resolve) {
+			.expectRequest("#7 " + sMainUrl + "&$skip=2&$top=1", new Promise(function (resolve) {
 				fnResolveMain = resolve.bind(null, {
 					"@odata.count" : "8",
 					value : [{
@@ -79284,11 +80524,9 @@ make root = ${bMakeRoot}`;
 			{property : "SiblingEntity", start : 2, length : 1}
 		]);
 
-		this.expectRequest({
-				batchNo : 8,
-				url : sUrl + "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=3&$top=2"
-			}, {
+		this.expectRequest("#8 " + sUrl
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=3&$top=2", {
 				value : [{
 					ArtistID : "99", // unexpected entity
 					BestFriend : {ArtistID : "F99", IsActiveEntity : true, Name : "Friend Z"},
@@ -79299,11 +80537,9 @@ make root = ${bMakeRoot}`;
 					IsActiveEntity : true
 				}]
 			})
-			.expectRequest({
-				batchNo : 9,
-				url : sUrl + "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=3&$top=2"
-			}, {
+			.expectRequest("#9 " + sUrl
+			+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=3&$top=2", {
 				value : [{
 					ArtistID : "50",
 					IsActiveEntity : true,
@@ -79314,10 +80550,7 @@ make root = ${bMakeRoot}`;
 					SiblingEntity : {ArtistID : "S99", IsActiveEntity : true, Name : "Sibling Z"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 10,
-				url : sMainUrl + "&$skip=3&$top=2"
-			}, {
+			.expectRequest("#10 " + sMainUrl + "&$skip=3&$top=2", {
 				"@odata.count" : "8",
 				value : [{
 					ArtistID : "40",
@@ -79337,18 +80570,13 @@ make root = ${bMakeRoot}`;
 			.expectChange("friendBusy__AS_COMPOSITE", [,,, false, true])
 			.expectChange("friendBusy__AS_COMPOSITE", [,,, false])
 			.expectChange("sibling", [,,,, "Sibling E"])
-			.expectRequest({
-				batchNo : 11,
-				url : "Artists(ArtistID='40',IsActiveEntity=true)?custom=foo&$select=SiblingEntity"
-					+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-			}, {
+			.expectRequest("#11 Artists(ArtistID='40',IsActiveEntity=true)?custom=foo"
+				+ "&$select=SiblingEntity"
+				+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)", {
 				SiblingEntity : {ArtistID : "S4", IsActiveEntity : true, Name : "Sibling D"}
 			})
-			.expectRequest({
-				batchNo : 11,
-				url : "Artists(ArtistID='50',IsActiveEntity=true)?custom=foo&$select=BestFriend"
-					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-			}, {
+			.expectRequest("#11 Artists(ArtistID='50',IsActiveEntity=true)?custom=foo"
+				+ "&$select=BestFriend&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)", {
 				BestFriend : {ArtistID : "F5", IsActiveEntity : true, Name : "Friend E"}
 			})
 			.expectChange("friend", [,,,, "Friend E"])
@@ -79366,34 +80594,33 @@ make root = ${bMakeRoot}`;
 		]);
 
 		let fnResolveBestFriend60;
-		this.expectRequest({
-				batchNo : 12,
-				url : sUrl + "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=5&$top=1"
-			}, new Promise(function (resolve) {
-				fnResolveBestFriend60 = resolve.bind(null, {
-					value : [{
-						ArtistID : "60",
-						BestFriend : {ArtistID : "F6", IsActiveEntity : true, Name : "Friend F"},
-						IsActiveEntity : true
-					}]
-				});
-			}))
-			.expectRequest({
-				batchNo : 13,
-				url : sUrl + "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=5&$top=1"
-			}, {
+		this.expectRequest("#12 " + sUrl
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=5&$top=1",
+				new Promise(function (resolve) {
+					fnResolveBestFriend60 = resolve.bind(null, {
+						value : [{
+							ArtistID : "60",
+							BestFriend : {
+								ArtistID : "F6",
+								IsActiveEntity : true,
+								Name : "Friend F"
+							},
+							IsActiveEntity : true
+						}]
+					});
+				})
+			)
+			.expectRequest("#13 " + sUrl
+				+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=5&$top=1", {
 				value : [{
 					ArtistID : "60",
 					IsActiveEntity : true,
 					SiblingEntity : {ArtistID : "S6", IsActiveEntity : true, Name : "Sibling F"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 14,
-				url : sMainUrl + "&$skip=5&$top=1"
-			}, {
+			.expectRequest("#14 " + sMainUrl + "&$skip=5&$top=1", {
 				"@odata.count" : "8",
 				value : [{
 					ArtistID : "60",
@@ -79413,32 +80640,25 @@ make root = ${bMakeRoot}`;
 
 		checkEvents([{property : "SiblingEntity", start : 5, length : 1}]);
 
-		this.expectRequest({
-				batchNo : 15,
-				url : sUrl + "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=6&$top=1"
-			}, {
+		this.expectRequest("#15 " + sUrl
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=6&$top=1", {
 				value : [{
 					ArtistID : "70",
 					BestFriend : {ArtistID : "F7", IsActiveEntity : true, Name : "Friend G"},
 					IsActiveEntity : true
 				}]
 			})
-			.expectRequest({
-				batchNo : 16,
-				url : sUrl + "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-					+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=6&$top=1"
-			}, {
+			.expectRequest("#16 " + sUrl
+				+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
+				+ sFilterSort + "&$select=ArtistID,IsActiveEntity&$skip=6&$top=1", {
 				value : [{
 					ArtistID : "70",
 					IsActiveEntity : true,
 					SiblingEntity : {ArtistID : "S7", IsActiveEntity : true, Name : "Sibling G"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 17,
-				url : sMainUrl + "&$skip=6&$top=1"
-			}, {
+			.expectRequest("#17 " + sMainUrl + "&$skip=6&$top=1", {
 				"@odata.count" : "8",
 				value : [{
 					ArtistID : "70",
@@ -79497,13 +80717,10 @@ make root = ${bMakeRoot}`;
 				IsActiveEntity : true,
 				Name : "Artist X"
 			})
-			.expectRequest({
-				batchNo : 19,
-				url : "Artists(ArtistID='240',IsActiveEntity=true)?custom=foo&$select=BestFriend"
-					+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ ",BestPublication($select=CurrencyCode,PublicationID)"
-					+ ",SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-			}, {
+			.expectRequest("#19 Artists(ArtistID='240',IsActiveEntity=true)?custom=foo"
+				+ "&$select=BestFriend&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ ",BestPublication($select=CurrencyCode,PublicationID)"
+				+ ",SiblingEntity($select=ArtistID,IsActiveEntity,Name)", {
 				BestFriend : {ArtistID : "F24", IsActiveEntity : true, Name : "Friend X"},
 				BestPublication : {CurrencyCode : "IDR", PublicationID : "Pub24"},
 				SiblingEntity : {ArtistID : "S24", IsActiveEntity : true, Name : "Sibling X"}
@@ -79518,44 +80735,37 @@ make root = ${bMakeRoot}`;
 
 		await this.waitForChanges(assert, "create new item");
 
-		this.expectRequest({
-				batchNo : 20,
-				url : sUrl + "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
-					+ "&$filter=(IsActiveEntity eq true)"
-					+ " and not (ArtistID eq '240' and IsActiveEntity eq true)"
-					+ "&$orderby=ArtistID&$search=covfefe"
-					+ "&$select=ArtistID,IsActiveEntity&$skip=7&$top=1"
-			}, {
+		this.expectRequest("#20 " + sUrl
+				+ "&$expand=BestFriend($select=ArtistID,IsActiveEntity,Name)"
+				+ "&$filter=(IsActiveEntity eq true)"
+				+ " and not (ArtistID eq '240' and IsActiveEntity eq true)"
+				+ "&$orderby=ArtistID&$search=covfefe"
+				+ "&$select=ArtistID,IsActiveEntity&$skip=7&$top=1", {
 				value : [{
 					ArtistID : "80",
 					BestFriend : {ArtistID : "F8", IsActiveEntity : true, Name : "Friend H"},
 					IsActiveEntity : true
 				}]
 			})
-			.expectRequest({
-				batchNo : 21,
-				url : sUrl + "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
-					+ "&$filter=(IsActiveEntity eq true)"
-					+ " and not (ArtistID eq '240' and IsActiveEntity eq true)"
-					+ "&$orderby=ArtistID&$search=covfefe"
-					+ "&$select=ArtistID,IsActiveEntity&$skip=7&$top=1"
-			}, {
+			.expectRequest("#21 " + sUrl
+				+ "&$expand=SiblingEntity($select=ArtistID,IsActiveEntity,Name)"
+				+ "&$filter=(IsActiveEntity eq true)"
+				+ " and not (ArtistID eq '240' and IsActiveEntity eq true)"
+				+ "&$orderby=ArtistID&$search=covfefe"
+				+ "&$select=ArtistID,IsActiveEntity&$skip=7&$top=1", {
 				value : [{
 					ArtistID : "80",
 					IsActiveEntity : true,
 					SiblingEntity : {ArtistID : "S8", IsActiveEntity : true, Name : "Sibling H"}
 				}]
 			})
-			.expectRequest({
-				batchNo : 22,
-				url : sUrl + "&$count=true"
-					+ "&$expand=BestPublication($select=CurrencyCode,PublicationID)"
-					+ "&$filter=(IsActiveEntity eq true)"
-					+ " and not (ArtistID eq '240' and IsActiveEntity eq true)"
-					+ "&$orderby=ArtistID&$search=covfefe"
-					+ "&$select=ArtistID,IsActiveEntity,Name"
-					+ "&$skip=7&$top=1"
-			}, {
+			.expectRequest("#22 " + sUrl + "&$count=true"
+				+ "&$expand=BestPublication($select=CurrencyCode,PublicationID)"
+				+ "&$filter=(IsActiveEntity eq true)"
+				+ " and not (ArtistID eq '240' and IsActiveEntity eq true)"
+				+ "&$orderby=ArtistID&$search=covfefe"
+				+ "&$select=ArtistID,IsActiveEntity,Name"
+				+ "&$skip=7&$top=1", {
 				"@odata.count" : "9",
 				value : [{
 					ArtistID : "80",
@@ -79800,13 +81010,14 @@ make root = ${bMakeRoot}`;
 	//*********************************************************************************************
 	// Scenario: A list binding uses binding parameter $$separate. If a main list request fails, the
 	// response of the separate request is ignored. If the separate request fails, the column for
-	// the separate data remains empty. In both cases the error is reported as UI5 message.
+	// the separate data remains empty. In both cases the messages contained in the error response
+	// are reported as UI5 messages.
 	// JIRA: CPOUI5ODATAV4-2776
 	//
-	// The UI5 message of the failed separate request is also provided as "errorMessage" parameter
-	// to the "separateReceived" event. Calling preventDefault on this event prevents that this UI5
-	// message is automatically reported to the message model.
-	// JIRA: CPOUI5ODATAV4-2792
+	// The UI5 messages of the failed separate request are also provided as "messagesOnError"
+	// parameter to the "separateReceived" event. Calling preventDefault on this event prevents that
+	// these UI5 messages are automatically reported to the message model.
+	// JIRA: CPOUI5ODATAV4-2792, CPOUI5ODATAV4-2878
 	//
 	// Context#requestObject can be used to wait for the separate data while waiting for the
 	// pending separate GET request. If the separate request fails, the promise returned by
@@ -79857,13 +81068,16 @@ make root = ${bMakeRoot}`;
 		}
 		let fnReject;
 		const oResponsePromise = new Promise(function (_resolve, reject) {
-			fnReject = reject.bind(null, createErrorInsideBatch());
+			fnReject = reject.bind(null, createErrorInsideBatch({
+					details : [{
+						"@Common.numericSeverity" : 3,
+						code : "DETAIL",
+						message : "Detail Message"
+					}]
+				}));
 		});
-		this.expectRequest({
-				batchNo : 1,
-				url : "EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
-					+ "&$skip=0&$top=2"
-			}, bSeparateFailed ? oResponsePromise : {
+		this.expectRequest("#1 EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
+				+ "&$skip=0&$top=2", bSeparateFailed ? oResponsePromise : {
 				value : [{
 					EMPLOYEE_2_TEAM : {Name : "Team A", Team_Id : "A"},
 					ID : "0"
@@ -79872,10 +81086,7 @@ make root = ${bMakeRoot}`;
 					ID : "1"
 				}]
 			})
-			.expectRequest({
-				batchNo : 2,
-				url : "EMPLOYEES?$select=ID,Name&$skip=0&$top=2"
-			}, bSeparateFailed ? {
+			.expectRequest("#2 EMPLOYEES?$select=ID,Name&$skip=0&$top=2", bSeparateFailed ? {
 				value : [{
 					ID : "0",
 					Name : "Employee 0"
@@ -79902,6 +81113,7 @@ make root = ${bMakeRoot}`;
 			}, function (oError) {
 				assert.strictEqual(oError.canceled, true);
 				assert.strictEqual(oError.message, "$$separate: canceled EMPLOYEE_2_TEAM");
+				assert.strictEqual(oError.cause.message, "Request intentionally failed");
 			});
 
 			this.expectCanceledError("Failed to read path /EMPLOYEES('0')/EMPLOYEE_2_TEAM/Name",
@@ -79915,6 +81127,11 @@ make root = ${bMakeRoot}`;
 				persistent : true,
 				technical : true,
 				type : "Error"
+			}, {
+				code : "DETAIL",
+				message : "Detail Message",
+				persistent : true,
+				type : "Warning"
 			}]);
 
 		fnReject();
@@ -79929,14 +81146,20 @@ make root = ${bMakeRoot}`;
 			assert.strictEqual(oParameters.property, "EMPLOYEE_2_TEAM");
 			assert.strictEqual(oParameters.start, 0);
 			assert.strictEqual(oParameters.length, 2);
-			assert.strictEqual(oParameters.errorMessage.getCode(), "CODE");
-			assert.strictEqual(oParameters.errorMessage.getMessage(),
+			assert.strictEqual(oParameters.messagesOnError.length, 2);
+			assert.strictEqual(oParameters.messagesOnError[0].getCode(), "CODE");
+			assert.strictEqual(oParameters.messagesOnError[0].getMessage(),
 				"Request intentionally failed");
-			assert.strictEqual(oParameters.errorMessage.getPersistent(), true);
-			assert.strictEqual(oParameters.errorMessage.getType(), "Error");
+			assert.strictEqual(oParameters.messagesOnError[0].getPersistent(), true);
+			assert.strictEqual(oParameters.messagesOnError[0].getType(), "Error");
+			assert.strictEqual(oParameters.messagesOnError[1].getCode(), "DETAIL");
+			assert.strictEqual(oParameters.messagesOnError[1].getMessage(), "Detail Message");
+			assert.strictEqual(oParameters.messagesOnError[1].getPersistent(), true);
+			assert.strictEqual(oParameters.messagesOnError[1].getType(), "Warning");
 			if (!bPreventDefault) {
-				assert.strictEqual(oParameters.errorMessage,
-					Messaging.getMessageModel().getObject("/")[0]);
+				const aMessages = Messaging.getMessageModel().getObject("/");
+				assert.strictEqual(oParameters.messagesOnError[0], aMessages[0]);
+				assert.strictEqual(oParameters.messagesOnError[1], aMessages[1]);
 			}
 		}
 		assert.deepEqual(aEventParameters, []);
@@ -79949,10 +81172,27 @@ make root = ${bMakeRoot}`;
 	// Create a new list binding (matching the kept-alive element) with $$separate and see that the
 	// kept-alive element becomes part of the binding.
 	// JIRA: CPOUI5ODATAV4-2697
-	QUnit.test("$$separate: ODM#getKeepAliveContext", async function (assert) {
+	//
+	// Load another kept-alive element and bind it to an object page. This page contains properties
+	// which are reachable via a $$separate navigation property (EMPLOYEE_2_TEAM). One of them is
+	// not part of the list binding's $expand/$select query options (EMPLOYEE_2_TEAM/MEMBER_COUNT).
+	// When paging in the table, the kept-alive element is loaded, but the EMPLOYEE_2_TEAM has a new
+	// ETag. As a result, the new EMPLOYEE_2_TEAM overwrites the old one, and the missing
+	// MEMBER_COUNT is requested in a subsequent late property request. When doing the same scenario
+	// but with a matching ETag, then the known MEMBER_COUNT can be used and no late property
+	// request is needed.
+	// JIRA: CPOUI5ODATAV4-2998
+	//
+	// Due to a deletion in the back end (between processing main and separate request), the
+	// separate request responds with an unexpected entity which was not part of the main list
+	// response. The unexpected data is ignored. Instead, the missing separate data is tried to be
+	// fetched with a subsequent late property request. This request fails with 404, and the
+	// affected table column remains empty.
+	// JIRA: CPOUI5ODATAV4-2777
+	QUnit.test("$$separate: ODM#getKeepAliveContext, deleted entity", async function (assert) {
 		const oModel = this.createTeaBusiModel({autoExpandSelect : true});
 		const sView = `
-<Table growing="true" growingThreshold="1" id="table"
+<Table growing="true" growingThreshold="1" id="list"
 		items="{
 			path : 'EMPLOYEES',
 			parameters : {
@@ -79962,47 +81202,188 @@ make root = ${bMakeRoot}`;
 			}
 		}">
 	<Text id="name" text="{Name}"/>
-	<Text id="team" text="{EMPLOYEE_2_TEAM/Name}"/>
-</Table>`;
+	<Text id="listTeamName" text="{EMPLOYEE_2_TEAM/Name}"/>
+</Table>
+<FlexBox id="object">
+	<Text id="objectTeamName" text="{EMPLOYEE_2_TEAM/Name}"/>
+	<Text id="memberCount" text="{EMPLOYEE_2_TEAM/MEMBER_COUNT}"/>
+</FlexBox>`;
 
 		this.expectChange("name", [])
-			.expectChange("team", []);
+			.expectChange("listTeamName", [])
+			.expectChange("objectTeamName")
+			.expectChange("memberCount");
 
 		await this.createView(assert, sView, oModel);
 
 		this.expectRequest("EMPLOYEES('0')?$select=ID", {ID : "0"});
 
-		const oContext = oModel.getKeepAliveContext("/EMPLOYEES('0')");
+		const oContext0 = oModel.getKeepAliveContext("/EMPLOYEES('0')");
 
-		await this.waitForChanges(assert, "load keep alive context");
+		await this.waitForChanges(assert, "load keep alive context 0");
 
 		this.expectRequest("EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
 				+ "&$skip=0&$top=1", {
 				value : [{
-					EMPLOYEE_2_TEAM : {Name : "Team A", Team_Id : "A"},
+					EMPLOYEE_2_TEAM : {
+						"@odata.etag" : "A.0",
+						Name : "Team A",
+						Team_Id : "A"
+					},
 					ID : "0"
 				}]
 			})
 			.expectRequest("EMPLOYEES?$select=ID,Name&$skip=0&$top=1", {
-				value : [{
+				value : [{ // ETag irrelevant
 					ID : "0",
 					Name : "Frederic Fall"
 				}]
 			})
 			.expectChange("name", ["Frederic Fall"])
-			.expectChange("team", ["Team A"]);
+			.expectChange("listTeamName", ["Team A"]);
 
-		const oTable = this.oView.byId("table");
+		const oTable = this.oView.byId("list");
 		// code under test
 		oTable.setBindingContext(oModel.createBindingContext("/"));
 
 		await this.waitForChanges(assert, "bind table");
 
-		assert.deepEqual(oContext.getObject(), {
-			EMPLOYEE_2_TEAM : {Name : "Team A", Team_Id : "A"},
+		assert.deepEqual(oContext0.getObject(), {
+			EMPLOYEE_2_TEAM : {
+				"@odata.etag" : "A.0",
+				Name : "Team A",
+				Team_Id : "A"
+			},
 			ID : "0",
 			Name : "Frederic Fall"
 		});
+
+		this.expectRequest("EMPLOYEES('1')?$select=ID"
+				+ "&$expand=EMPLOYEE_2_TEAM($select=MEMBER_COUNT,Name,Team_Id)", {
+				EMPLOYEE_2_TEAM : {
+					"@odata.etag" : "B.0",
+					MEMBER_COUNT : 22,
+					Name : "Team B",
+					Team_Id : "B"
+				},
+				ID : "1"
+			})
+			.expectChange("objectTeamName", "Team B")
+			.expectChange("memberCount", "22");
+
+		const oContext1 = oModel.getKeepAliveContext("/EMPLOYEES('1')");
+		this.oView.byId("object").setBindingContext(oContext1);
+
+		await this.waitForChanges(assert, "load keep alive context 1");
+
+		this.expectRequest("EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
+				+ "&$skip=1&$top=1", {
+				value : [{
+					EMPLOYEE_2_TEAM : {
+						"@odata.etag" : "B.1",
+						Name : "Team B #2",
+						Team_Id : "B"
+					},
+					ID : "1"
+				}]
+			})
+			.expectRequest("EMPLOYEES?$select=ID,Name&$skip=1&$top=1", {
+				value : [{
+					ID : "1",
+					Name : "Jonathan Smith"
+				}]
+			})
+			.expectChange("name", [, "Jonathan Smith"])
+			.expectChange("listTeamName", [, "Team B #2"])
+			.expectChange("objectTeamName", "Team B #2")
+			.expectRequest("EMPLOYEES('1')/EMPLOYEE_2_TEAM?$select=MEMBER_COUNT,Team_Id", {
+				"@odata.etag" : "B.1",
+				MEMBER_COUNT : 42,
+				Team_Id : "B"
+			})
+			.expectChange("memberCount", "42");
+
+		// code under test (CPOUI5ODATAV4-2998)
+		oTable.requestItems();
+
+		await this.waitForChanges(assert, "scroll to ('1'): ETag conflict");
+
+		this.expectRequest("EMPLOYEES('2')?$select=ID"
+				+ "&$expand=EMPLOYEE_2_TEAM($select=MEMBER_COUNT,Name,Team_Id)", {
+				EMPLOYEE_2_TEAM : {
+					"@odata.etag" : "C.0",
+					MEMBER_COUNT : 7,
+					Name : "Team C",
+					Team_Id : "C"
+				},
+				ID : "2"
+			})
+			.expectChange("objectTeamName", "Team C")
+			.expectChange("memberCount", "7");
+
+		const oContext2 = oModel.getKeepAliveContext("/EMPLOYEES('2')");
+		this.oView.byId("object").setBindingContext(oContext2);
+
+		await this.waitForChanges(assert, "load keep alive context 2");
+
+		this.expectRequest("EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
+				+ "&$skip=2&$top=1", {
+				value : [{
+					EMPLOYEE_2_TEAM : {
+						"@odata.etag" : "C.0",
+						Name : "Team C",
+						Team_Id : "C"
+					},
+					ID : "2"
+				}]
+			})
+			.expectRequest("EMPLOYEES?$select=ID,Name&$skip=2&$top=1", {
+				value : [{ // ETag irrelevant
+					ID : "2",
+					Name : "Jane Doe"
+				}]
+			})
+			.expectChange("name", [,, "Jane Doe"])
+			.expectChange("listTeamName", [,, "Team C"]);
+
+		// code under test (CPOUI5ODATAV4-2998)
+		oTable.requestItems();
+
+		await this.waitForChanges(assert, "scroll to ('2'): with ETag, but no conflict");
+
+		this.expectRequest("EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
+				+ "&$skip=3&$top=1", {
+				value : [{
+					EMPLOYEE_2_TEAM : null, // not relevant
+					ID : "unexpected entity"
+				}]
+			})
+			.expectRequest("EMPLOYEES?$select=ID,Name&$skip=3&$top=1", {
+				value : [{
+					ID : "3",
+					Name : "Peter Burke"
+				}]
+			})
+			.expectChange("name", [,,, "Peter Burke"])
+			.expectRequest("EMPLOYEES('3')?$select=EMPLOYEE_2_TEAM"
+				+ "&$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)",
+				createErrorInsideBatch({message : "Not found"}, 404))
+			.expectChange("listTeamName", [,,, null])
+			.expectMessage({
+				code : "CODE",
+				message : "Not found",
+				persistent : true,
+				technical : true,
+				type : "Error"
+			});
+		this.oLogMock.expects("error")
+			.withExactArgs("Failed to read path /EMPLOYEES('3')/EMPLOYEE_2_TEAM/Name",
+				sinon.match("Not found"), sODPrB);
+
+		// code under test (CPOUI5ODATAV4-2777)
+		oTable.requestItems();
+
+		await this.waitForChanges(assert, "scroll to ('3'): entity deleted, separate fails");
 	});
 
 	//*********************************************************************************************
@@ -80036,11 +81417,8 @@ make root = ${bMakeRoot}`;
 			.withExactArgs("ETag changed: EMPLOYEES('0')",
 				"EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID&$skip=0&$top=2",
 				"sap.ui.model.odata.v4.lib._Cache");
-		this.expectRequest({
-				batchNo : 1,
-				url : "EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
-					+ "&$skip=0&$top=2"
-			}, {
+		this.expectRequest("#1 EMPLOYEES?$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)&$select=ID"
+				+ "&$skip=0&$top=2", {
 				value : [{
 					"@odata.etag" : "conflict",
 					EMPLOYEE_2_TEAM : {Name : "n/a", Team_Id : "A"},
@@ -80051,10 +81429,7 @@ make root = ${bMakeRoot}`;
 					ID : "1"
 				}]
 			})
-			.expectRequest({
-				batchNo : 2,
-				url : "EMPLOYEES?$select=ID,Name&$skip=0&$top=2"
-			}, {
+			.expectRequest("#2 EMPLOYEES?$select=ID,Name&$skip=0&$top=2", {
 				value : [{
 					"@odata.etag" : "etag0",
 					ID : "0",
@@ -80067,11 +81442,8 @@ make root = ${bMakeRoot}`;
 			})
 			.expectChange("name", ["Employee 0", "Employee 1"])
 			.expectChange("team", [, "Team B"])
-			.expectRequest({ // late property request
-				batchNo : 3,
-				url : "EMPLOYEES('0')?$select=EMPLOYEE_2_TEAM"
-					+ "&$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)"
-			}, {
+			.expectRequest("#3 EMPLOYEES('0')?$select=EMPLOYEE_2_TEAM"// late property request
+				+ "&$expand=EMPLOYEE_2_TEAM($select=Name,Team_Id)", {
 				"@odata.etag" : bLatePropertyEtagConflict ? "conflict" : "etag0",
 				EMPLOYEE_2_TEAM : {Name : "Team A", Team_Id : "A"}
 			})

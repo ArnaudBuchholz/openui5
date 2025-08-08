@@ -6,11 +6,12 @@ sap.ui.define([
 	"sap/ui/integration/util/OAuth3LOHelper",
 	"sap/ui/integration/util/Utils",
 	"sap/m/IllustratedMessageType",
+	"sap/ui/core/Lib",
 	"sap/ui/integration/library",
 	"sap/ui/core/library",
 	"sap/m/library",
 	"sap/base/Log"
-	], function (Extension, OAuth3LOHelper, Utils, IllustratedMessageType, library, coreLibrary, mLibrary, Log) {
+	], function (Extension, OAuth3LOHelper, Utils, IllustratedMessageType, Library, library, coreLibrary, mLibrary, Log) {
 	"use strict";
 
 	const AriaHasPopup = coreLibrary.aria.HasPopup;
@@ -95,13 +96,13 @@ sap.ui.define([
 		const oUrl = new URL(oHeader.consent.url, window.location.href);
 		return {
 			type: CardBlockingMessageType.Information,
-			illustrationType: IllustratedMessageType.Connection,
+			illustrationType: IllustratedMessageType.UnableToLoad,
 			imageSrc: oHeader.imageSrc,
-			title: oHeader.title || oCard.getTranslatedText("CARD_OAUTH3LO_FALLBACK_TITLE"),
-			description: oHeader.description || oCard.getTranslatedText("CARD_OAUTH3LO_FALLBACK_DESCRIPTION", [oUrl.origin]),
+			title: oHeader.title || Library.getResourceBundleFor("sap.ui.integration").getText("CARD_OAUTH3LO_FALLBACK_TITLE"),
+			description: oHeader.description || Library.getResourceBundleFor("sap.ui.integration").getText("CARD_OAUTH3LO_FALLBACK_DESCRIPTION", [oUrl.origin]),
 			additionalContent: [
 				{
-					text: oHeader.buttonText || oCard.getTranslatedText("CARD_OAUTH3LO_FALLBACK_BUTTON_TEXT"),
+					text: oHeader.buttonText || Library.getResourceBundleFor("sap.ui.integration").getText("CARD_OAUTH3LO_FALLBACK_BUTTON_TEXT"),
 					buttonType: ButtonType.Accept,
 					ariaHasPopup: AriaHasPopup.Dialog,
 					press: () => {
@@ -119,16 +120,15 @@ sap.ui.define([
 	 * @returns	{object} The consent message.
 	 */
 	OAuth3LO.prototype._createConsentErrorMessage = function (oResponse) {
-		const oCard = this.getCard();
 		const oHeader =	OAuth3LOHelper.readHeader(oResponse);
 
 		Log.error(oHeader.message, this);
 
 		return {
 			type: CardBlockingMessageType.Error,
-			illustrationType: IllustratedMessageType.ErrorScreen,
-			title: oCard.getTranslatedText("CARD_ERROR_CONFIGURATION_TITLE"),
-			description: oCard.getTranslatedText("CARD_ERROR_CONFIGURATION_DESCRIPTION")
+			illustrationType: IllustratedMessageType.UnableToLoad,
+			title: Library.getResourceBundleFor("sap.ui.integration").getText("CARD_ERROR_CONFIGURATION_TITLE"),
+			description: Library.getResourceBundleFor("sap.ui.integration").getText("CARD_ERROR_CONFIGURATION_DESCRIPTION")
 		};
 	};
 

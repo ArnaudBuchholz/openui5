@@ -50,8 +50,8 @@
 			}
 		},
 		"header": {
-			"title": "Component card based on destinations (Experimental)",
-			"subTitle": "Top 5 products from Northwind"
+			"title": "Component Card Based on Destinations",
+			"subtitle": "Top 5 products from Northwind"
 		}
 	}
 }

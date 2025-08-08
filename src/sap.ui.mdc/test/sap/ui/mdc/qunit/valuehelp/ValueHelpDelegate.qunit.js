@@ -16,7 +16,9 @@ sap.ui.define([
 	"sap/ui/model/json/JSONModel",
 	"sap/ui/model/type/Integer",
 	"sap/ui/model/type/String",
-	"sap/ui/Device"
+	"sap/ui/Device",
+	"sap/ui/mdc/valuehelp/RequestShowContainerDefault",
+	"sap/ui/mdc/util/loadModules"
 ], (
 		ValueHelpDelegate,
 		FieldDisplay,
@@ -32,7 +34,9 @@ sap.ui.define([
 		JSONModel,
 		IntegerType,
 		StringType,
-		Device
+		Device,
+		RequestShowContainerDefault,
+		loadModules
 	) => {
 	"use strict";
 
@@ -128,6 +132,23 @@ sap.ui.define([
 		assert.notOk(ValueHelpDelegate.isSearchSupported(oFakeValueHelp, oFakeContent, oListBinding), "Search not supported");
 	});
 
+	QUnit.test("requestShowContainer", async (assert) => {
+		const oFakeContainer = {isA: (sName) => false, getContent: () => []};
+		const sFakeReason = "Tap";
+
+		sinon.spy(ValueHelpDelegate, "requestShowContainer");
+		sinon.spy(RequestShowContainerDefault, sFakeReason);
+
+		await ValueHelpDelegate.requestShowContainer(oFakeValueHelp,  oFakeContainer, sFakeReason);
+
+		assert.ok(RequestShowContainerDefault[sFakeReason].calledWith(oFakeValueHelp,oFakeContainer), "executes default method");
+		RequestShowContainerDefault[sFakeReason].restore();
+		ValueHelpDelegate.requestShowContainer.restore();
+	});
+
+	/**
+	 *  @deprecated As of version 1.137
+	 */
 	QUnit.test("showTypeahead", (assert) => {
 		assert.notOk(ValueHelpDelegate.showTypeahead(oFakeValueHelp, null), "without Content");
 
@@ -153,6 +174,7 @@ sap.ui.define([
 		oFakeContent.isA.restore();
 		oFakeContent.getFilterValue.restore();
 	});
+
 
 	QUnit.test("updateBindingInfo", (assert) => {
 		ValueHelpDelegate.updateBindingInfo(oFakeValueHelp, oFakeContent, oBindingInfo);
@@ -314,6 +336,9 @@ sap.ui.define([
 		oFakeContent.getCaseSensitive.restore();
 	});
 
+	/**
+	 *  @deprecated As of version 1.137
+	 */
 	QUnit.test("shouldOpenOnFocus", async (assert) => {
 		const oFakeContainer = {
 			isA: (sName) => (sName === "sap.ui.mdc.valuehelp.Popover" ? true : false),
@@ -338,6 +363,9 @@ sap.ui.define([
 		assert.notOk(bShouldOpen, "other Container");
 	});
 
+	/**
+	 *  @deprecated As of version 1.137
+	 */
 	QUnit.test("shouldOpenOnClick", async (assert) => {
 		const oFakeContainer = {
 			isA: (sName) => (sName === "sap.ui.mdc.valuehelp.Popover" ? true : false),

@@ -466,6 +466,7 @@ sap.ui.define([
 				oProgressNavigator && oProgressNavigator._updateCurrentStep(this._aStepPath.indexOf(oStep) + 1);
 			};
 
+			oStep._setNumberInvisibleText(this._aStepPath.indexOf(oStep) + 1);
 			if (!this.getVisible() || this._aStepPath.indexOf(oStep) < 0) {
 				return this;
 			} else if (this.getRenderMode() === WizardRenderMode.Page) {
@@ -475,7 +476,6 @@ sap.ui.define([
 				return this;
 			}
 
-			oStep._setNumberInvisibleText(this.getProgress());
 			var that = this,
 				mScrollProps = {
 					scrollTop: this._getStepScrollOffset(oStep)
@@ -488,10 +488,16 @@ sap.ui.define([
 					},
 					complete: function () {
 						that._bScrollLocked = false;
+
+						if (that.isDestroyed()) {
+							return;
+						}
+
 						fnUpdateProgressNavigator.call(that);
 
 						if (bFocusFirstStepElement || bFocusFirstStepElement === undefined) {
 							that._focusFirstStepElement(oStep);
+							that.setPreviousStepButtonVisibility(oStep);
 						}
 					}
 				};
@@ -499,6 +505,16 @@ sap.ui.define([
 			jQuery(this.getDomRef("step-container")).animate(mScrollProps, mAnimProps);
 
 			return this;
+		};
+
+		Wizard.prototype.setPreviousStepButtonVisibility = function (oStep) {
+			const aStepPath = this._aStepPath;
+			const iCurrentStepIndex = aStepPath.indexOf(oStep);
+			const oPreviousStep = iCurrentStepIndex > 0 ? aStepPath[iCurrentStepIndex - 1] : null;
+
+			if (oPreviousStep) {
+				oPreviousStep.setButtonVisibility();
+			}
 		};
 
 		/**

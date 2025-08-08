@@ -1,12 +1,14 @@
 /* global QUnit */
 
 sap.ui.define([
+	"sap/base/Log",
 	"sap/ui/fl/apply/_internal/flexState/compVariants/CompVariantManagementState",
 	"sap/ui/fl/apply/_internal/flexObjects/FlexObjectFactory",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
 	"sap/ui/fl/Layer",
 	"sap/ui/thirdparty/sinon-4"
 ], function(
+	Log,
 	CompVariantManagementState,
 	FlexObjectFactory,
 	FlexState,
@@ -126,6 +128,47 @@ sap.ui.define([
 		});
 	});
 
+	QUnit.module("CompVariantManagementState.addExternalVariants", {
+		async beforeEach() {
+			await initializeFlexState();
+		},
+		afterEach() {
+			sandbox.restore();
+		}
+	}, function() {
+		QUnit.test("when called with an special character '#'", function(assert) {
+			const oAddRuntimeSteadyObjectStub = sandbox.stub(FlexState, "addRuntimeSteadyObject");
+
+			CompVariantManagementState.addExternalVariants({
+				persistencyKey: sPersistencyKey,
+				reference: "myApp",
+				variants: [{
+					id: "#externalVariantId1",
+					name: ""
+				}]
+			});
+
+			assert.equal(oAddRuntimeSteadyObjectStub.getCall(0).args[2].getId(), "_HASHTAG_externalVariantId1");
+		});
+
+		QUnit.test("when called with an special character '$'", function(assert) {
+			const oLogErrorStub = sandbox.stub(Log, "error");
+			const oAddRuntimeSteadyObjectStub = sandbox.stub(FlexState, "addRuntimeSteadyObject");
+
+			CompVariantManagementState.addExternalVariants({
+				persistencyKey: sPersistencyKey,
+				reference: "myApp",
+				variants: [{
+					id: "$externalVariantId1",
+					name: ""
+				}]
+			});
+
+			assert.equal(oLogErrorStub.callCount, 1, "an error was logged");
+			assert.equal(oAddRuntimeSteadyObjectStub.callCount, 0, "no item was added");
+		});
+	});
+
 	QUnit.module("VariantsMapSelector.checkInvalidation", {
 		async beforeEach() {
 			await initializeFlexState();
@@ -155,7 +198,7 @@ sap.ui.define([
 				id: "someSetDefaultChange",
 				layer: Layer.CUSTOMER,
 				selector: {
-					persistencyKey: "myKey"
+					persistencyKey: sPersistencyKey
 				},
 				fileType: "change",
 				changeType: "defaultVariant"
@@ -244,6 +287,9 @@ sap.ui.define([
 				reference: "myApp",
 				fileType: "change",
 				changeType: "defaultVariant",
+				selector: {
+					persistencyKey: sPersistencyKey
+				},
 				layer: Layer.CUSTOMER,
 				content: {
 					defaultVariantName: sDefaultVariantName
@@ -252,7 +298,7 @@ sap.ui.define([
 			stubFlexObjectsSelector([oSetDefaultChange]);
 
 			const sDefaultVariantId = CompVariantManagementState.getDefaultVariantId({
-				persistencyKey: "undefined",
+				persistencyKey: sPersistencyKey,
 				reference: "myApp",
 				variants: [{
 					getVariantId: () => sDefaultVariantName
@@ -260,6 +306,63 @@ sap.ui.define([
 				includeUndefined: true
 			});
 			assert.equal(sDefaultVariantId, sDefaultVariantName, "then the key is returned");
+		});
+	});
+
+	QUnit.module("CompVariantManagementState can handle changes on multiple different standard variants", {
+		async beforeEach() {
+			await initializeFlexState();
+		},
+		afterEach() {
+			sandbox.restore();
+		}
+	}, function() {
+		QUnit.test("when changes are present for multiple different persistency keys", async function(assert) {
+			const oUpdateVariantChange0 = FlexObjectFactory.createFromFileContent({
+				reference: sReference,
+				fileType: "change",
+				changeType: "updateVariant",
+				selector: {
+					persistencyKey: "anotherPersistencyKey",
+					variantId: "*standard*"
+				},
+				layer: Layer.CUSTOMER,
+				content: {
+					executeOnSelection: true
+				}
+			});
+
+			const oChangeContent = {
+				bField: {
+					visible: true
+				}
+			};
+
+			const oUpdateVariantChange1 = FlexObjectFactory.createFromFileContent({
+				reference: sReference,
+				fileType: "change",
+				changeType: "updateVariant",
+				selector: {
+					persistencyKey: sPersistencyKey,
+					variantId: "*standard*"
+				},
+				layer: Layer.CUSTOMER,
+				content: {
+					variantContent: oChangeContent
+				}
+			});
+
+			stubFlexObjectsSelector([oUpdateVariantChange0, oUpdateVariantChange1]);
+
+			const aVariants = await CompVariantManagementState.assembleVariantList({
+				reference: sReference,
+				persistencyKey: sPersistencyKey,
+				componentId: sComponentId
+			});
+
+			assert.equal(aVariants.length, 1, "the standard variant is returned");
+			assert.deepEqual(aVariants[0].getContent(), oChangeContent, "the content was updated");
+			assert.equal(aVariants[0].getExecuteOnSelection(), false, "the execute on selection was NOT updated");
 		});
 	});
 

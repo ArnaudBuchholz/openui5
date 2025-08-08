@@ -141,20 +141,18 @@ sap.ui.define([
 
 			if (typeof (vDomRef) === "function") {
 				try {
-					// TODO: replace jQuery when we know that vDomRef will always return a DOM Element
 					var vRes = vDomRef(...aArgs);
-					// convert Nodelist and jQuery-Selection to an Array
-					if ((vRes.jquery && vRes.length > 1) || vRes instanceof NodeList) {
+					// convert NodeList to an Array
+					if (vRes instanceof NodeList) {
 						vRes = Array.from(vRes);
 					}
-					// we return an Array or a Node
-					return vRes.jquery ? vRes.get(0) : vRes;
+					// we return an Array of DOM elements
+					return vRes;
 				} catch (error) {
 					return undefined;
 				}
 			} else if (oElementDomRef && typeof (vDomRef) === "string") {
-				// TODO: replace jQuery when we know that getDomRefForCSSSelector will always return a DOM Element
-				return DOMUtil.getDomRefForCSSSelector(oElementDomRef, vDomRef).get(0);
+				return DOMUtil.getDomRefForCSSSelector(oElementDomRef, vDomRef);
 			}
 		}
 		return undefined;
@@ -328,12 +326,12 @@ sap.ui.define([
 	};
 
 	/**
-	 * Returns propagated action from DesigntimeMetadata
-	 * @param  {string} sActionName - Action name
-	 * @returns {object} Object with the action and its target (origin element)
+	 * Returns the propagated action info from DesigntimeMetadata
+	 * @param {string} sActionName - Action name
+	 * @returns {object} Object with the propagating control and its name
 	 * @public
 	 */
-	DesignTimeMetadata.prototype.getPropagatedAction = function(sActionName) {
+	DesignTimeMetadata.prototype.getPropagatedActionInfo = function(sActionName) {
 		const mData = this.getData();
 		const aActions = mData.propagatedActions;
 		if (!aActions) {
@@ -344,8 +342,8 @@ sap.ui.define([
 			return undefined;
 		}
 		return {
-			action: evaluateAction(oAction.action, oAction.propagatingControl),
-			propagatingControl: oAction.propagatingControl
+			propagatingControl: oAction.propagatingControl,
+			propagatingControlName: oAction.propagatingControlName
 		};
 	};
 

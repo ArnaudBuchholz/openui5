@@ -1,15 +1,17 @@
-/* global QUnit */
+/* global QUnit, sinon */
 
 sap.ui.define([
 	"sap/ui/core/Lib",
 	"sap/ui/integration/Host",
 	"sap/ui/integration/util/ManifestResolver",
-	"sap/ui/integration/util/SkeletonCard"
+	"sap/ui/integration/util/SkeletonCard",
+	"qunit/testResources/nextCardReadyEvent"
 ], function (
 	Library,
 	Host,
 	ManifestResolver,
-	SkeletonCard
+	SkeletonCard,
+	nextCardReadyEvent
 ) {
 	"use strict";
 
@@ -238,7 +240,7 @@ sap.ui.define([
 				"type": "Object",
 				"header": {
 					"title": "{{contactDetails}}",
-					"subTitle": "{i18n>contactDetails}"
+					"subtitle": "{i18n>contactDetails}"
 				},
 				"content": {
 					"groups": [
@@ -287,7 +289,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Products",
-					"subTitle": "{= format.text(${i18n>subtitle_data_count}, [${uniqueCategories}, ${count}]) }",
+					"subtitle": "{= format.text(${i18n>subtitle_data_count}, [${uniqueCategories}, ${count}]) }",
 					"status": {
 						"text": {
 							"format": {
@@ -387,8 +389,8 @@ sap.ui.define([
 						"title": oResourceBundle.getText("CARD_ERROR_CONFIGURATION_TITLE"),
 						"description": oResourceBundle.getText("CARD_ERROR_CONFIGURATION_DESCRIPTION"),
 						"details": "Card sap.app/id entry in the manifest is mandatory There must be a 'sap.card' section in the manifest.",
-						"illustrationType": "sapIllus-SimpleError",
-						"illustrationSize": "Spot"
+						"illustrationType": "sapIllus-UnableToLoad",
+						"illustrationSize": "Small"
 					}
 				};
 
@@ -521,7 +523,7 @@ sap.ui.define([
 						"message": {
 							"type": "error",
 							"title": oResourceBundle.getText("CARD_ERROR_CONFIGURATION_TITLE"),
-							"illustrationType": "sapIllus-ErrorScreen",
+							"illustrationType": "sapIllus-UnableToLoad",
 							"illustrationSize": "Auto",
 							"description": oResourceBundle.getText("CARD_ERROR_CONFIGURATION_DESCRIPTION")
 						}
@@ -1213,7 +1215,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Notebooks Distribution",
-					"subTitle": "by years",
+					"subtitle": "by years",
 					"status": {
 						"text": "3 of 11"
 					}
@@ -1364,7 +1366,6 @@ sap.ui.define([
 			});
 	});
 
-
 	QUnit.test("List with pagination - client side", function (assert) {
 		var oManifest = {
 			"sap.app": {
@@ -1418,7 +1419,49 @@ sap.ui.define([
 				baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
 			});
 
-		assert.expect(3);
+		// Act
+		return oCard.resolveManifest()
+			.then(function (oRes) {
+				// Assert
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items, oExpectedItemsPage1, "content for first page is resolved correctly");
+				assert.deepEqual(oRes["sap.card"].footer.paginator, oExpectedPaginatorPage1, "paginator for first page is resolved correctly");
+			});
+	});
+
+
+	QUnit.test("List with pagination with large amount of data - client side", function (assert) {
+		const aData = new Array(100).fill({ Name: "Name" });
+		const oManifest = {
+			"sap.app": {
+				"id": "manifestResolver.test.card",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"content": {
+					"data": {
+						"json": aData
+					},
+					"item": {
+						"title": "{Name}"
+					}
+				},
+				"footer": {
+					"paginator": {
+						"pageSize": 2
+					}
+				}
+			}
+		};
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+		const oExpectedItemsPage1 = aData.map((oItem) => { return { title: "Name" }; });
+		const oExpectedPaginatorPage1 = {
+			"pageCount": 1,
+			"pageIndex": 0
+		};
 
 		// Act
 		return oCard.resolveManifest()
@@ -1426,7 +1469,7 @@ sap.ui.define([
 				// Assert
 				assert.deepEqual(oRes["sap.card"].content.groups[0].items, oExpectedItemsPage1, "content for first page is resolved correctly");
 				assert.deepEqual(oRes["sap.card"].footer.paginator, oExpectedPaginatorPage1, "paginator for first page is resolved correctly");
-				assert.ok(oExpectedPaginatorPage1);
+
 			});
 	});
 
@@ -2092,6 +2135,18 @@ sap.ui.define([
 							"visible": "{= !!${parameters>/someParameter/value}}",
 							"value": "{parameters>/someParameter/value}",
 							"items": []
+						},
+						"filter4": {
+							"type": "DateRange",
+							"label": "{parameters>/someParameter/value}",
+							"visible": "{= !!${parameters>/someParameter/value}}",
+							"value": {
+								"option": "dateRange",
+								"values": [
+									"1996-08-06T00:00:00.000Z",
+									"1996-08-16T00:00:00.000Z"
+								]
+							}
 						}
 					}
 				}
@@ -2111,6 +2166,7 @@ sap.ui.define([
 				"label": "SomeValue",
 				"visible": true,
 				"value": "SomeValue",
+				"index": 0,
 				"items": []
 			},
 			"Values are resolved."
@@ -2122,6 +2178,7 @@ sap.ui.define([
 				"type": "Search",
 				"label": "SomeValue",
 				"value": "SomeValue",
+				"index": 1,
 				"visible": true
 			},
 			"Values are resolved."
@@ -2134,7 +2191,26 @@ sap.ui.define([
 				"label": "SomeValue",
 				"value": "SomeValue",
 				"visible": true,
+				"index": 2,
 				"items": []
+			},
+			"Values are resolved."
+		);
+
+		assert.deepEqual(
+			oRes["sap.card"].configuration.filters.filter4,
+			{
+				"type": "DateRange",
+				"label": "SomeValue",
+				"visible": true,
+				"index": 3,
+				"value": {
+					"option": "dateRange",
+					"values": [
+						"1996-08-06T00:00:00.000Z",
+						"1996-08-16T00:00:00.000Z"
+					]
+				}
 			},
 			"Values are resolved."
 		);
@@ -2356,15 +2432,11 @@ sap.ui.define([
 					}
 				},
 				"header": {
-					"icon": {
-						"src": "{photo}"
-					},
-					"title": "{firstName} {lastName}",
-					"subTitle": "{position}"
+					"title": "Title"
 				},
 				"content": {
 					"groups": [{
-						"title": "{{contactDetails}}",
+						"title": "Group Title",
 						"items": [
 							{
 								"label": "Icons",
@@ -2465,6 +2537,366 @@ sap.ui.define([
 							}
 						]
 					};
+				// Assert
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items[0], oExpectedIconGroup);
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items[1], oExpectedButtonGroup);
+
+				oCard.destroy();
+			});
+	});
+
+	QUnit.test("Resolve ButtonGroup and IconGroup type items using named data section", function (assert) {
+		// Arrange
+		const oManifest = {
+			"sap.app": {
+				"id": "card.bundle.object",
+				"type": "card",
+				"i18n": "i18n/i18n.properties"
+			},
+			"sap.card": {
+				"type": "Object",
+				"data": {
+					"request": {
+						"url": "./employee.json"
+					},
+					"name": "myDataSection"
+				},
+				"header": {
+					"title": "Title"
+				},
+				"content": {
+					"groups": [{
+						"title": "Group Title",
+						"items": [
+							{
+								"label": "Icons",
+								"type": "IconGroup",
+								"path": "myDataSection>/team",
+								"template": {
+									"icon": {
+										"src": "{myDataSection>imageUrl}",
+										"initials": "{= format.initials(${myDataSection>firstName} + ' ' + ${myDataSection>lastName}) }"
+									},
+									"actions": [{
+										"type": "Navigation",
+										"parameters": {
+											"url": "{myDataSection>imageUrl}"
+										}
+									}]
+								}
+							},
+							{
+								"label": "Buttons",
+								"type": "ButtonGroup",
+								"path": "myDataSection>/attachments",
+								"template": {
+									"icon": "{myDataSection>icon}",
+									"text": "{myDataSection>title}",
+									"actions": [{
+										"type": "Navigation",
+										"parameters": {
+											"url": "{myDataSection>url}"
+										}
+									}]
+								}
+							}
+						]
+					}
+					]
+				}
+			}
+		};
+
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+
+		// Act
+		return ManifestResolver.resolveCard(oCard)
+			.then(function (oRes) {
+				const oExpectedButtonGroup = {
+					"label": "Buttons",
+					"type": "ButtonGroup",
+					"items": [{
+						"icon": "sap-icon://excel-attachment",
+						"text": "Schedule",
+						"actions": [{
+							"type": "Navigation",
+							"parameters": {
+								"url": "./somefile.csv"
+							}
+						}]
+					},
+					{
+						"icon": "sap-icon://attachment",
+						"text": "Attachment 2",
+						"actions": [{
+							"type": "Navigation",
+							"parameters": {
+								"url": "./somefile.csv"
+							}
+						}]
+					}
+					]
+				};
+				const oExpectedIconGroup = {
+					"label": "Icons",
+					"type": "IconGroup",
+					"items": [
+						{
+							"icon": {
+								"src": "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/../../images/Woman_avatar_01.png",
+								"initials": "EE"
+							},
+							"actions": [{
+								"type": "Navigation",
+								"parameters": {
+									"url": "../../images/Woman_avatar_01.png"
+								}
+							}]
+						},
+						{
+							"icon": {
+								"initials": "JM"
+							},
+							"actions": [{
+								"type": "Navigation",
+								"parameters": {}
+							}]
+						}
+					]
+				};
+				// Assert
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items[0], oExpectedIconGroup);
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items[1], oExpectedButtonGroup);
+
+				oCard.destroy();
+			});
+	});
+
+	QUnit.test("Resolve ButtonGroup and IconGroup type items using named data section with base path", function (assert) {
+		// Arrange
+		const oManifest = {
+			"sap.app": {
+				"id": "card.bundle.object",
+				"type": "card",
+				"i18n": "i18n/i18n.properties"
+			},
+			"sap.card": {
+				"type": "Object",
+				"data": {
+					"request": {
+						"url": "./employee.json"
+					},
+					"name": "myDataSection",
+					"path": "myDataSection>/"
+				},
+				"header": {
+					"title": "Title"
+				},
+				"content": {
+					"groups": [{
+						"title": "Group Title",
+						"items": [
+							{
+								"label": "Icons",
+								"type": "IconGroup",
+								"path": "myDataSection>team",
+								"template": {
+									"icon": {
+										"src": "{myDataSection>imageUrl}",
+										"initials": "{= format.initials(${myDataSection>firstName} + ' ' + ${myDataSection>lastName}) }"
+									},
+									"actions": [{
+										"type": "Navigation",
+										"parameters": {
+											"url": "{myDataSection>imageUrl}"
+										}
+									}]
+								}
+							},
+							{
+								"label": "Buttons",
+								"type": "ButtonGroup",
+								"path": "myDataSection>/attachments",
+								"template": {
+									"icon": "{myDataSection>icon}",
+									"text": "{myDataSection>title}",
+									"actions": [{
+										"type": "Navigation",
+										"parameters": {
+											"url": "{myDataSection>url}"
+										}
+									}]
+								}
+							}
+						]
+					}
+					]
+				}
+			}
+		};
+
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+
+		// Act
+		return ManifestResolver.resolveCard(oCard)
+			.then(function (oRes) {
+				const oExpectedButtonGroup = {
+					"label": "Buttons",
+					"type": "ButtonGroup",
+					"items": [{
+						"icon": "sap-icon://excel-attachment",
+						"text": "Schedule",
+						"actions": [{
+							"type": "Navigation",
+							"parameters": {
+								"url": "./somefile.csv"
+							}
+						}]
+					},
+					{
+						"icon": "sap-icon://attachment",
+						"text": "Attachment 2",
+						"actions": [{
+							"type": "Navigation",
+							"parameters": {
+								"url": "./somefile.csv"
+							}
+						}]
+					}
+					]
+				};
+				const oExpectedIconGroup = {
+					"label": "Icons",
+					"type": "IconGroup",
+					"items": [
+						{
+							"icon": {
+								"src": "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/../../images/Woman_avatar_01.png",
+								"initials": "EE"
+							},
+							"actions": [{
+								"type": "Navigation",
+								"parameters": {
+									"url": "../../images/Woman_avatar_01.png"
+								}
+							}]
+						},
+						{
+							"icon": {
+								"initials": "JM"
+							},
+							"actions": [{
+								"type": "Navigation",
+								"parameters": {}
+							}]
+						}
+					]
+				};
+				// Assert
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items[0], oExpectedIconGroup);
+				assert.deepEqual(oRes["sap.card"].content.groups[0].items[1], oExpectedButtonGroup);
+
+				oCard.destroy();
+			});
+	});
+
+	QUnit.test("Resolve ButtonGroup and IconGroup type items using 2 data sections", function (assert) {
+		// Arrange
+		const oManifest = {
+			"sap.app": {
+				"id": "card.bundle.object",
+				"type": "card",
+				"i18n": "i18n/i18n.properties"
+			},
+			"sap.card": {
+				"type": "Object",
+				"data": {
+					"json": {
+						"buttonText": "Button Text"
+					}
+				},
+				"header": {
+					"title": "Title"
+				},
+				"content": {
+					"data": {
+						"request": {
+							"url": "./employee.json"
+						},
+						"name": "myDataSection"
+					},
+					"groups": [{
+						"title": "Group Title",
+						"items": [
+							{
+								"label": "Icons",
+								"type": "IconGroup",
+								"path": "myDataSection>/team",
+								"template": {
+									"icon": {
+										"src": "{myDataSection>/manager/photo}",
+										"initials": "{= format.initials(${myDataSection>firstName} + ' ' + ${myDataSection>lastName}) }"
+									}
+								}
+							},
+							{
+								"label": "Buttons",
+								"type": "ButtonGroup",
+								"path": "myDataSection>/attachments",
+								"template": {
+									"icon": "{myDataSection>icon}",
+									"text": "{/buttonText}"
+								}
+							}
+						]
+					}
+					]
+				}
+			}
+		};
+
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+
+		// Act
+		return ManifestResolver.resolveCard(oCard)
+			.then(function (oRes) {
+				const oExpectedButtonGroup = {
+					"label": "Buttons",
+					"type": "ButtonGroup",
+					"items": [{
+						"icon": "sap-icon://excel-attachment",
+						"text": "Button Text"
+					},
+					{
+						"icon": "sap-icon://attachment",
+						"text": "Button Text"
+					}]
+				};
+				const oExpectedIconGroup = {
+					"label": "Icons",
+					"type": "IconGroup",
+					"items": [{
+						"icon": {
+							"src": "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/./images/Woman_avatar_01.png",
+							"initials": "EE"
+						}
+					},
+					{
+						"icon": {
+							"src": "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/./images/Woman_avatar_01.png",
+							"initials": "JM"
+						}
+					}]
+				};
 				// Assert
 				assert.deepEqual(oRes["sap.card"].content.groups[0].items[0], oExpectedIconGroup);
 				assert.deepEqual(oRes["sap.card"].content.groups[0].items[1], oExpectedButtonGroup);
@@ -3137,6 +3569,275 @@ sap.ui.define([
 
 			// Act - show message
 			oCard.showMessage("{i18n>testMessage}", "Error");
+		});
+
+		oCard.startManifestProcessing();
+	});
+
+	QUnit.module("Property subtitle and subtitleMaxLines");
+
+	QUnit.test("Subtitle is resolved for header", async function (assert) {
+		// Arrange
+		const oManifest = {
+			"sap.app": {
+				"id": "manifestResolver.test.card.headeSubtitle",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"header": {
+					"title": "Test Title",
+					"subtitle": "Test Subtitle",
+					"subtitleMaxLines": 3
+				},
+				"content": {
+					"item": {
+						"title": "test"
+					}
+				}
+			}
+		};
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+
+		// Act
+		const oResult = await ManifestResolver.resolveCard(oCard);
+
+		assert.strictEqual(oResult["sap.card"].header.subTitle, oManifest["sap.card"].header.subtitle, "subtitle was resolved correctly to subTitle");
+		assert.strictEqual(oResult["sap.card"].header.subTitleMaxLines, oManifest["sap.card"].header.subtitleMaxLines, "subtitleMaxLines was resolved correctly to subTitleMaxLines");
+		assert.notOk(oResult["sap.card"].header.hasOwnProperty("subtitle"), "The subtitle property should be removed from the resolved manifest.");
+		assert.notOk(oResult["sap.card"].header.hasOwnProperty("subtitleMaxLines"), "The subtitleMaxLines property should be removed from the resolved manifest.");
+
+		oCard.destroy();
+	});
+
+	QUnit.test("Subtitle is resolved for numeric header", async function (assert) {
+		// Arrange
+		const oManifest = {
+			"sap.app": {
+				"id": "manifestResolver.test.card.headeNumericSubtitle",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"header": {
+					"type": "Numeric",
+					"title": "Test Title",
+					"subtitle": "Test Subtitle",
+					"subtitleMaxLines": 4
+				},
+				"content": {
+					"item": {
+						"title": "test"
+					}
+				}
+			}
+		};
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+
+		// Act
+		const oResult = await ManifestResolver.resolveCard(oCard);
+
+		assert.strictEqual(oResult["sap.card"].header.subTitle, oManifest["sap.card"].header.subtitle, "subtitle was resolved correctly to subTitle");
+		assert.strictEqual(oResult["sap.card"].header.subTitleMaxLines, oManifest["sap.card"].header.subtitleMaxLines, "subtitleMaxLines was resolved correctly to subTitleMaxLines");
+		assert.notOk(oResult["sap.card"].header.hasOwnProperty("subtitle"), "The subtitle property should be removed from the resolved manifest.");
+		assert.notOk(oResult["sap.card"].header.hasOwnProperty("subtitleMaxLines"), "The subtitleMaxLines property should be removed from the resolved manifest.");
+
+		oCard.destroy();
+	});
+
+	QUnit.test("Subtitle is resolved for object group item overlay", async function (assert) {
+		// Arrange
+		const oManifest = {
+			"sap.app": {
+				"id": "manifestResolver.test.card.imageOverlaySubtitle",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "Object",
+				"header": {
+					"title": "Card with overlay"
+				},
+				"content": {
+					"groups": [
+						{
+							"items": [
+								{
+									"type": "Image",
+									"src": "./images/natureAndChildren.jpg",
+									"overlay": {
+										"title": "Hello, John",
+										"subtitle": "Today will be a good day!"
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		};
+		const oCard = new SkeletonCard({
+			manifest: oManifest,
+			baseUrl: "test-resources/sap/ui/integration/qunit/testResources/manifestResolver/"
+		});
+
+		// Act
+		const oResult = await ManifestResolver.resolveCard(oCard);
+		const oResultOverlay = oResult["sap.card"].content.groups[0].items[0].overlay;
+		const oOriginalOverlay = oManifest["sap.card"].content.groups[0].items[0].overlay;
+
+		assert.strictEqual(oResultOverlay.subTitle, oOriginalOverlay.subtitle, "subtitle was resolved correctly to subTitle");
+		assert.notOk(oResultOverlay.hasOwnProperty("subtitle"), "The subtitle property should be removed from the resolved manifest.");
+
+		oCard.destroy();
+	});
+
+	QUnit.module("Resolve child cards", {
+		beforeEach: function () {
+			this.oServer = sinon.createFakeServer({
+				respondImmediately: true
+			});
+
+			const sDestinationUrl = "some/fake/url";
+			this.oServer.respondWith("GET", new RegExp(sDestinationUrl), [
+				200,
+				{
+					"Content-Type": "application/json"
+				},
+				JSON.stringify({
+					"title": "Title from destination",
+					"description": "Description from destination"
+				})
+			]);
+
+			this.oHost = new Host({
+				resolveDestination: (sName) => {
+					if (sName === "destination1") {
+						return sDestinationUrl;
+					}
+
+					return null;
+				}
+			});
+		},
+		afterEach: function () {
+			this.oServer.restore();
+			this.oHost.destroy();
+		}
+	});
+
+	QUnit.test("Card opens child card using ShowCard action with manifest url", function (assert) {
+		const done = assert.async();
+		const sChildCardManifestUrl = "/fake/child/manifest.json";
+		const oChildCardManifest = {
+			"sap.app": {
+				"id": "child.card",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "Object",
+				"configuration" :{
+					"useMainDestinations": true
+				},
+				"data": {
+					"request": {
+						"url": "{{mainDestinations.destination1}}/data.json"
+					}
+				},
+				"header": {
+					"title": "{title}"
+				},
+				"content": {
+					"groups": [
+						{
+							"title": "Child Group",
+							"items": [
+								{
+									"label": "Child Item",
+									"value": "{description}"
+								}
+							]
+						}
+					]
+				}
+			}
+		};
+
+		this.oServer.respondWith("GET", new RegExp(sChildCardManifestUrl), [
+			200,
+			{
+				"Content-Type": "application/json"
+			},
+			JSON.stringify(oChildCardManifest)
+		]);
+
+		const oMainCardManifest = {
+			"sap.app": {
+				"id": "main.card",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"configuration": {
+					"destinations": {
+						"destination1": {
+							"name": "destination1"
+						}
+					}
+				},
+				"header": {
+					"title": "Main Card"
+				},
+				"content": {
+					"data": {
+						"json": [
+							{
+								"Name": "Open Child"
+							}
+						]
+					},
+					"item": {
+						"title": "{Name}",
+						"actions": [
+							{
+								"type": "ShowCard",
+								"parameters": {
+									"manifest": sChildCardManifestUrl
+								}
+							}
+						]
+					}
+				}
+			}
+		};
+
+		const oCard = new SkeletonCard({
+			manifest: oMainCardManifest,
+			baseUrl: "/"
+		});
+
+		this.oHost.onShowCard = function (oChildCard) {
+			ManifestResolver.resolveCard(oChildCard)
+				.then(function (oRes) {
+					// Assert
+					assert.strictEqual(oRes["sap.card"].header.title, "Title from destination", "Destination is resolved in child card manifest.");
+					assert.strictEqual(oRes["sap.card"].content.groups[0].items[0].value, "Description from destination", "Destination is resolved in child card manifest.");
+
+					// Clean up
+					oCard.destroy();
+					done();
+				});
+		};
+
+		oCard.setHost(this.oHost);
+
+		nextCardReadyEvent(oCard).then(() => {
+			oCard.triggerAction(oMainCardManifest["sap.card"].content.item.actions[0]);
 		});
 
 		oCard.startManifestProcessing();

@@ -93,7 +93,7 @@ sap.ui.define([
 				} else {
 					// To be able to identify whether a row is dropped on itself we need to compare the contexts. The row index is not reliable. The
 					// indexing of the table can change, for example by expanding a node.
-					oSessionData.draggedRowContext = oDraggedControl.getRowBindingContext();
+					oSessionData.draggedRowContext = TableUtils.getBindingContextOfRow(oDraggedControl);
 				}
 			}
 
@@ -124,7 +124,7 @@ sap.ui.define([
 				 * - Sum rows
 				 */
 				const oDraggedRowContext = oSessionData.draggedRowContext;
-				const oDropRowContext = oDropControl.getRowBindingContext();
+				const oDropRowContext = TableUtils.getBindingContextOfRow(oDropControl);
 				const sDropPosition = oDragSession.getDropInfo().getDropPosition();
 
 				if ((oDropControl.isEmpty() && sDropPosition === DropPosition.On && TableUtils.hasData(this)) // On empty row, table has data
@@ -284,7 +284,7 @@ sap.ui.define([
 		 * @inheritDoc
 		 * @returns {string} The name of this extension.
 		 */
-		_init: function(oTable, sTableType, mSettings) {
+		_init: function(oTable, mSettings) {
 			this._oDelegate = ExtensionDelegate;
 
 			TableUtils.addDelegate(oTable, this._oDelegate, oTable);

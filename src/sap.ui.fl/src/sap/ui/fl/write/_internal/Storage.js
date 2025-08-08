@@ -251,8 +251,6 @@ sap.ui.define([
 
 			const oResult = await _executeActionByName("condense", mProperties);
 
-			// the FlexController expects the response to be an array of changes, but having an array as response is bad practice.
-			// so once the coding is migrated away from FlexController and ChangePersistence, the return value should be used as is
 			if (oResult && oResult.status && oResult.status === 205 && aCreatedChanges.length) {
 				const aResponse = aCreatedChanges.map(function(oChange) {
 					return Object.values(oChange).pop();
@@ -369,17 +367,6 @@ sap.ui.define([
 	 */
 	Storage.loadContextDescriptions = function(mPropertyBag) {
 		return _executeActionByName("loadContextDescriptions", mPropertyBag);
-	};
-
-	/**
-	 * Checks if variant management context sharing is enabled.
-	 *
-	 * @param {object} mPropertyBag - Property bag
-	 * @param {sap.ui.fl.Layer} mPropertyBag.layer - Layer
-	 * @returns {Promise<boolean>} Promise resolves true if context sharing is enabled
-	 */
-	Storage.isContextSharingEnabled = function(mPropertyBag) {
-		return _executeActionByName("isContextSharingEnabled", mPropertyBag);
 	};
 
 	/**

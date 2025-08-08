@@ -198,15 +198,15 @@ sap.ui.define([
 					scaleFactor: {type: "float", group: "Data", defaultValue: 1},
 
 					/**
-			 	 	* If set, the calendar week numbering is used for display.
+			 	 	 * If set, the calendar week numbering is used for display.
 					 * If not set, the calendar week numbering of the global configuration is used.
 					 * @since 1.110.0
 					 */
 					calendarWeekNumbering : { type : "sap.base.i18n.date.CalendarWeekNumbering", group : "Appearance", defaultValue: null},
 
 					/* Determines whether more than one day will be selectable.
-					* <b>Note:</b> selecting more than one day is possible with a combination of <code>Ctrl + mouse click</code>
-					*/
+					 * <b>Note:</b> selecting more than one day is possible with a combination of <code>Ctrl + mouse click</code>
+					 */
 					dateSelectionMode: { type: "sap.m.SinglePlanningCalendarSelectionMode", group: "Behavior", defaultValue: SinglePlanningCalendarSelectionMode.SingleSelect }
 				},
 				aggregations: {
@@ -969,7 +969,7 @@ sap.ui.define([
 			if (this._oAppointmentsToRender[sDate]) {
 				this._oAppointmentsToRender[sDate].oAppointmentsList.getIterator().forEach(function(oAppNode) {
 					oAppointment = oAppNode.getData();
-					oAppDomRef = this.getDomRef().querySelector("#" + oAppointment.getId() + "-" + iColumn + "_" + iRow);
+					oAppDomRef = document.getElementById(oAppointment.getId() + "-" + iColumn + "_" + iRow);
 					oAppStartDate = oAppointment.getStartDate();
 					oAppEndDate = oAppointment.getEndDate();
 					bAppStartIsOutsideVisibleStartHour = oColumnStartDateAndHour.getTime() > oAppStartDate.getTime();
@@ -2474,7 +2474,16 @@ sap.ui.define([
 
 		SinglePlanningCalendarGrid.prototype._isNonWorkingDay = function(oCalendarDate) {
 			const aSpecialDates = this._getSpecialDates().filter((oDateRange) => {
-				return oDateRange.getStartDate() && CalendarDate.fromLocalJSDate(oDateRange.getStartDate()).isSame(oCalendarDate);
+				const oRangeStartDate = oDateRange.getStartDate(),
+					oRangeEndDate = oDateRange.getEndDate();
+
+				if (oRangeStartDate && oRangeEndDate) {
+					return CalendarUtils._isBetween(oCalendarDate, CalendarDate.fromLocalJSDate(oRangeStartDate), CalendarDate.fromLocalJSDate(oRangeEndDate), true);
+				} else if (oRangeStartDate) {
+					return CalendarDate.fromLocalJSDate(oRangeStartDate).isSame(oCalendarDate);
+				}
+
+				return false;
 			});
 			const sType = aSpecialDates.length > 0 && aSpecialDates[0].getType();
 			const sSecondaryType =  aSpecialDates.length > 0 && aSpecialDates[0].getSecondaryType();
@@ -2485,6 +2494,24 @@ sap.ui.define([
 			return sType === unifiedLibrary.CalendarDayType.NonWorking
 				|| sSecondaryType === unifiedLibrary.CalendarDayType.NonWorking
 				|| bNonWorkingWeekend;
+		};
+
+		/**
+		 * Returns whether now marker should be rendered in calendar view.
+		 *
+		 * @param {Date|module:sap/ui/core/date/UI5Date} oDate - date to check.
+		 * @returns {boolean}
+		 * @private
+		 */
+		SinglePlanningCalendarGrid.prototype._isNowMarkerInView = function(oDate) {
+			var oStartDate = this.getStartDate(),
+				iColumns = this._getColumns(),
+				oDateTimestamp = oDate.getTime(),
+				oEndDate = UI5Date.getInstance(oStartDate);
+
+			oEndDate.setDate(oEndDate.getDate() + iColumns);
+
+			return oDateTimestamp >= oStartDate.getTime() && oDateTimestamp < oEndDate.getTime();
 		};
 
 		function getResizeGhost() {

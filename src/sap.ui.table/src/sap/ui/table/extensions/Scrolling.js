@@ -1762,6 +1762,13 @@ sap.ui.define([
 			if (mRowCounts.fixedBottom > 0) {
 				iOffsetBottom += mRowCounts.fixedBottom * oTable._getBaseRowHeight();
 			}
+			const oCreationRow = oTable.getCreationRow();
+			if (oCreationRow) {
+				const oCreationRowDomRef = oCreationRow.getDomRef();
+				if (oCreationRowDomRef && oCreationRow.getVisible()) {
+					iOffsetBottom += oCreationRowDomRef.offsetHeight;
+				}
+			}
 			oVSb.style.bottom = iOffsetBottom + "px";
 		},
 
@@ -2329,7 +2336,7 @@ sap.ui.define([
 		 * @inheritDoc
 		 * @returns {string} The name of this extension.
 		 */
-		_init: function(oTable, sTableType, mSettings) {
+		_init: function(oTable, mSettings) {
 			const _ = _private(oTable);
 
 			// Horizontal scrolling
@@ -2394,7 +2401,7 @@ sap.ui.define([
 			this._clearCache();
 
 			if (oTable) {
-				TableUtils.removeDelegate(oTable, ExtensionDelegate);
+				oTable.removeEventDelegate(ExtensionDelegate);
 
 				if (_private(oTable).pVerticalScrollUpdateProcess) {
 					_private(oTable).pVerticalScrollUpdateProcess.cancel();

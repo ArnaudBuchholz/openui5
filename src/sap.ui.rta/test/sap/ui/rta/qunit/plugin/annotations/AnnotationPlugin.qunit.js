@@ -111,7 +111,10 @@ sap.ui.define([
 			sandbox.stub(Log, "error");
 			const aMenuItems = await this.oAnnotationPlugin.getMenuItems([this.oButtonOverlay]);
 			assert.strictEqual(aMenuItems.length, 1, "only 1 menu item is returned");
-			assert.ok(Log.error.calledWith("When using singleRename, controlBasedRenameChangeType must also be defined"), "the proper error is logged");
+			assert.ok(
+				Log.error.calledWith("When using singleRename, controlBasedRenameChangeType must also be defined"),
+				"the proper error is logged"
+			);
 		});
 
 		QUnit.test("When an overlay has an annotation action in the designtime metadata", async function(assert) {
@@ -215,7 +218,11 @@ sap.ui.define([
 			assert.strictEqual(aMenuItems[2].enabled, true, "then the third menu item is enabled");
 			assert.strictEqual(aMenuItems[2].rank, 302, "then the third menu item rank is correct");
 
-			assert.strictEqual(aMenuItems[3].id, "CTX_ANNOTATION_CHANGE_SINGLE_LABEL_annotationChange4", "then the fourth menu item id is correct");
+			assert.strictEqual(
+				aMenuItems[3].id,
+				"CTX_ANNOTATION_CHANGE_SINGLE_LABEL_annotationChange4",
+				"then the fourth menu item id is correct"
+			);
 			assert.strictEqual(aMenuItems[3].text, sActionTitle2, "then the third menu item text is correct");
 			assert.strictEqual(aMenuItems[3].icon, "sap-icon://edit", "then the third menu item icon is correct");
 			assert.strictEqual(aMenuItems[3].enabled, true, "then the third menu item is enabled");
@@ -225,7 +232,11 @@ sap.ui.define([
 		QUnit.test("When an overlay has an annotation action in the designtime metadata but the control has no stable ID", function(assert) {
 			configureDefaultActionAndUpdateOverlay.call(this);
 
-			assert.strictEqual(this.oAnnotationPlugin.isAvailable([this.oButtonNoStableIDOverlay]), false, "then isAvailable returns false");
+			assert.strictEqual(
+				this.oAnnotationPlugin.isAvailable([this.oButtonNoStableIDOverlay]),
+				false,
+				"then isAvailable returns false"
+			);
 			assert.strictEqual(this.oAnnotationPlugin.isEnabled([this.oButtonNoStableIDOverlay]), false, "then isEnabled returns false");
 			assert.strictEqual(this.oAnnotationPlugin._isEditable(this.oButtonNoStableIDOverlay), false, "then _isEditable returns false");
 		});
@@ -304,6 +315,21 @@ sap.ui.define([
 						annotationPath: "Path2",
 						value: "Value2"
 					}
+				},
+				{
+					serviceUrl: "testServiceUrl3",
+					content: {
+						annotationPath: "Path3",
+						text: "Text3"
+					}
+				},
+				{
+					serviceUrl: "testServiceUrl4",
+					content: {
+						annotationPath: "Path4",
+						text: "Text4",
+						textType: "XBUT"
+					}
 				}
 			];
 
@@ -312,15 +338,47 @@ sap.ui.define([
 			this.oAnnotationPlugin.attachEventOnce("elementModified", function(oEvent) {
 				const oCompositeCommand = oEvent.getParameter("command");
 				const aCommands = oCompositeCommand.getCommands();
-				assert.strictEqual(aCommands.length, 2, "then the composite command contains two annotation commands");
+				assert.strictEqual(aCommands.length, 4, "then the composite command contains four annotation commands");
 				const oAnnotationChange = aCommands[0].getPreparedChange();
-				const oAnnotationChange2 = aCommands[1].getPreparedChange();
 				assert.strictEqual(oAnnotationChange.getChangeType(), "myChangeType", "then the first change has the correct change type");
-				assert.strictEqual(oAnnotationChange.getServiceUrl(), "testServiceUrl", "then the first change has the correct service URL");
+				assert.strictEqual(
+					oAnnotationChange.getServiceUrl(),
+					"testServiceUrl",
+					"then the first change has the correct service URL"
+				);
 				assert.strictEqual(oAnnotationChange.getContent().annotationPath, "Path1", "then the first change has the correct content");
-				assert.strictEqual(oAnnotationChange2.getChangeType(), "myChangeType", "then the second change has the correct change type");
-				assert.strictEqual(oAnnotationChange2.getContent().annotationPath, "Path2", "then the second change has the correct content");
-				assert.strictEqual(oAnnotationChange2.getServiceUrl(), "testServiceUrl2", "then the first change has the correct service URL");
+				const oAnnotationChange2 = aCommands[1].getPreparedChange();
+				assert.strictEqual(
+					oAnnotationChange2.getChangeType(),
+					"myChangeType",
+					"then the second change has the correct change type"
+				);
+				assert.strictEqual(
+					oAnnotationChange2.getContent().annotationPath,
+					"Path2",
+					"then the second change has the correct content"
+				);
+				assert.strictEqual(
+					oAnnotationChange2.getServiceUrl(),
+					"testServiceUrl2",
+					"then the first change has the correct service URL"
+				);
+				const oAnnotationChange3 = aCommands[2].getPreparedChange();
+				assert.deepEqual(oAnnotationChange3.getContent(), {
+					annotationPath: "Path3"
+				}, "then the second change has the correct content");
+				assert.deepEqual(oAnnotationChange3.convertToFileContent().texts.annotationText, {
+					type: "XFLD",
+					value: "Text3"
+				}, "then the first change has the correct text");
+				const oAnnotationChange4 = aCommands[3].getPreparedChange();
+				assert.deepEqual(oAnnotationChange4.getContent(), {
+					annotationPath: "Path4"
+				}, "then the second change has the correct content");
+				assert.deepEqual(oAnnotationChange4.convertToFileContent().texts.annotationText, {
+					type: "XBUT",
+					value: "Text4"
+				}, "then the first change has the correct text");
 				fnDone();
 			});
 

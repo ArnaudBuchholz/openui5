@@ -15,7 +15,8 @@ sap.ui.define([
 	"sap/ui/core/ResizeHandler",
 	"sap/ui/dom/containsOrEquals",
 	"sap/ui/events/KeyCodes",
-	"sap/ui/test/utils/nextUIUpdate"
+	"sap/ui/test/utils/nextUIUpdate",
+	"sap/ui/qunit/utils/createAndAppendDiv"
 ], function(
 	Popup,
 	Localization,
@@ -31,7 +32,8 @@ sap.ui.define([
 	ResizeHandler,
 	containsOrEquals,
 	KeyCodes,
-	nextUIUpdate
+	nextUIUpdate,
+	createAndAppendDiv
 ){
 	"use strict";
 
@@ -2415,6 +2417,78 @@ sap.ui.define([
 
 		assert.ok(this.oPopup.isOpen(), "Popup should be opened");
 	});
+
+	QUnit.test("Set web component opener as extra content of a autoclose popup", async function(assert) {
+
+		customElements.define(
+			"my-popup-opener",
+			class extends HTMLElement {
+				constructor() {
+					super();
+					const shadowRoot = this.attachShadow({ mode: "open" });
+					// Create a button and add it to the shadow DOM
+					const button = document.createElement('button');
+					button.id = "button";
+					button.textContent = 'Click Me';
+					shadowRoot.appendChild(button);
+				}
+			}
+		);
+
+		const oDiv = createAndAppendDiv("my-web-component-parent");
+
+		const oMyWebComponent = document.createElement("my-popup-opener");
+
+		oDiv.appendChild(oMyWebComponent);
+
+		const oInternalButton = oMyWebComponent.shadowRoot.querySelector('button');
+
+		this.oPopup.setExtraContent([oInternalButton]);
+		this.oPopup.setAutoClose(true);
+
+		this.oPopup.open();
+
+		// wait for open
+		await new Promise((resolve, reject) => {
+			const fnOpened = () => {
+				this.oPopup.detachOpened(fnOpened);
+				resolve();
+			};
+			this.oPopup.attachOpened(fnOpened);
+		});
+
+		assert.ok(this.oPopup.getContent().contains(document.activeElement), "focus is in the Popup content after open");
+
+		oInternalButton.focus();
+
+		// wait for the autoclose detection
+		await new Promise((resolve, reject) => {
+			setTimeout(resolve, 100);
+		});
+
+		assert.ok(this.oPopup.isOpen(), "Popup is still open");
+
+		this.oPopup.getContent().focus();
+
+		const oDOM = jQuery("#focusableElement2");
+		if (this.oPopup.touchEnabled) {
+			QUnitUtils.triggerEvent("touchstart", oDOM);
+		} else {
+			oDOM.focus();
+		}
+
+		// wait for close
+		await new Promise((resolve, reject) => {
+			const fnClosed = () => {
+				this.oPopup.detachClosed(fnClosed);
+				resolve();
+			};
+			this.oPopup.attachClosed(fnClosed);
+		});
+
+		oDiv.remove();
+	});
+
 
 	QUnit.test("The previous active element isn't blurred before the opening animation, if it's the same element which gets the focus after popup open", async function(assert) {
 		var done = assert.async(),

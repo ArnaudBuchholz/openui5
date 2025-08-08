@@ -21,7 +21,7 @@ sap.ui.define([
 	"sap/ui/rta/plugin/DragDrop",
 	"sap/ui/rta/plugin/LocalReset",
 	"sap/ui/rta/plugin/Remove",
-	"sap/ui/rta/plugin/Rename",
+	"sap/ui/rta/plugin/rename/Rename",
 	"sap/ui/rta/plugin/Resize",
 	"sap/ui/rta/plugin/RTAElementMover",
 	"sap/ui/rta/plugin/Selection",
@@ -68,7 +68,7 @@ sap.ui.define([
 	 * @since 1.86
 	 * @alias sap.ui.rta.util.PluginManager
 	 */
-	var PluginManager = ManagedObject.extend("sap.ui.rta.util.PluginManager", {
+	const PluginManager = ManagedObject.extend("sap.ui.rta.util.PluginManager", {
 		metadata: {
 			properties: {
 				/**
@@ -208,9 +208,11 @@ sap.ui.define([
 				});
 			}
 
-			this._mDefaultPlugins.annotation = new AnnotationPlugin({
-				commandFactory: this._oCommandFactory
-			});
+			if (FeaturesAPI.areAnnotationChangesEnabled()) {
+				this._mDefaultPlugins.annotation = new AnnotationPlugin({
+					commandFactory: this._oCommandFactory
+				});
+			}
 		}
 
 		return { ...this._mDefaultPlugins };
@@ -276,7 +278,7 @@ sap.ui.define([
 	 * @private
 	 */
 	PluginManager.prototype.onElementEditableChange = function(oEvent) {
-		var bEditable = oEvent.getParameter("editable");
+		const bEditable = oEvent.getParameter("editable");
 		if (bEditable) {
 			this.iEditableOverlaysCount += 1;
 		} else {
@@ -288,15 +290,15 @@ sap.ui.define([
 	 * Handler for the stop cut and paste function.
 	 */
 	PluginManager.prototype.handleStopCutPaste = function() {
-		var oCutPastePlugin = this.getPlugin("cutPaste");
+		const oCutPastePlugin = this.getPlugin("cutPaste");
 		if (oCutPastePlugin) {
 			oCutPastePlugin.stopCutAndPaste();
 		}
 	};
 
 	PluginManager.prototype._destroyDefaultPlugins = function(mPluginsToKeep) {
-		for (var sDefaultPluginName in this._mDefaultPlugins) {
-			var oDefaultPlugin = this._mDefaultPlugins[sDefaultPluginName];
+		for (const sDefaultPluginName in this._mDefaultPlugins) {
+			const oDefaultPlugin = this._mDefaultPlugins[sDefaultPluginName];
 
 			if (oDefaultPlugin && !oDefaultPlugin.bIsDestroyed) {
 				if (!mPluginsToKeep || mPluginsToKeep[sDefaultPluginName] !== oDefaultPlugin) {

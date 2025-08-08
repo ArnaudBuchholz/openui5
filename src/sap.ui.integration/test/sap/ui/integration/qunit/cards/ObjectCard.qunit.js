@@ -1,6 +1,7 @@
 /* global QUnit, sinon */
 
 sap.ui.define([
+	"sap/base/i18n/Localization",
 	"sap/base/Log",
 	"sap/ui/core/Configuration",
 	"sap/m/library",
@@ -15,8 +16,10 @@ sap.ui.define([
 	"sap/ui/integration/util/DateRangeHelper",
 	"sap/ui/qunit/utils/MemoryLeakCheck",
 	"sap/ui/qunit/utils/nextUIUpdate",
-	"qunit/testResources/nextCardReadyEvent"
+	"qunit/testResources/nextCardReadyEvent",
+	"qunit/testResources/genericTests/actionEnablementTests"
 ], function(
+	Localization,
 	Log,
 	Configuration,
 	mLibrary,
@@ -31,7 +34,8 @@ sap.ui.define([
 	DateRangeHelper,
 	MemoryLeakCheck,
 	nextUIUpdate,
-	nextCardReadyEvent
+	nextCardReadyEvent,
+	actionEnablementTests
 ) {
 	"use strict";
 
@@ -86,7 +90,7 @@ sap.ui.define([
 					"src": "{photo}"
 				},
 				"title": "{firstName} {lastName}",
-				"subTitle": "{position}"
+				"subtitle": "{position}"
 			},
 			"content": {
 				"groups": [{
@@ -261,7 +265,7 @@ sap.ui.define([
 					"src": "{photo}"
 				},
 				"title": "{firstName} {lastName}",
-				"subTitle": "{position}"
+				"subtitle": "{position}"
 			},
 			"content": {
 				"groups": [{
@@ -716,7 +720,7 @@ sap.ui.define([
 					"src": "sap-icon://product"
 				},
 				"title": "PR255 - MacBook Purchase",
-				"subTitle": "Procurement Purchase Requisition"
+				"subtitle": "Procurement Purchase Requisition"
 			},
 			"content": {
 				"groups": [
@@ -856,7 +860,7 @@ sap.ui.define([
 					"src": "sap-icon://product"
 				},
 				"title": "PR255 - MacBook Purchase",
-				"subTitle": "Procurement Purchase Requisition"
+				"subtitle": "Procurement Purchase Requisition"
 			},
 			"content": {
 				"groups": [
@@ -1012,7 +1016,7 @@ sap.ui.define([
 					"src": "{photo}"
 				},
 				"title": "{firstName} {lastName}",
-				"subTitle": "{position}"
+				"subtitle": "{position}"
 			},
 			"content": {
 				"groups": [{
@@ -1056,6 +1060,36 @@ sap.ui.define([
 			}
 		}
 	};
+
+	actionEnablementTests("Status in NumericHeader", {
+		manifest: {
+			"sap.app": {
+				"id": "card.objectCard.statusActionsTest",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "Object",
+				"header": {
+					"title": "Card Title"
+				},
+				"content": {
+					"groups": [{
+						"items": [{
+							"type": "Status",
+							"value": "Status"
+						}]
+					}]
+				}
+			}
+		},
+		partUnderTestPath: "/sap.card/content/groups/0/items/0",
+		getActionControl: (oCard) => {
+			return oCard.getCardContent().getAggregation("_content").getItems()[0].getContent()[0].getItems()[0];
+		},
+		DOM_RENDER_LOCATION,
+		QUnit,
+		sinon
+	});
 
 	QUnit.module("Object Card", {
 		beforeEach: function() {
@@ -1136,32 +1170,24 @@ sap.ui.define([
 		var oObjectContent = this.oCard.getAggregation("_content");
 		var oRoot = oObjectContent.getAggregation("_content");
 		var oLayout = oRoot.getItems()[0];
-		var oEvent = {
-			size: {
-				width: 400
-			},
-			oldSize: {
-				width: 0
-			},
-			control: oRoot
-		};
 
 		//This is the case when 2 groups are in one column and the last group is on another row
-		oObjectContent._onResize(oEvent);
+		this.oCard.setWidth("450px");
+		await nextUIUpdate();
 		assert.ok(oLayout.getContent()[0].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The first group should have the separation class");
 		assert.ok(!oLayout.getContent()[1].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The second group should not have the separation class");
 		assert.ok(oLayout.getContent()[2].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The last group should have the separation class");
 
 		//This is the case when all groups are in one column
-		oEvent.size.width = 200;
-		oObjectContent._onResize(oEvent);
+		this.oCard.setWidth("250px");
+		await nextUIUpdate();
 		assert.ok(!oLayout.getContent()[0].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The group should not have the separation class");
 		assert.ok(!oLayout.getContent()[1].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The group should not have the separation class");
 		assert.ok(!oLayout.getContent()[2].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The group should not have the separation class");
 
 		//This is the case when all groups are in one row
-		oEvent.size.width = 800;
-		oObjectContent._onResize(oEvent);
+		this.oCard.setWidth("850px");
+		await nextUIUpdate();
 		assert.ok(oLayout.getContent()[0].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The group should have the separation class");
 		assert.ok(oLayout.getContent()[1].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The group should have the separation class");
 		assert.ok(!oLayout.getContent()[2].$().hasClass("sapFCardObjectSpaceBetweenGroup"), "The group should not have the separation class");
@@ -1711,7 +1737,7 @@ sap.ui.define([
 				},
 				"header": {
 					"title": "Donna Moore",
-					"subTitle": "Complete your time recording",
+					"subtitle": "Complete your time recording",
 					"visible": false
 				},
 				"content": {
@@ -2358,7 +2384,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Resize handler is called for AlignedFlowLayout containers", async function (assert) {
-		var oResizeSpy = this.spy(ObjectContent.prototype, "_onAlignedFlowLayoutResize");
+		var oResizeSpy = this.spy(ObjectContent.prototype, "_resizeAlignedFlowLayout");
 
 		this.oCard.setManifest(oManifest_ComplexLayout);
 
@@ -2374,8 +2400,10 @@ sap.ui.define([
 			}
 		});
 
+		await nextUIUpdate();
+
 		// Assert
-		assert.strictEqual(oResizeSpy.callCount, 2, "First AlignedFlowLayout is destroyed");
+		assert.strictEqual(oResizeSpy.callCount, 2, "Resize handler is called");
 	});
 
 	MemoryLeakCheck.checkControl("ObjectContent with IconGroup", function () {
@@ -3161,6 +3189,82 @@ sap.ui.define([
 		assert.strictEqual(oTextArea.getValueState(), ValueState.None, "Validation passed");
 	});
 
+	QUnit.module("Form controls: DateRange", {
+		beforeEach: function() {
+			this.oCard = new Card({
+				baseUrl: "test-resources/sap/ui/integration/qunit/testResources/"
+			});
+
+			this.oCard.placeAt(DOM_RENDER_LOCATION);
+		},
+		afterEach: function () {
+			this.oCard.destroy();
+			this.oCard = null;
+		}
+	});
+
+	QUnit.test("Timezone", async function (assert) {
+		const sTimezone = Localization.getTimezone();
+		const oCard = this.oCard;
+		const done = assert.async();
+
+		Localization.setTimezone("America/Los_Angeles");
+
+		oCard.setManifest({
+			"sap.app": {
+				"id": "test.card.object.dateRangeTimezone",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "Object",
+				"header": {
+					"title": "test"
+				},
+				"content": {
+					"groups": [
+						{
+							"items": [
+								{
+									"id": "date",
+									"label": "Date",
+									"type": "DateRange",
+									"value": {
+										"option": "date",
+										"values": ["2025-03-10"]
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		});
+
+		await nextCardReadyEvent(oCard);
+
+		oCard.attachAction((oEvent) => {
+			const oParams = oEvent.getParameter("parameters");
+
+			const oExpectedRange = {
+				end: "2025-03-11T06:59:59.999Z",
+				endLocalDate: "2025-03-10",
+				start: "2025-03-10T07:00:00.000Z",
+				startLocalDate: "2025-03-10"
+			};
+
+			assert.deepEqual(oParams.data.date.range, oExpectedRange, "The output start and end dates in UTC and local zones are as expected.");
+
+			// clean up - reset timezone
+			Localization.setTimezone(sTimezone);
+
+			done();
+		});
+
+		oCard.triggerAction({
+			type: CardActionType.Submit
+		});
+	});
+
 	QUnit.module("'Image' items", {
 		beforeEach: function() {
 			this.oCard = new Card({
@@ -3193,7 +3297,7 @@ sap.ui.define([
 										"overlay": {
 											"supertitle": "Sun, May 28",
 											"title": "Hello, John",
-											"subTitle": "Today will be a good day!",
+											"subtitle": "Today will be a good day!",
 											"textColor": "#fff",
 											"verticalPosition": "Center",
 											"horizontalPosition": "End",
@@ -3266,7 +3370,7 @@ sap.ui.define([
 		assert.equal(aGroups[0].getItems()[0].getTooltip(), "Green grass", "Image's tooltip is correctly set.");
 		assert.equal(aGroups[0].getItems()[0].getSupertitle(), "Sun, May 28", "Image's supertitle is correctly set.");
 		assert.equal(aGroups[0].getItems()[0].getTitle(), "Hello, John", "Image's title is correctly set.");
-		assert.equal(aGroups[0].getItems()[0].getSubTitle(), "Today will be a good day!", "Image's subtitle is correctly set.");
+		assert.equal(aGroups[0].getItems()[0].getSubtitle(), "Today will be a good day!", "Image's subtitle is correctly set.");
 		assert.equal(aGroups[0].getItems()[0].getVerticalPosition(), "Center", "Image's verticalPosition is correctly set.");
 		assert.equal(aGroups[0].getItems()[0].getHorizontalPosition(), "End", "Image's horizontalPosition is correctly set.");
 		assert.equal(aGroups[0].getItems()[0].getTextColor(), "#fff", "Image's textColor is correctly set.");
@@ -3388,5 +3492,57 @@ sap.ui.define([
 
 			done();
 		});
+	});
+
+	QUnit.module("Test deprecated image overlay subTitle", {
+		beforeEach: function() {
+			this.oCard = new Card({
+				width: "400px",
+				height: "600px",
+				baseUrl: "test-resources/sap/ui/integration/qunit/testResources/",
+				manifest: {
+					"sap.app": {
+						"id": "test.cards.object.card2",
+						"type": "card"
+					},
+					"sap.card": {
+						"type": "Object",
+						"header": {
+							"title": "Title"
+						},
+						"content": {
+							"groups": [{
+								"items": [
+									{
+										"type": "Image",
+										"overlay": {
+											"subTitle": "Today will be a good day!"
+										}
+									}
+								]
+							}]
+						}
+					}
+				}
+			});
+
+			this.oCard.placeAt(DOM_RENDER_LOCATION);
+		},
+		afterEach: function () {
+			this.oCard.destroy();
+			this.oCard = null;
+		}
+	});
+
+	QUnit.test("Check that the deprecated subTitle property still works", async function (assert) {
+		await nextCardReadyEvent(this.oCard);
+		await nextUIUpdate();
+
+		var oObjectContent = this.oCard.getAggregation("_content");
+		var oContent = oObjectContent.getAggregation("_content");
+		var aGroups = oContent.getItems()[0].getContent();
+
+		// Image
+		assert.equal(aGroups[0].getItems()[0].getSubtitle(), "Today will be a good day!", "Image's subtitle is correctly set.");
 	});
 });

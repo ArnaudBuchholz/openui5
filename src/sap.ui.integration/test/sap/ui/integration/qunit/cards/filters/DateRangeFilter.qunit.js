@@ -1,6 +1,7 @@
 /* global QUnit */
 
 sap.ui.define([
+	"sap/base/i18n/Localization",
 	"sap/m/DynamicDateRange",
 	"sap/ui/core/Element",
 	"sap/ui/core/library",
@@ -12,6 +13,7 @@ sap.ui.define([
 	"sap/ui/qunit/utils/nextUIUpdate",
 	"qunit/testResources/nextCardReadyEvent"
 ], function(
+	Localization,
 	DynamicDateRange,
 	Element,
 	coreLibrary,
@@ -164,6 +166,28 @@ sap.ui.define([
 		assert.ok(oModelValue.range.hasOwnProperty("end"), "'end' property should be part of range");
 		assert.ok(oModelValue.rangeOData.hasOwnProperty("start"), "'start' property should be part of rangeOData");
 		assert.ok(oModelValue.rangeOData.hasOwnProperty("end"), "'end' property should be part of rangeOData");
+	});
+
+	QUnit.test("setValueFromOutside", function (assert) {
+		// Arrange
+		var oDateStart = UI5Date.getInstance("1997-05-01T00:00:00.000Z"),
+			oDateEnd = UI5Date.getInstance("2000-01-01T00:00:00.000Z"),
+			aLocalDates = DynamicDateRange.toDates({
+				operator: "DATERANGE",
+				values: [oDateStart, oDateEnd]
+			});
+		this.oDRF.setValueFromOutside({
+			option: "dateRange",
+			values: ["1997-05-01T00:00:00.000Z", "2000-01-01T00:00:00.000Z"]
+		});
+		var oModelValue = this.oDRF.getValueForModel();
+
+		// Assert
+		assert.strictEqual(oModelValue.range.start, aLocalDates[0].toISOString(), "Range start should be in ISO format");
+		assert.strictEqual(oModelValue.range.end, aLocalDates[1].toISOString(), "Range end should be in ISO format");
+
+		assert.strictEqual(oModelValue.range.startLocalDate, "1997-05-01", "Range start local date should be correct and in short ISO 8601 date format");
+		assert.strictEqual(oModelValue.range.endLocalDate, "2000-01-01", "Range end local date should be correct and in short ISO date format");
 	});
 
 	QUnit.test("Dates in the value are in ISO format", function (assert) {
@@ -460,6 +484,34 @@ sap.ui.define([
 
 		// Assert
 		assert.notEqual(this.oDRF.getValue(), oOldValue, "Value should be changed after new value is entered");
+	});
+
+	QUnit.test("Timezone", function (assert) {
+		const sTimezone = Localization.getTimezone();
+
+		Localization.setTimezone("America/Los_Angeles");
+
+		// Arrange
+		this.oDRF.setConfig({
+			value: {
+				option: "date",
+				values: ["2025-03-10"]
+			}
+		});
+		const oModelValue = this.oDRF.getValueForModel();
+
+		const oExpectedRange = {
+			end: "2025-03-11T06:59:59.999Z",
+			endLocalDate: "2025-03-10",
+			start: "2025-03-10T07:00:00.000Z",
+			startLocalDate: "2025-03-10"
+		};
+
+		// Assert
+		assert.deepEqual(oModelValue.range, oExpectedRange, "Result date range is correct");
+
+		// reset timezone
+		Localization.setTimezone(sTimezone);
 	});
 
 	QUnit.module("DateRangeFilter Properties");

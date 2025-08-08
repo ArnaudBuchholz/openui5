@@ -136,10 +136,6 @@
 @_sap_m_IconTabBar_SelectedTextColor: var(--sapTab_Selected_Background);
 @_sap_m_IconTabBar_SelectedTextHoverColor: darken(@sapUiSelected, 10);
 @_sap_m_IconTabBar_ArrowScroll_AfterHeight: 1px;
-@_sap_m_IconTabBar_HeaderFocusBorderTopOffset: -4px;
-@_sap_m_IconTabBar_HeaderFocusBorderBottomOffset: -4px;
-@_sap_m_IconTabBar_HeaderFocusBorderRightOffset: -3px;
-@_sap_m_IconTabBar_HeaderFocusBorderLeftOffset: -3px;
 @_sap_m_IconTabBar_HeaderBorderRadius: 0.25rem;
 @_sap_m_IconTab_Bar_Separator_Line: var(--sapGroup_TitleBorderColor);
 
@@ -835,10 +831,6 @@ html.sap-desktop {
 	}
 }
 
-.sapMITBFilter .sapMITBText {
-	font-weight: bold;
-}
-
 /* ------------------------------------------------ */
 /* Shell overrides */
 /* ------------------------------------------------ */
@@ -853,7 +845,6 @@ html.sap-desktop {
 		.sapMITBItem {
 			border: 1px solid var(--sapButton_BorderColor);
 			color: var(--sapShell_Navigation_TextColor);
-			background-color: var(--sapShell_InteractiveBackground);
 
 			.sapMITHShowSubItemsIcon {
 				color: var(--sapShell_Navigation_TextColor);
@@ -882,7 +873,6 @@ html.sap-desktop {
 	.sapMITHEndOverflow {
 
 		.sapMITBItem {
-			background-color: var(--sapShell_InteractiveBackground);
 
 			&:hover {
 				background: var(--sapShell_Hover_Background);

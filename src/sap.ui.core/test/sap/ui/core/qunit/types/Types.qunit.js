@@ -2187,7 +2187,7 @@ sap.ui.define([
 		});
 
 		// format and parse invalid unit
-		assert.strictEqual(oType.formatValue([100, "mass-kilogram"], "string"), "100.000 mass-kilogram",
+		assert.strictEqual(oType.formatValue([100, "mass-kilogram"], "string"), "100.000\u00a0mass-kilogram",
 			"Format of unknown unit returns number and measure (just as NumberFormat returns it)");
 		assert.throws(function () {
 				oType.parseValue("100 kg", "string");
@@ -2251,7 +2251,7 @@ sap.ui.define([
 		});
 
 		// format and parse invalid unit (excluded by local config)
-		assert.strictEqual(oType.formatValue([100, "mass-kilogram"], "string"), "100.000 mass-kilogram",
+		assert.strictEqual(oType.formatValue([100, "mass-kilogram"], "string"), "100.000\u00a0mass-kilogram",
 			"Format of unknown unit leads to empty string (just as NumberFormat returns it)");
 		assert.throws(function () {
 				oType.parseValue("100 kg", "string");
@@ -2260,7 +2260,7 @@ sap.ui.define([
 			"ParseException is thrown for wrong unit");
 
 		// format and parse invalid unit (excluded by local config)
-		assert.strictEqual(oType.formatValue([123.4, "lebkuchen"], "string"), "123.400 lebkuchen",
+		assert.strictEqual(oType.formatValue([123.4, "lebkuchen"], "string"), "123.400\u00a0lebkuchen",
 			"Lebkuchen is formatted with the default of 3 decimal places");
 		assert.throws(function () {
 			oType.parseValue("1234.56 LKs", "string");
@@ -2971,7 +2971,11 @@ sap.ui.define([
 		const oUnitType = {};
 		if (aTypes[0]) {
 			aTypes[0].isA = () => {};
-			this.mock(aTypes[0]).expects("isA").withExactArgs("sap.ui.model.odata.type.Decimal").returns(true);
+			const oTypeMock = this.mock(aTypes[0]);
+			oTypeMock.expects("isA")
+				.withExactArgs(["sap.ui.model.odata.type.Int", "sap.ui.model.odata.type.Int64"])
+				.returns(false);
+			oTypeMock.expects("isA").withExactArgs("sap.ui.model.odata.type.Decimal").returns(true);
 		}
 
 		// code under test
@@ -2982,14 +2986,27 @@ sap.ui.define([
 });
 
 	//*********************************************************************************************
-	QUnit.test("Unit: processPartTypes, first part has non-Decimal type", function (assert) {
-		const oUnitType = {iScale : 42};
-		const oNonDecimalType = {isA() {}};
-		this.mock(oNonDecimalType).expects("isA").withExactArgs("sap.ui.model.odata.type.Decimal").returns(false);
+[
+	{bInt: undefined, iScale: undefined}, // no quantity type
+	{bInt: false, iScale: undefined}, // quantity type is not Int* and not Decimal
+	{bInt: true, iScale: 0} // quantity type is Int*
+].forEach(({bInt, iScale}, i) => {
+	QUnit.test(`Unit: processPartTypes defaults scale to '0' if measure part is integer (${i})`, function (assert) {
+		const oUnitType = {};
+		const oQuantityType = {isA() {}};
+		const aTypes = bInt === undefined ? [] : [oQuantityType];
+		if (aTypes[0]) {
+			const oTypeMock = this.mock(aTypes[0]);
+			oTypeMock.expects("isA")
+				.withExactArgs(["sap.ui.model.odata.type.Int", "sap.ui.model.odata.type.Int64"])
+				.returns(bInt);
+			oTypeMock.expects("isA").withExactArgs("sap.ui.model.odata.type.Decimal").returns(false);
+		}
 
 		// code under test
-		UnitType.prototype.processPartTypes.call(oUnitType, [oNonDecimalType]);
+		UnitType.prototype.processPartTypes.call(oUnitType, aTypes);
 
-		assert.strictEqual(oUnitType.iScale, 42);
+		assert.strictEqual(oUnitType.iScale, iScale);
 	});
+});
 });

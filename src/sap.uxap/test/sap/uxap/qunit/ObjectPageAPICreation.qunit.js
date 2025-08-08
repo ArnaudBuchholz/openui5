@@ -3569,6 +3569,80 @@ function(
 		await helpers.renderObject(oObjectPage);
 	});
 
+	QUnit.test("Expanding Header with ObjectPageDynamicHeaderTitle with rounding issue",
+	async function (assert) {
+
+		// Arrange
+		var oObjectPage = oFactory.getObjectPageLayoutWithOneVisibleSection(),
+			oHeader = oFactory.getObjectPageDynamicHeaderTitle(),
+			fnDone = assert.async(),
+			oSpy;
+
+		assert.expect(2);
+
+		oHeader.setSnappedHeading(new Button({text: "Heading Button"}));
+		oHeader.setExpandedHeading(new Button({text: "Heading Button"}));
+		oObjectPage.setShowAnchorBar(false);
+		oObjectPage.addHeaderContent(new Button());
+		oObjectPage.setHeaderTitle(oFactory.getObjectPageDynamicHeaderTitle());
+
+		oObjectPage.attachEventOnce("onAfterRenderingDOMReady", function() {
+			// Act - Snap header
+			oObjectPage._handleDynamicTitlePress();
+
+			setTimeout(function() {
+				// Assert
+				assert.strictEqual(oObjectPage._bHeaderExpanded, false, "Header is collapsed");
+
+				// stub - simulate rounding issue
+				this.stub(oObjectPage._$opWrapper, "scrollTop").returns(oObjectPage._getSnapPosition() + 1.6);
+				oSpy = this.spy(oObjectPage, "_moveHeaderToTitleArea");
+
+				// Act - Expand header
+				oObjectPage._handleDynamicTitlePress();
+
+				// Assert
+				assert.ok(oSpy.notCalled, "_moveHeaderToTitleArea is not called");
+
+				// Cleanup
+				oObjectPage.destroy();
+				fnDone();
+			}.bind(this), 100);
+		}.bind(this));
+
+		await helpers.renderObject(oObjectPage);
+	});
+
+	QUnit.test("_updateMedia called with proper arguments onAfterRendering when _hasDynamicTitle",
+	async function (assert) {
+
+		// Arrange
+		var oObjectPage = oFactory.getObjectPageLayoutWithOneVisibleSection(),
+			oUpdateMediaSpy,
+			that = this,
+			fnDone = assert.async();
+
+		assert.expect(1);
+		oObjectPage.setHeaderTitle(oFactory.getObjectPageDynamicHeaderTitle());
+
+		oObjectPage.attachEventOnce("onAfterRenderingDOMReady", function() {
+
+			oUpdateMediaSpy = that.spy(oObjectPage, "_updateMedia");
+
+			oObjectPage.onAfterRendering();
+
+			assert.strictEqual(oUpdateMediaSpy.getCalls()[0].args[1],
+				ObjectPageLayout.DYNAMIC_HEADERS_MEDIA,
+				"_updateMedia is correctly called with dynamic headers args when needed");
+
+			oObjectPage.destroy();
+			oUpdateMediaSpy.reset();
+			fnDone();
+		});
+
+		await helpers.renderObject(oObjectPage);
+	});
+
 	QUnit.test("BCP:1870298358 - _getScrollableViewportHeight method should acquire the exact height", async function(assert) {
 
 		// Arrange
@@ -3782,6 +3856,33 @@ function(
 		}
 	});
 
+	QUnit.test("sectionChange event is fired for single/not promoted SubSection", async function (assert) {
+		// Arrange
+		var fnDone = assert.async(),
+			oSubSection = new ObjectPageSubSection({
+				blocks: new Button()
+			}),
+			oSection = oFactory.getSection(1, null, [ oSubSection ]);
+
+		this.oObjectPage.addSection(oSection);
+		await nextUIUpdate();
+
+		this.oObjectPage.attachEventOnce("onAfterRenderingDOMReady", function() {
+			this.oObjectPage.attachEventOnce("sectionChange", function(oEvent) {
+				// Assert
+				assert.strictEqual(oEvent.getParameter("section").getId(), oSection.getId(),
+					"sectionChange event is fired for the new Section");
+				assert.strictEqual(oEvent.getParameter("subSection").getId(), oSubSection.getId(),
+					"sectionChange event is fired for the new SubSection");
+				fnDone();
+			});
+
+			// Act
+			this.oObjectPage.onAnchorBarTabPress(oSection.getId());
+			this.oObjectPage._onScroll({ target: {scrollTop: this.oObjectPage._computeScrollPosition(oSection)}});
+		}.bind(this));
+	});
+
 	QUnit.test("subSectionVisibilityChange without IconTabBar and changing visibility", function (assert) {
 		// Arrange
 		var fnDone = assert.async();
@@ -3914,6 +4015,50 @@ function(
 		assert.strictEqual(oObjectPage.$("footerWrapper").attr("aria-label"), "Footer", "Footer label is set correctly.");
 		assert.strictEqual(oObjectPage.$("anchorBar").attr("role"), "navigation", "Navigation role is set correctly.");
 		assert.strictEqual(oObjectPage.$("anchorBar").attr("aria-label"), "Navigation", "Navigation label is set correctly.");
+
+		oLandmarkInfo = new ObjectPageAccessibleLandmarkInfo({
+			rootRole: "None",
+			rootLabel: "Root",
+			contentRole: "None",
+			contentLabel: "Content",
+			headerRole: "None",
+			headerLabel: "Header",
+			footerRole: "None",
+			footerLabel: "Footer",
+			navigationRole: "None",
+			navigationLabel: "Navigation"
+		});
+
+		oObjectPage.setLandmarkInfo(oLandmarkInfo);
+		await nextUIUpdate();
+
+		assert.strictEqual(oObjectPage.$().attr("role"), undefined, "Root role is not set");
+		assert.strictEqual(oObjectPage.$().attr("aria-label"), undefined, "Root label is not");
+		assert.strictEqual(oObjectPage.$().attr("aria-roledescription"), undefined, "Root roledescription is not set");
+		assert.strictEqual(oObjectPage.$("sectionsContainer").attr("role"), undefined, "Content role  is not set");
+		assert.strictEqual(oObjectPage.$("sectionsContainer").attr("aria-label"), undefined, "Content label is not set");
+		assert.strictEqual(oObjectPage.$("sectionsContainer").attr("aria-roledescription"), undefined, "Content roledescription is not set");
+		assert.strictEqual(oObjectPage.$("headerTitle").attr("role"), undefined, "Header role is not set");
+		assert.strictEqual(oObjectPage.$("headerTitle").attr("aria-label"), undefined, "Header label is set correctly.");
+		assert.strictEqual(oObjectPage.$("headerTitle").attr("aria-roledescription"), undefined, "Header roledescription is not set");
+		assert.strictEqual(oObjectPage.$("footerWrapper").attr("role"), undefined, "Footer role is not set");
+		assert.strictEqual(oObjectPage.$("footerWrapper").attr("aria-label"), undefined, "Footer label is not set");
+		assert.strictEqual(oObjectPage.$("footerWrapper").attr("aria-roledescription"), undefined, "Footer roledescription is not set");
+		assert.strictEqual(oObjectPage.$("anchorBar").attr("role"), undefined, "Navigation role is not set");
+		assert.strictEqual(oObjectPage.$("anchorBar").attr("aria-label"), undefined, "Navigation label  is not set");
+		assert.strictEqual(oObjectPage.$("anchorBar").attr("aria-roledescription"), undefined, "Navigation roledescription is not set");
+
+		oLandmarkInfo = new ObjectPageAccessibleLandmarkInfo({
+			rootRole: "None",
+			headerRole: "None"
+		});
+
+		oObjectPage.setLandmarkInfo(oLandmarkInfo);
+		await nextUIUpdate();
+
+		assert.strictEqual(oObjectPage.$().attr("aria-label"), undefined, "When rootRole is None and no label is set, root label is not set.");
+		assert.strictEqual(oObjectPage.$("headerTitle").attr("aria-label"), undefined, "When headerRole is None and no label is set, header label is not set.");
+
 
 		oObjectPage.destroy();
 	});

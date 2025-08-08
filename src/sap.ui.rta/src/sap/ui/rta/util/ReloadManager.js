@@ -32,18 +32,13 @@ sap.ui.define([
 	 * @private
 	 * @ui5-restricted
 	 */
-	var ReloadManager = {};
+	const ReloadManager = {};
 
-	var mUShellServices = {};
-	var mReloadMethods = {
-		NOT_NEEDED: "NO_RELOAD",
-		VIA_HASH: "CROSS_APP_NAVIGATION",
-		RELOAD_PAGE: "HARD_RELOAD"
-	};
+	let mUShellServices = {};
 
 	function getReloadMessageOnStart(oReloadInfo) {
-		var sReason;
-		var bIsCustomerLayer = oReloadInfo.layer === Layer.CUSTOMER;
+		let sReason;
+		const bIsCustomerLayer = oReloadInfo.layer === Layer.CUSTOMER;
 
 		if (oReloadInfo.hasHigherLayerChanges && oReloadInfo.isDraftAvailable) {
 			sReason = bIsCustomerLayer ? "MSG_VIEWS_OR_PERSONALIZATION_AND_DRAFT_EXISTS" : "MSG_HIGHER_LAYER_CHANGES_AND_DRAFT_EXISTS";
@@ -60,7 +55,7 @@ sap.ui.define([
 	}
 
 	function getReloadMessageOnExit(oReloadInfo) {
-		var bIsCustomerLayer = oReloadInfo.layer === Layer.CUSTOMER;
+		const bIsCustomerLayer = oReloadInfo.layer === Layer.CUSTOMER;
 
 		if (oReloadInfo.hasHigherLayerChanges) {
 			if (!bIsCustomerLayer) {
@@ -100,48 +95,44 @@ sap.ui.define([
 		return undefined;
 	}
 
-	function handleReloadMessageBoxOnExit(oReloadReasons) {
-		var sReason = getReloadMessageOnExit(oReloadReasons);
+	async function handleReloadMessageBoxOnExit(oReloadReasons) {
+		const sReason = getReloadMessageOnExit(oReloadReasons);
 
 		if (sReason) {
-			return Utils.showMessageBox("information", sReason, {
+			await Utils.showMessageBox("information", sReason, {
 				titleKey: "HEADER_RELOAD_NEEDED"
 			});
 		}
-		return Promise.resolve();
 	}
 
-	function triggerReloadOnStart(oReloadInfo, bVersioningEnabled, bDeveloperMode) {
-		return Promise.resolve().then(function() {
-			if (mUShellServices.Navigation && bVersioningEnabled) {
-				// clears FlexState and triggers reloading of the flex data without blocking
-				if (oReloadInfo.isDraftAvailable) {
-					return VersionsAPI.loadDraftForApplication({
-						control: oReloadInfo.selector,
-						layer: oReloadInfo.layer,
-						allContexts: oReloadInfo.allContexts,
-						adaptationId: oReloadInfo.adaptationId
-					});
-				}
-				return VersionsAPI.loadVersionForApplication({
+	async function triggerReloadOnStart(oReloadInfo) {
+		if (mUShellServices.Navigation && oReloadInfo.versioningEnabled) {
+			// clears FlexState and triggers reloading of the flex data without blocking
+			if (oReloadInfo.isDraftAvailable) {
+				await VersionsAPI.loadDraftForApplication({
+					control: oReloadInfo.selector,
+					layer: oReloadInfo.layer,
+					allContexts: oReloadInfo.allContexts,
+					adaptationId: oReloadInfo.adaptationId
+				});
+			} else {
+				await VersionsAPI.loadVersionForApplication({
 					control: oReloadInfo.selector,
 					layer: oReloadInfo.layer,
 					allContexts: oReloadInfo.allContexts,
 					adaptationId: oReloadInfo.adaptationId
 				});
 			}
-			return undefined;
-		}).then(function() {
-			var sReason = getReloadMessageOnStart(oReloadInfo);
-			// showing messages in visual editor is leading to blocked screen. In this case we should reload without message
-			return bDeveloperMode ? undefined : Utils.showMessageBox("information", sReason);
-		}).then(function() {
-			ReloadManager.enableAutomaticStart(oReloadInfo.layer, oReloadInfo.selector);
-			oReloadInfo.onStart = true;
-			return ReloadManager.triggerReload(oReloadInfo);
-		}).then(function() {
-			return true;
-		});
+		}
+		const sReason = getReloadMessageOnStart(oReloadInfo);
+		// showing messages in visual editor is leading to blocked screen. In this case we should reload without message
+		if (!oReloadInfo.developerMode) {
+			await Utils.showMessageBox("information", sReason);
+		}
+		ReloadManager.enableAutomaticStart(oReloadInfo.layer, oReloadInfo.selector);
+		oReloadInfo.onStart = true;
+		ReloadManager.triggerReload(oReloadInfo);
+		return true;
 	}
 
 	ReloadManager.setUShellServices = function(mPassedUShellServices) {
@@ -155,8 +146,8 @@ sap.ui.define([
 	 * @param {sap.ui.core.Control} oRootControl - Root control for which key user adaptation was started
 	 */
 	ReloadManager.enableAutomaticStart = function(sLayer, oRootControl) {
-		var sFlexReference = FlexRuntimeInfoAPI.getFlexReference({element: oRootControl});
-		var vParameter = sFlexReference || true;
+		const sFlexReference = FlexRuntimeInfoAPI.getFlexReference({element: oRootControl});
+		const vParameter = sFlexReference || true;
 		window.sessionStorage.setItem(`sap.ui.rta.restart.${sLayer}`, vParameter);
 	};
 
@@ -180,36 +171,11 @@ sap.ui.define([
 	};
 
 	/**
-	 * Sets a flag in sessionStorage to indicate that the "What's New" dialog should not be shown after rta reload.
-	 */
-	ReloadManager.setDontShowWhatsNewAfterReload = () => {
-		window.sessionStorage.setItem("sap.ui.rta.whatsNew", true);
-	};
-
-	/**
-	 * Checks if the "What's New" dialog should be shown rta after reload.
-	 *
-	 * @returns {boolean} Returns true if the "What's New" dialog should be shown, false otherwise.
-	 */
-	ReloadManager.getDontShowWhatsNewAfterReload = () => {
-		return window.sessionStorage.getItem("sap.ui.rta.whatsNew");
-	};
-
-	/**
-	 * Removes the flag from sessionStorage that indicates the "What's New" dialog should not be shown after reload.
-	 */
-	ReloadManager.removeDontShowWhatsNewAfterReload = () => {
-		window.sessionStorage.removeItem("sap.ui.rta.whatsNew");
-	};
-
-	/**
 	 * Triggers the reload of the page. Can either be a soft reload inside the FLP or a hard reload.
 	 *
 	 * @param {object} oReloadInfo - Information needed for the reload
-	 * @param {sap.ui.fl.Layer} oReloadInfo.layer - Current layer
 	 * @param {boolean} oReloadInfo.hasHigherLayerChanges - Indicates if higher layer changes exist
 	 * @param {boolean} oReloadInfo.ignoreMaxLayerParameter - Indicates if the max layer parameter should be ignored
-	 * @param {string|object} oReloadInfo.parameters - The URL parameters to be modified
 	 * @param {string} oReloadInfo.versionSwitch - Indicates if we are in a version switch scenario
 	 * @param {string} oReloadInfo.version - Version we want to switch to
 	 * @param {string} oReloadInfo.removeVersionParameter - Indicates if version parameter should be removed
@@ -223,9 +189,7 @@ sap.ui.define([
 		}
 		if (FlUtils.getUshellContainer()) {
 			mUShellServices.AppLifeCycle.reloadCurrentApp();
-		}
-		// standalone app always trigger hard reload
-		if (!FlUtils.getUshellContainer() || oReloadInfo.triggerHardReload) {
+		} else {
 			ReloadManager.reloadPage();
 		}
 	};
@@ -258,25 +222,20 @@ sap.ui.define([
 	 *
 	 * @return {Promise<boolean>} Resolving to <code>false</code> means that reload is not necessary
 	 */
-	ReloadManager.handleReloadOnStart = function(mProperties) {
+	ReloadManager.handleReloadOnStart = async function(mProperties) {
 		merge(mProperties, {
-			hasHigherLayerChanges: false,
-			isDraftAvailable: false,
 			ignoreMaxLayerParameter: false,
-			includeCtrlVariants: true,
-			URLParsingService: mUShellServices.URLParsing
+			includeCtrlVariants: true
 		});
-		return ReloadInfoAPI.getReloadReasonsForStart(mProperties).then(function(oReloadInfo) {
-			if (
-				oReloadInfo.hasHigherLayerChanges
-				|| oReloadInfo.isDraftAvailable
-				|| oReloadInfo.allContexts
-				|| oReloadInfo.switchAdaptation
-			) {
-				return triggerReloadOnStart(oReloadInfo, mProperties.versioningEnabled, mProperties.developerMode);
-			}
-			return undefined;
-		});
+		const oReloadInfo = await ReloadInfoAPI.getReloadReasonsForStart(mProperties);
+		if (
+			oReloadInfo.hasHigherLayerChanges
+			|| oReloadInfo.isDraftAvailable
+			|| oReloadInfo.allContexts
+		) {
+			return triggerReloadOnStart(merge(mProperties, oReloadInfo));
+		}
+		return undefined;
 	};
 
 	/**
@@ -288,21 +247,17 @@ sap.ui.define([
 	 * @param {boolean} mProperties.versioningEnabled - Whether versioning is enabled
 	 * @param {boolean} mProperties.isDraftAvailable - Whether a draft is available
 	 * @param {boolean} mProperties.activeVersion - Number of the active version
-	 * @param {Promise} mProperties.changesNeedReloadPromise - Resolves to whether any change needs a hard reload
+	 * @param {Promise} mProperties.changesNeedReloadPromise - Resolves to whether any change needs a reload
 	 * @param {boolean} bSkipRestart - Stop key user adaptation without reloading the app in any way
 	 *
 	 * @return {Promise<object>} Resolving to an object containing information about whether a reload is needed and how to handle it
 	 */
-	ReloadManager.checkReloadOnExit = function(mProperties) {
-		return mProperties.changesNeedReloadPromise.then(function(bChangesNeedReload) {
-			mProperties.changesNeedReload = bChangesNeedReload;
-			mProperties.URLParsingService = mUShellServices.URLParsing;
-			var oReloadInfo = ReloadInfoAPI.getReloadMethod(mProperties);
-			return handleReloadMessageBoxOnExit(oReloadInfo).then(function() {
-				oReloadInfo.triggerHardReload = oReloadInfo.reloadMethod === mReloadMethods.RELOAD_PAGE;
-				return oReloadInfo;
-			});
-		});
+	ReloadManager.checkReloadOnExit = async function(mProperties) {
+		const bChangesNeedReload = await mProperties.changesNeedReloadPromise;
+		mProperties.changesNeedReload = bChangesNeedReload;
+		const oReloadInfo = ReloadInfoAPI.getReloadInfo(mProperties);
+		await handleReloadMessageBoxOnExit(oReloadInfo);
+		return oReloadInfo;
 	};
 
 	/**
@@ -312,7 +267,7 @@ sap.ui.define([
 	 * @param {boolean} oReloadInfo.hasHigherLayerChanges - Indicates if higher layer changes exist
 	 */
 	ReloadManager.handleReloadOnExit = function(oReloadInfo) {
-		if (oReloadInfo.reloadMethod !== mReloadMethods.NOT_NEEDED) {
+		if (oReloadInfo.reloadNeeded) {
 			oReloadInfo.removeVersionParameter = true;
 			ReloadManager.triggerReload(oReloadInfo);
 		}

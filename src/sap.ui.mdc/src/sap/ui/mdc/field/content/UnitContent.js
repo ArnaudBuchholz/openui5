@@ -13,8 +13,8 @@ sap.ui.define([
 
 	const { ValueState } = coreLibrary;
 
-	const _getUnitTypeInstance = function(oTypeUtil, oType, oFormatOptions, oConstraints, bShowNumber, bShowMeasure) {
-		return oTypeUtil.getUnitTypeInstance ? oTypeUtil.getUnitTypeInstance(oType, bShowNumber, bShowMeasure) : oTypeUtil.getDataTypeInstance(oType.getMetadata().getName(), oFormatOptions, oConstraints, { showNumber: bShowNumber, showMeasure: bShowMeasure });
+	const _getUnitTypeInstance = function(oTypeMap, oType, oFormatOptions, oConstraints, bShowNumber, bShowMeasure) {
+		return oTypeMap.getUnitTypeInstance ? oTypeMap.getUnitTypeInstance(oType, bShowNumber, bShowMeasure) : oTypeMap.getDataTypeInstance(oType.getMetadata().getName(), oFormatOptions, oConstraints, { showNumber: bShowNumber, showMeasure: bShowMeasure });
 	};
 
 	/**
@@ -40,6 +40,9 @@ sap.ui.define([
 			];
 		},
 		getEditMultiLine: function() {
+			return [null];
+		},
+		getEditSelect: function() {
 			return [null];
 		},
 		getUseDefaultValueHelp: function() {
@@ -218,6 +221,9 @@ sap.ui.define([
 				oContentFactory.setUnitType(oNewType);
 				oContentFactory.updateConditionType();
 			}
+		},
+		createEditSelect: function() {
+			throw new Error("sap.ui.mdc.field.content.UnitContent - createEditSelect not defined!");
 		}
 	});
 
@@ -225,13 +231,13 @@ sap.ui.define([
 	function _setValueStateForControl(sValueState) {
 
 		const oField = this.getParent();
-
-		if (!oField || !oField.isInvalidInput() || oField._isInvalidInputForContent(this)) {
-			// if there is no invalid input at all valueState seems to be set from outside -> just take it
-			// if there is invalid input on current control -> take ValueState
-			return sValueState;
+		const oValueState = oField?.getValueStateForContent(this.getId());
+		if (oValueState) {
+			return oValueState.valueState;
+		} else if (oField?.hasValueStateForContent()) {
+			return ValueState.None; // there is a valueState on another control, show none.
 		} else {
-			return ValueState.None;
+			return sValueState;
 		}
 
 	}
@@ -239,16 +245,13 @@ sap.ui.define([
 	function _setValueStateTextForControl(sValueStateText) {
 
 		const oField = this.getParent();
-
-		if (!oField || !oField.isInvalidInput()) {
-			// if there is no invalid input at all valueState seems to be set from outside -> just take it
-			return sValueStateText;
-		} else if (oField._isInvalidInputForContent(this)) {
-			// if there is invalid input on current control -> take error of this exception (as we can only have one ValueStateText)
-			const oException = oField._getInvalidInputException(this);
-			return oException.message;
+		const oValueState = oField?.getValueStateForContent(this.getId());
+		if (oValueState) {
+			return oValueState.valueStateText;
+		} else if (oField?.hasValueStateForContent()) {
+			return ""; // there is a valueState on another control, show none.
 		} else {
-			return "";
+			return sValueStateText;
 		}
 
 	}

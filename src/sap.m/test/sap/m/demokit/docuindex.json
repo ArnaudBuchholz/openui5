@@ -58,8 +58,8 @@
 				"ref" : "test-resources/sap/m/demokit/tutorial/walkthrough/38/webapp/test/mockServer.html",
 				"links": {
 					"View Tutorial": "topic/3da5f4be63264db99f2e5b04c5e853db",
-					"Run Integration Tests": "test-resources/sap/m/demokit/tutorial/walkthrough/38/webapp/test/Test.qunit.html?testsuite=test-resources/ui5/walkthrough/testsuite.qunit&test=integration/opaTests",
-					"Run Unit Tests": "test-resources/sap/m/demokit/tutorial/walkthrough/38/webapp/test/Test.qunit.html?testsuite=test-resources/ui5/walkthrough/testsuite.qunit&test=unit/unitTests"
+					"Run Unit Tests": "test-resources/sap/m/demokit/tutorial/walkthrough/38/webapp/test/Test.qunit.html?testsuite=test-resources/ui5/walkthrough/testsuite.qunit&test=unit/unitTests",
+					"Run Integration Tests": "test-resources/sap/m/demokit/tutorial/walkthrough/38/webapp/test/Test.qunit.html?testsuite=test-resources/ui5/walkthrough/testsuite.qunit&test=integration/opaTests"
 				},
 				"category": "Tutorial",
 				"config": "test-resources/sap/m/demokit/tutorial/walkthrough/demoapp.json"
@@ -108,16 +108,28 @@
 				"config": "test-resources/sap/m/demokit/theming/demoapp.json"
 			},
 			{
-				"icon": "activities",
-				"text": "TypeScript To-Do List",
-				"ref": "test-resources/sap/m/demokit/sample/TsTodos/webapp/index.html",
-				"desc": "This to-do app demonstrates a TypeScript setup for developing UI5 applications.",
+				"icon": "sap-ui5",
+				"text": "UXC Integration",
+				"ref": "https://sap-samples.github.io/uxc-integration/",
+				"desc": "This example illustrates the integration of UI5 Web Components into SAPUI5 applications.",
 				"links": {
-					"View TypeScript Code": "entity/sap.m.sample.TsTodos/sample/sap.m.sample.TsTodos.webapp",
-					"Run Unit Tests": "test-resources/sap/m/demokit/sample/TsTodos/test/unit/unitTests.qunit.html"
+					"View Source Code": "https://github.com/SAP-samples/uxc-integration"
 				},
 				"category": "Showcase",
-				"config": "test-resources/sap/m/demokit/sample/TsTodos/demoapp.json"
+				"config": "test-resources/sap/m/demokit/sample/UXCIntegration/demoapp.json"
+			},
+			{
+				"icon": "source-code",
+				"text": "TypeScript Hello World",
+				"ref": "https://sap-samples.github.io/ui5-typescript-helloworld/",
+				"desc": "This sample demonstrates a TypeScript setup for developing UI5 applications.",
+				"links": {
+					"View Source Code": "https://github.com/SAP-samples/ui5-typescript-helloworld",
+					"Run Unit Tests": "https://sap-samples.github.io/ui5-typescript-helloworld/test/Test.qunit.html?testsuite=test-resources/ui5/typescript/helloworld/testsuite.qunit&test=unit/unitTests",
+					"Run Integration Tests": "https://sap-samples.github.io/ui5-typescript-helloworld/test/Test.qunit.html?testsuite=test-resources/ui5/typescript/helloworld/testsuite.qunit&test=integration/opaTests"
+				},
+				"category": "Showcase",
+				"config": "test-resources/sap/m/demokit/sample/TsHelloWorld/demoapp.json"
 			}
 		]
 	},
@@ -629,11 +641,10 @@
 			"sap.m.sample.IllustratedMessageInCardNoEmail",
 			"sap.m.sample.IllustratedMessageInDialog",
 			"sap.m.sample.IllustratedMessageInPage",
-			"sap.m.sample.IllustratedMessageInPageSimple",
-			"sap.m.sample.IllustratedMessageInPageIllustrative",
 			"sap.m.sample.IllustratedMessageInPageWithURI",
 			"sap.m.sample.IllustratedMessageInPageTNT",
 			"sap.m.sample.IllustratedMessageInPageCustom",
+			"sap.m.sample.IllustratedMessageInAppCustom",
 			"sap.m.sample.IllustratedMessageSessionTimeout"
 			]
 		},
@@ -701,6 +712,15 @@
 		  ]
 		},
 		{
+		  "id": "sap.m.OverflowToolbarTokenizer",
+		  "name": "OverflowToolbarTokenizer",
+		  "category": "User Input",
+		  "since": "1.139",
+		  "samples": [
+			"sap.m.sample.OverflowToolbarTokenizer"
+		  ]
+		},
+		{
 		  "id": "sap.m.InputListItem",
 		  "name": "Input List Item",
 		  "category": "List",
@@ -763,6 +783,7 @@
 			"sap.m.sample.ListItemTypes",
 			"sap.m.sample.ListLoading",
 			"sap.m.sample.ListNavType",
+			"sap.m.sample.ListActions",
 			"sap.m.sample.ListNoData",
 			"sap.m.sample.ListSelection",
 			"sap.m.sample.ListSelectionSearch",
@@ -1742,17 +1763,6 @@
 		  ]
 		},
 		{
-			"id": "sap.m.sample.TsTodos",
-			"name": "TypeScript To-Do List",
-			"category": "Showcase",
-			"since": "1.108",
-			"formFactors": "-",
-			"description": "This to-do app demonstrates a TypeScript setup for developing UI5 applications.",
-			"samples" : [
-				"sap.m.sample.TsTodos.webapp"
-			]
-		  },
-		{
 			"id": "sap.m.VariantManagement",
 			"name": "Variant Management",
 		  	"category": "Action",
@@ -1774,11 +1784,36 @@
 				"sap.m.sample.UploadSetwithTablePlugin.ResponsiveTableFilePreview",
 				"sap.m.sample.UploadSetwithTablePlugin.FilePreviewCustomPageContent",
 				"sap.m.sample.UploadSetwithTablePlugin.GridTableSimple",
+				"sap.m.sample.UploadSetwithTablePlugin.TreeTableSimple",
 				"sap.m.sample.UploadSetwithTablePlugin.ResponsiveTableProgressIndicator",
-				"sap.m.sample.UploadSetwithTablePlugin.MultiplePluginInstances"
+				"sap.m.sample.UploadSetwithTablePlugin.MultiplePluginInstances",
+				"sap.m.sample.UploadSetwithTablePlugin.FileNameValidationSample"
+			]
+		},
+		{
+			"id": "sap.m.sample.UXCIntegration",
+			"name": "UXC Integration",
+			"category": "Showcase",
+			"since": "1.138",
+			"formFactors": "-",
+			"description": "This example illustrates the integration of UI5 Web Components into SAPUI5 applications.",
+			"samples": [
+				"sap.m.sample.UXCIntegration"
+			],
+			"hidden": true
+		},
+		{
+			"id": "sap.m.sample.TsHelloWorld",
+			"name": "TypeScript Hello World",
+			"category": "Showcase",
+			"since": "1.138",
+			"formFactors": "-",
+			"description": "This sample demonstrates a TypeScript setup for developing UI5 applications.",
+			"samples": [
+				"sap.m.sample.TsHelloWorld"
 			]
 		}
-	  ],
+	],
 	  "samples": [
 		{
 		  "id": "sap.m.sample.Avatar",
@@ -2302,18 +2337,8 @@
 		},
 		{
 			"id": "sap.m.sample.IllustratedMessageInPage",
-			"name": "Classic style illustrations (Default for Quartz)",
-			"description": "This set is not recommended by UX and no longer receives design support. For new use cases use the default for Horizon. The available illustrations are from the default ('sapIllus') illustration set and are recommended for SAP Quartz and older themes."
-		},
-		{
-			"id": "sap.m.sample.IllustratedMessageInPageSimple",
-			"name": "Simple style illustrations (Alternative Style for Horizon)",
-			"description": "The available illustrations are simplified version from the default ('sapIllus') illustration set. And they are recommended for a more minimalistic look in Horizon and new use cases are added in this and the illustrative style."
-		},
-		{
-			"id": "sap.m.sample.IllustratedMessageInPageIllustrative",
-			"name": "Illustrative style illustrations (Default Illustration Set for Horizon)",
-			"description": "The available illustrations are from the default ('sapIllus') illustration set and are recommended for SAP Horizon theme. New use cases are added in this and the simple style."
+			"name": "Default Illustration Set (sapIllus)",
+			"description": "The available illustrations are from the default ('sapIllus') illustration set."
 		},
 		{
 			"id": "sap.m.sample.IllustratedMessageInPageWithURI",
@@ -2329,6 +2354,11 @@
 			"id": "sap.m.sample.IllustratedMessageInPageCustom",
 			"name": "Illustrated Message in a Page with Configurable Properties (Custom Illustration Set)",
 			"description": "The available properties of the IllustratedMessage are configurable in this sample. The available illustrations are from the 'custom' illustration set."
+		},
+		{
+			"id": "sap.m.sample.IllustratedMessageInAppCustom",
+			"name": "A demo application that imports a Custom Illustration Set from an npm package",
+			"description": "Shows how to import a Custom Illustration from an npm package into a UI5 application for usage with IllustratedMessage."
 		},
 		{
 			"id": "sap.m.sample.IllustratedMessageSessionTimeout",
@@ -2739,6 +2769,11 @@
 			"description": "Basic Tokenizer with tokens"
 		},
 		{
+			"id": "sap.m.sample.OverflowToolbarTokenizer",
+			"name": "Tokenizer in Toolbar and OverflowToolbar",
+			"description": "Tokenizer integration with sap.m.OverflowToolbar"
+		},
+		{
 			"id": "sap.m.sample.MultiComboBoxWrapping",
 			"name": "MultiComboBox - Suggestions wrapping",
 			"description": "Suggestions wrap automatically when longer then the dropdown width"
@@ -3117,6 +3152,11 @@
 		  "id": "sap.m.sample.ListNavType",
 		  "name": "List - Navigation Indication",
 		  "description": "If only a subset of the list items are navigable you should indicate those by setting their 'type' to 'Navigation'. This displays an navigation arrow. Do not show arrows if all items are navigable. This achieved by setting the 'type' to 'Active'."
+		},
+		{
+			"id": "sap.m.sample.ListActions",
+			"name": "List - Custom Actions",
+			"description": "This example demonstrates how to add custom actions to list items. Dedicated 'Delete' and 'Edit' types can be used to add predefined actions to the list items. The 'Custom' type can be used to add custom actions to the list items. Those actions are independent of the selection mode of the list."
 		},
 		{
 		  "id": "sap.m.sample.ListCounter",
@@ -3999,11 +4039,6 @@
 		  "description": "The standalone ColorPalette in a container (<code>sap.ui.layout.SimpleForm</code>)."
 		},
 		{
-		  "id": "sap.m.sample.TsTodos.webapp",
-		  "name": "TypeScript To-Do List",
-		  "description": "This to-do app demonstrates a TypeScript setup for developing UI5 applications."
-		},
-		{
 			"id": "sap.m.sample.VariantManagement",
 			"name": "VariantManagement using dedicated items",
 			"description": "VariantManagement with dedicated items"
@@ -4036,13 +4071,41 @@
 		{
 			"id": "sap.m.sample.UploadSetwithTablePlugin.FilePreviewCustomPageContent",
 			"name": "Plugin for Responsive Table (sap.m.Table) - File Preview with Custom Page Content for non supported file types",
-			"description": "This example showcases how to display custom page content for non supported file types in the FilePreviewDialog control. The custom page content is displayed when the user tries to preview a file that is not supported by the FilePreviewDialog control. This sample demonstrates usage of customPageConentHandler property as a callback function to display custom page content."	
+			"description": "This example showcases how to display custom page content for non supported file types in the FilePreviewDialog control. The custom page content is displayed when the user tries to preview a file that is not supported by the FilePreviewDialog control. This sample demonstrates usage of customPageConentHandler property as a callback function to display custom page content."
 		},
-		{	
+		{
 			"id": "sap.m.sample.UploadSetwithTablePlugin.MultiplePluginInstances",
 			"name": "Plugin for Responsive Table (sap.m.Table) - Multiple plugin instances with multiple tables",
 			"description": "This example demonstrates the usage of multiple plugin instances with multiple tables. The plugin instances are created for each table and the uploaded files are displayed in their respective tables."
+		},
+		{
+			"id": "sap.m.sample.UploadSetwithTablePlugin.FileNameValidationSample",
+			"name": "Plugin for Responsive Table (sap.m.Table) - File Name validation configuration",
+			"description": "This example demonstrates the usage of fileNameValidationConfig property to configure file name validation for renaming a file."
+		},
+		{
+			"id": "sap.m.sample.UXCIntegration",
+			"name": "UXC Integration",
+			"description": "This example illustrates the integration of UI5 Web Components into SAPUI5 applications.",
+			"external": true,
+			"externalAppRef": "https://sap-samples.github.io/uxc-integration/",
+			"externalSourceRef": "https://github.com/SAP-samples/uxc-integration",
+			"externalResourceRef": "https://github.com/SAP-samples/uxc-integration/archive/refs/heads/main.zip"
+		},
+		{
+			"id": "sap.m.sample.TsHelloWorld",
+			"name": "TypeScript Hello World",
+			"description": "This sample demonstrates a TypeScript setup for developing UI5 applications.",
+			"external": true,
+			"externalAppRef": "https://sap-samples.github.io/ui5-typescript-helloworld/",
+			"externalSourceRef": "https://github.com/SAP-samples/ui5-typescript-helloworld",
+			"externalResourceRef": "https://github.com/SAP-samples/ui5-typescript-helloworld/archive/refs/heads/main.zip"
+		},
+		{
+			"id": "sap.m.sample.UploadSetwithTablePlugin.TreeTableSimple",
+			"name": "Plugin for Tree Table (sap.ui.table.TreeTable)",
+			"description": "This example demonstrates the usage of UploadSetwithTable plugin for tree table with the features of upload, download, drag & drop, remove and rename of files. It also demonstrates how the uploaded files can be displayed in a table."
 		}
-	  ]
+	]
 	}
 }

@@ -119,7 +119,7 @@ sap.ui.define([
 			properties: {
 				"text": {type: "string", defaultValue: ""},
 				"visible": {type: "boolean", defaultValue: true},
-				"tabbable": {type: "boolean", defaultValue: false},
+				"tabbable": {type: "boolean", defaultValue: true},
 				"type": {type: "string", defaultValue: "text"}
 			},
 			associations: {
@@ -133,8 +133,8 @@ sap.ui.define([
 				oRm.voidStart("input", oControl);
 				oRm.attr("type", oControl.getType());
 				oRm.attr("value", oControl.getText());
-				if (oControl.getTabbable()) {
-					oRm.attr("tabindex", "0");
+				if (!oControl.getTabbable()) {
+					oRm.attr("tabindex", "-1");
 				}
 				if (!oControl.getVisible()) {
 					oRm.style("display", "none");
@@ -164,6 +164,31 @@ sap.ui.define([
 		}
 	});
 
+	const TestLayoutControl = Control.extend("sap.ui.table.test.TestLayoutControl", {
+		metadata: {
+			aggregations: {
+				items: {type: "sap.ui.core.Control", multiple: true, singularName: "item"}
+			},
+			associations: {
+				"ariaLabelledBy": {type: "sap.ui.core.Control", multiple: true, singularName: "ariaLabelledBy"}
+			}
+		},
+
+		renderer: {
+			apiVersion: 2,
+			render: function(oRm, oControl) {
+				oRm.openStart("div", oControl);
+				oRm.style("display", "flex");
+				oRm.style("flex-direction", "row");
+				oRm.openEnd();
+				oControl.getItems().forEach((oItem) => {
+					oRm.renderControl(oItem);
+				});
+				oRm.close("div");
+			}
+		}
+	});
+
 	// This plugin helps to add hooks to the table, including the ones that are called during initialization of the table.
 	const HelperPlugin = PluginBase.extend("sap.ui.table.test.HelperPlugin", {
 		metadata: {
@@ -181,10 +206,13 @@ sap.ui.define([
 		this.pFocusHandlingFinished = Promise.resolve();
 		this.fnResolveFocusHandlingFinished = null;
 	};
-	HelperPlugin.prototype.hooks = {};
 
 	HelperPlugin.prototype.onActivate = function(oTable) {
-		TableUtils.Hook.install(oTable, this.hooks, this);
+		TableUtils.Hook.register(oTable, TableUtils.Hook.Keys.Table.RefreshRows, _fireRenderingTriggered, this);
+		TableUtils.Hook.register(oTable, TableUtils.Hook.Keys.Table.UpdateRows, _fireRenderingTriggered, this);
+		TableUtils.Hook.register(oTable, TableUtils.Hook.Keys.Table.UnbindRows, _fireRenderingTriggered, this);
+		TableUtils.Hook.register(oTable, TableUtils.Hook.Keys.Table.RowsUnbound, onTableRowsUnbound, this);
+		TableUtils.Hook.register(oTable, TableUtils.Hook.Keys.Signal, onTableSignal, this);
 
 		const wrapForRenderingDetection = function(oObject, sFunctionName) {
 			const fnOriginalFunction = oObject[sFunctionName];
@@ -200,22 +228,27 @@ sap.ui.define([
 		wrapForRenderingDetection(oTable, "invalidate");
 		wrapForRenderingDetection(UIArea, "rerenderControl");
 	};
-	HelperPlugin.prototype.hooks[TableUtils.Hook.Keys.Table.RefreshRows] = function() { this.fireRenderingTriggered(); };
-	HelperPlugin.prototype.hooks[TableUtils.Hook.Keys.Table.UpdateRows] = function() { this.fireRenderingTriggered(); };
-	HelperPlugin.prototype.hooks[TableUtils.Hook.Keys.Table.UnbindRows] = function() { this.fireRenderingTriggered(); };
+
+	HelperPlugin.prototype.onDeactivate = function(oTable) {
+		TableUtils.Hook.deregister(oTable, TableUtils.Hook.Keys.Table.RefreshRows, _fireRenderingTriggered, this);
+		TableUtils.Hook.deregister(oTable, TableUtils.Hook.Keys.Table.UpdateRows, _fireRenderingTriggered, this);
+		TableUtils.Hook.deregister(oTable, TableUtils.Hook.Keys.Table.UnbindRows, _fireRenderingTriggered, this);
+		TableUtils.Hook.deregister(oTable, TableUtils.Hook.Keys.Table.RowsUnbound, onTableRowsUnbound, this);
+		TableUtils.Hook.deregister(oTable, TableUtils.Hook.Keys.Signal, onTableSignal, this);
+	};
+
+	function _fireRenderingTriggered() {
+		this.fireRenderingTriggered();
+	}
 
 	// If the table is unbound during initial rendering, it does not fire any rowsUpdated events. Handled in waitForFullRendering.
-	HelperPlugin.prototype.hooks[TableUtils.Hook.Keys.Table.RowsUnbound] = function() {
+	function onTableRowsUnbound() {
 		if (!this.getControl().getDomRef()) {
 			this.fireRenderingTriggered();
 		}
-	};
+	}
 
-	HelperPlugin.prototype.onDeactivate = function(oTable) {
-		TableUtils.Hook.uninstall(oTable, this);
-	};
-
-	HelperPlugin.prototype.hooks[TableUtils.Hook.Keys.Signal] = function(sSignal) {
+	function onTableSignal(sSignal) {
 		switch (sSignal) {
 			case "StartTableUpdate":
 				if (this.iTableUpdateProcesses === 0) {
@@ -249,7 +282,7 @@ sap.ui.define([
 				break;
 			default:
 		}
-	};
+	}
 
 	HelperPlugin.prototype.whenTableUpdateFinished = function() {
 		return this.pTableUpdateFinished;
@@ -1006,7 +1039,7 @@ sap.ui.define([
 				oTable.qunit._mSetRowStates.rowStates = aRowStates;
 			} else if (oTable.qunit._mSetRowStates) {
 				oTable.detachRowsUpdated(oTable.qunit._mSetRowStates.resetCounter);
-				oTable.removeDelegate(oTable.qunit._mSetRowStates);
+				oTable.removeEventDelegate(oTable.qunit._mSetRowStates);
 				TableUtils.Hook.deregister(oTable, TableUtils.Hook.Keys.Row.UpdateState, oTable.qunit._mSetRowStates.updateRowState);
 				delete oTable.qunit._mSetRowStates;
 			}
@@ -1020,6 +1053,7 @@ sap.ui.define([
 	TableQUnitUtils.TestControl = TestControl;
 	TableQUnitUtils.TestInputControl = TestInputControl;
 	TableQUnitUtils.HeightTestControl = HeightTestControl;
+	TableQUnitUtils.TestLayoutControl = TestLayoutControl;
 	TableQUnitUtils.ColumnHeaderMenu = Control.extend("sap.ui.table.test.TestContextMenu", {
 		metadata: {
 			interfaces: ["sap.ui.core.IColumnHeaderMenu"]
@@ -1197,7 +1231,7 @@ sap.ui.define([
 	 * @param {boolean} [mConfig.bind=false] Whether the text represents a binding path and the text property of the template should be bound.
 	 *                                       The corresponding entry in the default test data is created if it does not yet exist.
 	 * @param {string} [mConfig.type=text] The type of the input element.
-	 * @param {boolean} [mConfig.tabbable=false] Whether the input is tabbable.
+	 * @param {boolean} [mConfig.tabbable=true] Whether the input is tabbable.
 	 * @param {string} [mConfig.label=undefined] The text of the label.
 	 * @param {boolean} [mConfig.interactiveLabel=false] Whether the label should be interactive (focusable & tabbable).
 	 * @returns {sap.ui.table.Column} The column.
@@ -1213,7 +1247,7 @@ sap.ui.define([
 			}),
 			template: new TestInputControl({
 				text: mConfig.bind === true ? "{" + mConfig.text + "}" : mConfig.text,
-				tabbable: mConfig.tabbable === true,
+				tabbable: mConfig.tabbable,
 				type: mConfig.type
 			}),
 			width: "100px"
@@ -1258,7 +1292,7 @@ sap.ui.define([
 		const oDelegate = {};
 
 		oDelegate[sEventName] = function() {
-			this.removeDelegate(oDelegate);
+			this.removeEventDelegate(oDelegate);
 			fnHandler.apply(this, arguments);
 		};
 
@@ -1266,7 +1300,7 @@ sap.ui.define([
 
 		return {
 			remove: function() {
-				oElement.removeDelegate(oDelegate);
+				oElement.removeEventDelegate(oDelegate);
 			}
 		};
 	};

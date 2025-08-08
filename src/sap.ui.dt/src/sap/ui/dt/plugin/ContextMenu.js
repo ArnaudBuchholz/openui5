@@ -1,25 +1,32 @@
 /*!
  * ${copyright}
  */
+
 sap.ui.define([
 	"sap/base/assert",
+	"sap/m/Button",
+	"sap/m/FlexBox",
+	"sap/m/FormattedText",
 	"sap/m/Menu",
 	"sap/m/MenuItem",
 	"sap/ui/base/DesignTime",
 	"sap/ui/dt/util/_createPromise",
-	"sap/ui/dt/Plugin",
 	"sap/ui/dt/OverlayRegistry",
+	"sap/ui/dt/Plugin",
 	"sap/ui/dt/Util",
 	"sap/ui/events/KeyCodes",
 	"sap/ui/Device"
 ], function(
 	assert,
+	Button,
+	FlexBox,
+	FormattedText,
 	Menu,
 	MenuItem,
 	BaseDesignTime,
 	_createPromise,
-	Plugin,
 	OverlayRegistry,
+	Plugin,
 	DtUtil,
 	KeyCodes,
 	Device
@@ -131,6 +138,42 @@ sap.ui.define([
 		oOverlay.detachBrowserEvent("keyup", this._onKeyUp, this);
 	};
 
+	function createAdditionalInfo(oMenuItem) {
+		const oAdditionalInfoButton = new Button({
+			id: `${this.sId}-${oMenuItem.id}-additionalInfo-button`,
+			icon: "sap-icon://message-information",
+			visible: !oMenuItem.submenu,
+			type: "Transparent",
+			ariaLabelledBy: this.getId()
+		});
+		oAdditionalInfoButton.setTooltip(oMenuItem.additionalInfo);
+		return oAdditionalInfoButton;
+	}
+
+	function collectPropagatedMenuItemPromises(aPlugins, oSelectedOverlay) {
+		return aPlugins.map((oPlugin) => {
+			const oPropagatedActionInfo = oPlugin.getPropagatedActionInfo(oSelectedOverlay);
+			if (oPropagatedActionInfo) {
+				const oPropagatingControlOverlay = OverlayRegistry.getOverlay(oPropagatedActionInfo.propagatingControl);
+				let vPropagatedMenuItems = oPlugin.getMenuItems([oPropagatingControlOverlay]);
+				if (!(vPropagatedMenuItems instanceof Promise)) {
+					vPropagatedMenuItems = Promise.resolve(vPropagatedMenuItems);
+				}
+				return new Promise((resolve, reject) => {
+					vPropagatedMenuItems.then((aMenuItems) => {
+						const aMenuItemsWithPropagatingControl = aMenuItems.map((oMenuItem) => {
+							oMenuItem.propagatingControl = oPropagatedActionInfo.propagatingControl;
+							oMenuItem.propagatingControlName = oPropagatedActionInfo.propagatingControlName;
+							return oMenuItem;
+						});
+						resolve(aMenuItemsWithPropagatingControl);
+					}).catch(reject);
+				});
+			}
+			return null;
+		}).filter(Boolean);
+	}
+
 	/**
 	 * Opens the Context Menu
 	 * @param {sap.ui.dt.Overlay} oOverlay - Overlay object
@@ -140,21 +183,49 @@ sap.ui.define([
 	ContextMenu.prototype.open = function(oOverlay, bIsSubMenu, oEvent) {
 		let aSelectedOverlays;
 		function addMenuItems(oMenu, aMenuItems) {
+			let bStartsSection = !!aMenuItems[0]?.propagatingControl;
+			let oTargetOverlay = oOverlay;
+			let aTargetSelectedOverlays = aSelectedOverlays;
 			aMenuItems.forEach(function(oMenuItem, index) {
-				const sText = typeof oMenuItem.text === "function" ? oMenuItem.text(oOverlay) : oMenuItem.text;
-				const bEnabled = typeof oMenuItem.enabled === "function" ? oMenuItem.enabled(aSelectedOverlays) : oMenuItem.enabled;
-				oMenu.addItem(
-					new MenuItem({
-						key: oMenuItem.id,
-						icon: oMenuItem.icon,
-						text: sText,
-						enabled: bEnabled
-					})
-				);
-				if (oMenuItem.submenu) {
-					addMenuItems(oMenu.getItems()[index], oMenuItem.submenu);
+				if (oMenuItem.propagatingControl) {
+					oTargetOverlay = OverlayRegistry.getOverlay(oMenuItem.propagatingControl);
+					aTargetSelectedOverlays = [oTargetOverlay];
 				}
-			});
+				const sText = typeof oMenuItem.text === "function" ? oMenuItem.text(oTargetOverlay) : oMenuItem.text;
+				const bEnabled = typeof oMenuItem.enabled === "function" ? oMenuItem.enabled(aTargetSelectedOverlays) : oMenuItem.enabled;
+				const oMenuItemInstance = new MenuItem({
+					key: oMenuItem.id,
+					icon: oMenuItem.icon,
+					text: sText,
+					enabled: bEnabled,
+					startsSection: bStartsSection
+				});
+
+				oMenu.addItem(oMenuItemInstance);
+
+				// Add end content to the menu item
+				if (oMenuItem.propagatingControlName || oMenuItem.additionalInfo) {
+					const oFlexBox = new FlexBox({
+						justifyContent: "SpaceBetween",
+						alignItems: "Center"
+					});
+					if (oMenuItem.propagatingControlName) {
+						oFlexBox.addItem(new FormattedText({
+							htmlText: `<strong>${oMenuItem.propagatingControlName}</strong>`
+						}));
+					}
+					if (oMenuItem.additionalInfo) {
+						const oAdditionalInfoButton = createAdditionalInfo.call(this, oMenuItem);
+						oFlexBox.addItem(oAdditionalInfoButton);
+					}
+					oMenuItemInstance.addEndContent(oFlexBox);
+				}
+
+				if (oMenuItem.submenu) {
+					addMenuItems.call(this, oMenu.getItems()[index], oMenuItem.submenu);
+				}
+				bStartsSection = false;
+			}.bind(this));
 		}
 
 		const oNewContextElement = oOverlay.getElement();
@@ -199,8 +270,8 @@ sap.ui.define([
 				this._aGroupedItems = [];
 				this._aSubMenus = [];
 				const aPluginItemPromises = [];
-				const oPlugins = this.getDesignTime().getPlugins();
-				oPlugins.forEach(function(oPlugin) {
+				const aPlugins = this.getDesignTime().getPlugins();
+				aPlugins.forEach(function(oPlugin) {
 					let vMenuItems = oPlugin.getMenuItems(aSelectedOverlays);
 					if (!(vMenuItems instanceof Promise)) {
 						vMenuItems = Promise.resolve(vMenuItems);
@@ -208,15 +279,22 @@ sap.ui.define([
 					aPluginItemPromises.push(vMenuItems);
 				});
 
+				// Propagated actions are only possible for single selection
+				let aPropagatedMenuItemPromises = [];
+				if (aSelectedOverlays.length === 1) {
+					aPropagatedMenuItemPromises = collectPropagatedMenuItemPromises(aPlugins, aSelectedOverlays[0]);
+				}
+
 				const oPluginItemsPromise = _createPromise(function(resolve, reject) {
+					aPluginItemPromises.push(...aPropagatedMenuItemPromises);
 					Promise.all(aPluginItemPromises).then(resolve).catch(reject);
 				});
 				this._fnCancelMenuPromise = oPluginItemsPromise.cancel;
 				return oPluginItemsPromise.promise;
 			}.bind(this))
 			.then(function(aPluginMenuItems) {
-				return aPluginMenuItems.reduce(function(aConcatinatedMenuItems, aMenuItems) {
-					return aConcatinatedMenuItems.concat(aMenuItems);
+				return aPluginMenuItems.reduce(function(aConcatenatedMenuItems, aMenuItems) {
+					return aConcatenatedMenuItems.concat(aMenuItems);
 				});
 			})
 			.then(function(aPluginMenuItems) {
@@ -234,14 +312,18 @@ sap.ui.define([
 		}
 
 		oPromise.then(function() {
-			let aMenuItems = this._aMenuItems.map(function(mMenuItemEntry) {
+			const aAllMenuItems = this._aMenuItems.map(function(mMenuItemEntry) {
 				return mMenuItemEntry.menuItem;
 			});
 
-			if (aMenuItems.length > 0) {
-				aMenuItems = this._sortMenuItems(aMenuItems);
-				addMenuItems(this.oContextMenuControl, aMenuItems);
-				this.oContextMenuControl.openAsContextMenu(oEvent, oOverlay);
+			if (aAllMenuItems.length > 0) {
+				const aMenuItems = this._sortMenuItems(aAllMenuItems.filter((mMenuItem) => !mMenuItem.propagatingControl));
+				const aPropagatedMenuItems = this._sortMenuItems(aAllMenuItems.filter((mMenuItem) => mMenuItem.propagatingControl));
+				addMenuItems.call(this, this.oContextMenuControl, aMenuItems);
+				addMenuItems.call(this, this.oContextMenuControl, aPropagatedMenuItems, true);
+				// we have to distinguish between the mouse and the keyboard event
+				const oOpenerRef = (oEvent.type === "keyup") ? oOverlay : undefined;
+				this.oContextMenuControl.openAsContextMenu(oEvent, oOpenerRef);
 			}
 
 			this.fireOpenedContextMenu();
@@ -257,7 +339,7 @@ sap.ui.define([
 	/**
 	 * Collect menu items sorted by rank (entries without rank come first)
 	 * @param  {object[]} aMenuItems List of menu items
-	 * @return {object[]}            Returned a sorted list of menu items; higher rank come later
+	 * @return {object[]} Returns a sorted list of menu items; higher rank comes later
 	 */
 	ContextMenu.prototype._sortMenuItems = function(aMenuItems) {
 		return aMenuItems.sort(function(mFirstEntry, mSecondEntry) {
@@ -286,7 +368,12 @@ sap.ui.define([
 		this._ensureSelection(this._oCurrentOverlay);
 
 		function callHandler(oMenuItem, oEventItem) {
-			const aSelection = oMenuItem.responsible || this.getSelectedOverlays() || [];
+			let aSelection;
+			if (oMenuItem.propagatingControl) {
+				aSelection = [OverlayRegistry.getOverlay(oMenuItem.propagatingControl)];
+			} else {
+				aSelection = oMenuItem.responsible || this.getSelectedOverlays() || [];
+			}
 			assert(aSelection.length > 0, "sap.ui.rta - Opening context menu, with empty selection - check event order");
 			const mPropertiesBag = {};
 			mPropertiesBag.eventItem = oEventItem;
@@ -414,7 +501,8 @@ sap.ui.define([
 	 * @return {boolean} true, if locked; false if not
 	 */
 	ContextMenu.prototype._checkForPluginLock = function() {
-		// As long as Selection doesn't work correctly on ios we need to ensure that the ContextMenu opens even if a plugin mistakenly locks it
+		// As long as Selection doesn't work correctly on ios we need to ensure that the
+		// ContextMenu opens even if a plugin mistakenly locks it
 		if (Device.os.ios) {
 			return false;
 		}

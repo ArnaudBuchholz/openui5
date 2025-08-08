@@ -46,11 +46,11 @@ sap.ui.define([
 		});
 
 
-		opaTestOrSkip("Popover.opensOnClick", function (Given, When, Then) {
-			Given.iStartMyAppInAFrame("test-resources/sap/ui/mdc/integration/valuehelp/index.html?view=sap.ui.v4demo.view.OPA-6");
+		opaTestOrSkip("Popover: open on click", function (Given, When, Then) {
+			Given.iStartMyAppInAFrame("test-resources/sap/ui/mdc/integration/valuehelp/index.html?view=sap.ui.v4demo.view.RequestShowTypeahead");
 
-			Then.onTheOPAPage.iShouldSeeTheFilterField({label: "TestField"});
-			When.onTheOPAPage.iPressOnTheFilterField({label: "TestField"});
+			Then.onTheOPAPage.iShouldSeeTheField({label: "TestField"});
+			When.onTheOPAPage.iPressOnTheField({label: "TestField"});
 			Then.onTheOPAPage.iShouldSeeValueHelpListItems([
 				"101", "Austen, Jane",
 				"102", "Gilman, Charlotte Perkins",
@@ -64,13 +64,16 @@ sap.ui.define([
 				"111", "Melville, Herman"
 			]);
 
-			When.onTheOPAPage.iPressKeyOnTheFilterField({label: "TestField"}, KeyCodes.ESCAPE);
+			When.onTheOPAPage.iPressKeyOnTheField({label: "TestField"}, KeyCodes.ESCAPE);
 			Then.onTheOPAPage.iShouldNotSeeTheValueHelp();
 
 			Then.iTeardownMyAppFrame();
 		});
 
-		opaTestOrSkip("Popover.opensOnFocus", function (Given, When, Then) {
+		/**
+		 * @deprecated As of version 1.137
+		 */
+		opaTestOrSkip("Popover: open on focus", function (Given, When, Then) {
 			Given.iStartMyAppInAFrame("test-resources/sap/ui/mdc/integration/valuehelp/index.html?view=sap.ui.v4demo.view.OPA-7");
 			Then.onTheOPAPage.iShouldSeeTheFilterField({label: "TestField1"});
 			Then.onTheOPAPage.iShouldSeeTheFilterField({label: "TestField2"});
@@ -132,7 +135,7 @@ sap.ui.define([
 		/**
 		 *  @deprecated As of version 1.121
 		 */
-		opaTestOrSkip("Popover.opensOnClick", function (Given, When, Then) {
+		opaTestOrSkip("Popover: open on click", function (Given, When, Then) {
 			Given.iStartMyAppInAFrame("test-resources/sap/ui/mdc/integration/valuehelp/index.html?view=sap.ui.v4demo.view.OPA-6&legacy=true");
 
 			Then.onTheOPAPage.iShouldSeeTheFilterField({label: "TestField"});
@@ -159,7 +162,7 @@ sap.ui.define([
 		/**
 		 *  @deprecated As of version 1.121
 		 */
-		opaTestOrSkip("Popover.opensOnFocus", function (Given, When, Then) {
+		opaTestOrSkip("Popover: open on focus", function (Given, When, Then) {
 			Given.iStartMyAppInAFrame("test-resources/sap/ui/mdc/integration/valuehelp/index.html?view=sap.ui.v4demo.view.OPA-7&legacy=true");
 			Then.onTheOPAPage.iShouldSeeTheFilterField({label: "TestField1"});
 			Then.onTheOPAPage.iShouldSeeTheFilterField({label: "TestField2"});

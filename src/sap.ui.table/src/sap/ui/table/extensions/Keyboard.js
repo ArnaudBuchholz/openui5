@@ -275,11 +275,11 @@ sap.ui.define([
 		 * @inheritDoc
 		 * @returns {string} The name of this extension.
 		 */
-		_init: function(oTable, sTableType, mSettings) {
+		_init: function(oTable, mSettings) {
 			this._itemNavigation = null;
 			this._itemNavigationInvalidated = false; // determines whether item navigation should be reapplied from scratch
 			this._itemNavigationSuspended = false; // switch off event forwarding to item navigation
-			this._delegate = new KeyboardDelegate(sTableType);
+			this._delegate = new KeyboardDelegate();
 			this._actionMode = false;
 
 			// Register the delegates in correct order
@@ -460,7 +460,7 @@ sap.ui.define([
 
 	function setFocusFallback(oTable, oKeyboardExtension) {
 		if (oTable.getColumnHeaderVisible()) {
-			TableUtils.focusItem(oTable, ExtensionHelper.getInitialItemNavigationIndex(oKeyboardExtension));
+			oKeyboardExtension.focusItem(ExtensionHelper.getInitialItemNavigationIndex(oKeyboardExtension));
 			oKeyboardExtension._oLastFocus = null;
 		} else if (TableUtils.isNoDataVisible(oTable)) {
 			oTable.getDomRef("noDataCnt").focus();
@@ -563,6 +563,16 @@ sap.ui.define([
 		} else {
 			oElement.trigger("focus");
 		}
+	};
+
+	/**
+	 * Focus the item with the given index in the item navigation.
+	 *
+	 * @param {int} iIndex Index of item in ItemNavigation which shall get the focus.
+	 * @param {Object} oEvent The event object.
+	 */
+	KeyboardExtension.prototype.focusItem = function(iIndex, oEvent) {
+		this.getTable()._getItemNavigation()?.focusItem(iIndex, oEvent);
 	};
 
 	return KeyboardExtension;

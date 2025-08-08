@@ -1,0 +1,32 @@
+{
+  "1.137.0": {
+    "date": "May 2025",
+    "notes": [
+      {
+        "id": "68e35fe662cfb58ed2db56e2f10e25fa31ab979d",
+        "type": "FEATURE",
+        "text": " sap.m.Menu: Implemented now as a standalone control"
+      },
+      {
+        "id": "611f145b763573e614a6eb5dab31db4d159aa309",
+        "type": "FIX",
+        "text": " Integration Card: Unstable tests are now fixed"
+      },
+      {
+        "id": "2f1673bfabcee68a3f247120fdf9d4ea951e99a9",
+        "type": "FEATURE",
+        "text": " Integration Cards: Statuses in Object and Table cards now support actions"
+      },
+      {
+        "id": "76ccbb6fe2d0e2dcb8f17858cc98bc4e72c72cfe",
+        "type": "FEATURE",
+        "text": " Integration Cards: Statuses in Header, NumericHeader and List now support actions"
+      },
+      {
+        "id": "796f81c2476b6d6dee81d080e89849c606061682",
+        "type": "FIX",
+        "text": " Integration Cards: Updated documentation"
+      }
+    ]
+  }
+}

@@ -10,7 +10,8 @@ sap.ui.define([
 	'sap/ui/mdc/condition/FilterOperatorUtil',
 	'sap/ui/mdc/enums/ConditionValidated',
 	'sap/ui/mdc/enums/OperatorValueType',
-	'sap/base/strings/formatMessage'
+	'sap/base/strings/formatMessage',
+	'sap/ui/mdc/enums/RequestShowContainerReason'
 ], (
 	Element,
 	PromiseMixin,
@@ -19,7 +20,8 @@ sap.ui.define([
 	FilterOperatorUtil,
 	ConditionValidated,
 	OperatorValueType,
-	formatMessage
+	formatMessage,
+	RequestShowContainerReason
 ) => {
 	"use strict";
 
@@ -42,8 +44,6 @@ sap.ui.define([
 	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.navigate as #navigate
 	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.getUseAsValueHelp as #getUseAsValueHelp
 	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.isValidationSupported as #isValidationSupported
-	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.shouldOpenOnNavigate as #shouldOpenOnNavigate
-	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.shouldOpenOnClick as #shouldOpenOnClick
 	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.removeVisualFocus as #removeVisualFocus
 	 * @borrows sap.ui.mdc.valuehelp.base.ITypeaheadContent.setVisualFocus as #setVisualFocus
 	 * @borrows sap.ui.mdc.valuehelp.base.IDialogContent.getCount as #getCount
@@ -370,6 +370,19 @@ sap.ui.define([
 	};
 
 	/**
+	 * Getter for the initial focusable <code>control</code> on the content after all tokens are removed.
+	 *
+	 * @returns {sap.ui.core.Control} Control instance which could receive the focus.
+	 *
+	 * @private
+	 * @ui5-restricted sap.ui.mdc
+	 * @since 1.138
+	 */
+	Content.prototype.getFocusControlAfterTokenRemoval = function() {
+		return null;
+	};
+
+	/**
 	 * Called if the content will be hidden.
 	 *
 	 * @private
@@ -437,18 +450,16 @@ sap.ui.define([
 	 * @param {object} oChanges Change
 	 * @protected
 	 */
-	Content.prototype.handleFilterValueUpdate = function(oChanges) {
+	Content.prototype.handleFilterValueUpdate = async function(oChanges) {
 		if (this.isContainerOpen() && this.isTypeahead()) {
-			const oDelegate = this.getValueHelpDelegate();
 			const oValueHelp = this.getValueHelpInstance();
 
 			// Everytime the filterValue changes, we consult the delegate again to decide if the typeahead should still be shown or hidden via a cancel event
 			// Please also see the default implementation of sap.ui.mdc.ValueHelpDelegate.showTypeahead
-			Promise.resolve(!!oDelegate && oDelegate.showTypeahead(oValueHelp, this)).then((bShowTypeahead) => {
-				if (!bShowTypeahead) {
-					this.fireCancel();
-				}
-			});
+			const bCancelOpen = !await oValueHelp._requestShowContainer(this.getParent(), RequestShowContainerReason.Filter);
+			if (bCancelOpen) {
+				this.fireCancel();
+			}
 		}
 	};
 
@@ -693,23 +704,24 @@ sap.ui.define([
 		return this.getMaxConditions() === 1;
 	};
 
-	/*
+	/**
 	 * Determines if the value help should be opened when the user clicks into the connected control.
 	 *
 	 * @returns {boolean} If <code>true</code>, the value help should open when user clicks into the connected field control
+   	 * @deprecated As of version 1.137 with no replacement.
 	 */
 	Content.prototype.shouldOpenOnClick = function() {
 		return false;
 	};
 
-	/*
+	/**
 	 * Determines if the value help should be opened when the user used the arrow keys.
 	 * By default navigation on closed popover is enabled.
 	 *
 	 * @returns {boolean} If <code>true</code>, the value help should open when user used the arrow keys in the connected field control
+   	 * @deprecated As of version 1.137 with no replacement.
 	 */
 	Content.prototype.shouldOpenOnNavigate = function() {
-		// return !this.isSingleSelect();
 		return false;
 	};
 
@@ -898,6 +910,18 @@ sap.ui.define([
 	 */
 	Content.prototype.setHighlightId = function(sHighlightId) {
 
+	};
+
+	/**
+	 * If set, the connected field must not allow other values than the items of the <code>FixedList</code>. Free text must be prevented.
+	 *
+	 * @returns {boolean} If set, only fixed values are allowed
+	 * @private
+	 * @ui5-restricted sap.ui.mdc.valuehelp.base.Container
+	 * @since 1.138
+	 */
+	Content.prototype.isRestrictedToFixedValues = function() {
+		return false;
 	};
 
 	PromiseMixin.call(Content.prototype);

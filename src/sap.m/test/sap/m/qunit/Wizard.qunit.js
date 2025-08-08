@@ -441,12 +441,12 @@ sap.ui.define([
 		this.oWizard.invalidateStep(this.oWizard._getStartingStep());
 		this.clock.tick(500);
 
-		var firstStepVisibility = this.oWizard._getNextButton().getVisible();
+		var firstStepVisibility = !this.oWizard._getNextButton().hasStyleClass("sapMWizardNextButtonHidden");
 		this.oWizard._getNextButton().firePress();
 		this.clock.tick(500);
 
 		assert.strictEqual(firstStepVisibility, false, "On the first step button should not be visible");
-		assert.strictEqual(this.oWizard._getNextButton().getVisible(), true, "On the second step button should be visible");
+		assert.strictEqual(!this.oWizard._getNextButton().hasStyleClass("sapMWizardNextButtonHidden"), true, "On the second step button should be visible");
 
 		runAllTimersAndRestore(this.clock);
 	});
@@ -488,7 +488,7 @@ sap.ui.define([
 		this.oWizard.getSteps()[0].setValidated(false);
 		this.clock.tick(500);
 
-		assert.ok(!oButton.getVisible(), "Button should not be visible");
+		assert.ok(oButton.hasStyleClass("sapMWizardNextButtonHidden"), "Button should not be visible");
 		runAllTimersAndRestore(this.clock);
 	});
 
@@ -1017,6 +1017,22 @@ sap.ui.define([
 		assert.strictEqual(sAriaLabel, sWizardLabel, "Aria-label attribute of the wizard should be set to '" + sWizardLabel + "'");
 	});
 
+	QUnit.test("Wizard Step invisible text is correctly set in Page Mode", async function (assert) {
+		this.oWizard._activateStep(this.oWizard.getSteps()[1]);
+		await nextUIUpdate();
+
+		this.oWizard.goToStep(this.oWizard.getSteps()[1], true);
+
+		assert.strictEqual(this.oWizard.getSteps()[1]._oNumberInvisibleText.getText(), "Step2 Step 2", "The invisible text of the second step should be set correctly.");
+		this.oWizard._activateStep(this.oWizard.getSteps()[2]);
+		await nextUIUpdate();
+
+		this.oWizard.goToStep(this.oWizard.getSteps()[2], true);
+
+		assert.strictEqual(this.oWizard.getSteps()[2]._oNumberInvisibleText.getText(), "Step3 Step 3", "The invisible text of the third step should be set correctly.");
+		this.oWizard.destroy();
+	});
+
 	QUnit.test("WizardStep labelled-by reference number step and title", async function (assert) {
 		var oSpy = this.spy(WizardStep.prototype, "_setNumberInvisibleText"),
 			oWizard = new Wizard({
@@ -1113,33 +1129,33 @@ sap.ui.define([
 
 		var oNextButton = this.oWizard._getNextButton();
 
-		assert.notOk(oNextButton.getVisible(), "The next button for step 1 should be hidden.");
+		assert.ok(oNextButton.hasStyleClass("sapMWizardNextButtonHidden"), "The next button for step 1 should be hidden.");
 		// act
 		this.oWizard.nextStep();
 		this.clock.tick(500);
 
 		// assert
 		oNextButton = this.oWizard._getNextButton();
-		assert.notOk(oNextButton.getVisible(), "The next button for step 2 should be hidden.");
+		assert.ok(oNextButton.hasStyleClass("sapMWizardNextButtonHidden"), "The next button for step 2 should be hidden.");
 		runAllTimersAndRestore(this.clock);
 	});
 
 	QUnit.test("setShowNextButton()", function (assert) {
 		this.clock = sinon.useFakeTimers();
-		assert.ok(this.oWizard._getNextButton().getVisible(), "The next button for step 1 should be visible.");
+		assert.notOk(this.oWizard._getNextButton().hasStyleClass("sapMWizardNextButtonHidden"), "The next button for step 1 should be visible.");
 
 		// act
 		this.oWizard.setShowNextButton(false);
 		this.clock.tick(500);
 
 		// assert
-		assert.notOk(this.oWizard._getNextButton().getVisible(), "The next button for step 1 should be hidden.");
+		assert.ok(this.oWizard._getNextButton().hasStyleClass("sapMWizardNextButtonHidden"), "The next button for step 1 should be hidden.");
 
 		// act
 		this.oWizard.nextStep();
 		this.clock.tick(500);
 		// assert
-		assert.notOk(this.oWizard._getNextButton().getVisible(), "The next button for step 2 should be hidden.");
+		assert.ok(this.oWizard._getNextButton().hasStyleClass("sapMWizardNextButtonHidden"), "The next button for step 2 should be hidden.");
 		runAllTimersAndRestore(this.clock);
 	});
 
@@ -1155,7 +1171,7 @@ sap.ui.define([
 		this.clock.tick(500);
 
 		// assert
-		assert.notOk(oWizard._getNextButton().getVisible(), "The next button for step 1 should be hidden.");
+		assert.ok(oWizard._getNextButton().hasStyleClass("sapMWizardNextButtonHidden"), "The next button for step 1 should be hidden.");
 
 		// clean up
 		oWizard.destroy();

@@ -8,8 +8,9 @@ sap.ui.define([
 	"sap/ui/events/KeyCodes",
 	"sap/ui/core/Element",
 	"sap/m/library",
+	"sap/ui/core/Lib",
 	"sap/ui/core/InvisibleRenderer"
-], function (PluginBase, Localization, deepEqual, KeyCodes, Element, library, InvisibleRenderer) {
+], function (PluginBase, Localization, deepEqual, KeyCodes, Element, library, Lib, InvisibleRenderer) {
 	"use strict";
 
 	const ListMode = library.ListMode;
@@ -243,18 +244,18 @@ sap.ui.define([
 			}
 		},
 		onmousedown: function(oEvent) {
-			if (oEvent.isMarked?.() || oEvent.button != 0) {
+			if (oEvent.isMarked?.() || oEvent.button != 0 || !this.getConfig("isSupported", this.getControl(), this)) {
 				return;
 			}
 
-			var oSelectableCell = this._getSelectableCell(oEvent.target);
-
+			const oSelectableCell = this._getSelectableCell(oEvent.target);
 			if (!oSelectableCell) {
 				return;
 			}
 
 			const oInfo = this.getConfig("getCellInfo", this.getControl(), oSelectableCell, this._oPreviousCell);
 			this._bMouseDown = true;
+			this._oMouseSource = Element.closestTo(oEvent.target);
 
 			if (oEvent.shiftKey) {
 				if (this._oPreviousCell?.rowIndex !== oInfo.rowIndex || this._oPreviousCell?.colIndex !== oInfo.colIndex) {
@@ -280,6 +281,7 @@ sap.ui.define([
 			clearTimeout(this._iTimer);
 			this._bMouseDown = false;
 			this._bBorderDown = false;
+			this._oMouseSource = null;
 			this._mClickedCell = undefined;
 			this._bScrolling = false;
 			this._mTempCell = undefined;
@@ -289,8 +291,9 @@ sap.ui.define([
 			setTimeout(() => { this._startTarget = null; }, 0);
 		},
 		onclick: function(oEvent) {
-			var oTarget = this._getSelectableCell(oEvent.target);
-			if (oTarget && this._startTarget === oTarget) {
+			const oTarget = this._getSelectableCell(oEvent.target);
+			const oElement = Element.closestTo(oEvent.target);
+			if (oTarget && this._startTarget === oTarget && !oElement.isA("sap.m.Link")) {
 				oEvent.stopPropagation();
 			}
 		}
@@ -643,7 +646,7 @@ sap.ui.define([
 		}
 
 		var oSelectableCell = this._getSelectableCell(oEvent.target);
-		if (!oSelectableCell || !this._bMouseDown) {
+		if (!oSelectableCell || !this._bMouseDown || this._oMouseSource?.isA("sap.m.InputBase")) {
 			// Selection logic should not execute if mouse is not down or target is not a cell
 			return;
 		}
@@ -1179,10 +1182,20 @@ sap.ui.define([
 			onActivate: function(oTable, oPlugin) {
 				oTable.attachEvent("_change", oPlugin, this._onPropertyChange);
 				oTable.attachEvent("EventHandlerChange", oPlugin, this._onEventHandlerChange);
+
+				this._getSelectionTexts = oTable._getAccExtension().getSelectionTexts;
+				oTable._getAccExtension().getSelectionTexts = function() {
+					return {
+						rowSelect: Lib.getResourceBundleFor("sap.ui.table").getText("TBL_ROW_SELECT_KEY_ALTERNATIVE"),
+						rowDeselect: Lib.getResourceBundleFor("sap.ui.table").getText("TBL_ROW_DESELECT_KEY_ALTERNATIVE")
+					};
+				};
 			},
 			onDeactivate: function(oTable, oPlugin) {
 				oTable.detachEvent("_change", this._onPropertyChange);
 				oTable.detachEvent("EventHandlerChange", this._onEventHandlerChange);
+
+				oTable._getAccExtension().getSelectionTexts = this._getSelectionTexts;
 			},
 			_onPropertyChange: function(oEvent, oPlugin) {
 				oEvent.getParameter("name") == "selectionBehavior" && oPlugin._onSelectableChange();
@@ -1434,7 +1447,7 @@ sap.ui.define([
 			}
 		},
 		"sap.m.Table": {
-			selectableCells: ".sapMLIBFocusable, .sapMListTblCell, .sapMListTblSubRowCell, .sapMListTblSubCnt",
+			selectableCells: ".sapMLIBFocusable > :not(.sapMListTblHeaderCell), .sapMListTblCell:not(.sapMListTblHeaderCell), .sapMListTblSubRowCell, .sapMListTblSubCnt",
 			scrollArea: "listUl",
 			eventClearedAll: "sapMTableClearAll",
 			onActivate: function(oTable, oPlugin) {

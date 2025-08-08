@@ -34,7 +34,6 @@ sap.ui.define([
 
 	/**
 	 * Returns the offset for an element
-	 * Replaces the jQuery method offset
 	 * @param {HTMLElement} oElement - Element
 	 * @returns {PositionObject} the calculated offset containing left and top values
 	 */
@@ -47,25 +46,6 @@ sap.ui.define([
 		};
 	};
 
-	/**
-	 * Returns if the <code>oDomElement</code> is currently visible on the screen.
-	 *
-	 * @param {HTMLElement|jQuery} oDomElement Element to be evaluated
-	 * @returns{boolean} - Returns if <code>oDomElement</code> is currently visible on the screen.
-	 */
-	DOMUtil.isElementInViewport = function(oDomElement) {
-		oDomElement = oDomElement.jquery ? oDomElement.get(0) : oDomElement;
-
-		var mRect = oDomElement.getBoundingClientRect();
-
-		return (
-			mRect.top >= 0 &&
-			mRect.left >= 0 &&
-			mRect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-			mRect.right <= (window.innerWidth || document.documentElement.clientWidth)
-		);
-	};
-
 	DOMUtil.getSize = function(oDomRef) {
 		var oClientRec = oDomRef.getBoundingClientRect();
 		return {
@@ -76,9 +56,8 @@ sap.ui.define([
 
 	/**
 	 * Returns the parents for an element
-	 * Replaces the jQuery method parents
 	 * @param {HTMLElement} oElement - Element
-	 * @param {string} sSelector - jQuery (CSS-like) selector to search for
+	 * @param {string} sSelector - CSS selector to search for
 	 * @returns {Array} aParents - Array containing Parents which match selector
 	 */
 	DOMUtil.getParents = function(oElement, sSelector) {
@@ -111,7 +90,7 @@ sap.ui.define([
 		var iScrollTop = oParent ? oParent.scrollTop : null;
 		var iScrollLeft = oParent ? DOMUtil.getScrollLeft(oParent) : null;
 
-		var mParentOffset = oParent ? this.getOffset(oParent) : null;
+		var mParentOffset = oParent ? DOMUtil.getOffset(oParent) : null;
 
 		var mOffset = {
 			left: oGeometry.position.left,
@@ -274,7 +253,7 @@ sap.ui.define([
 
 	DOMUtil.getGeometry = function(oDomRef, bUseWindowOffset) {
 		if (oDomRef) {
-			var oOffset = this.getOffset(oDomRef);
+			var oOffset = DOMUtil.getOffset(oDomRef);
 			if (bUseWindowOffset) {
 				oOffset.left = oOffset.left - window.scrollX;
 				oOffset.top = oOffset.top - window.scrollY;
@@ -282,9 +261,9 @@ sap.ui.define([
 
 			return {
 				domRef: oDomRef,
-				size: this.getSize(oDomRef),
+				size: DOMUtil.getSize(oDomRef),
 				position: oOffset,
-				visible: this.isVisible(oDomRef)
+				visible: DOMUtil.isVisible(oDomRef)
 			};
 		}
 		return undefined;
@@ -306,30 +285,32 @@ sap.ui.define([
 	};
 
 	/**
-	 * returns jQuery object found in oDomRef for sCSSSelector
-	 * @param {Element|jQuery} oDomRef - to search in
-	 * @param {string} sCSSSelector - jQuery (CSS-like) selector to look for
-	 * @returns {jQuery} found domRef
+	 * Returns HTML Element found in oDomRef for sCSSSelector
+	 * @param {Element} oDomRef - to search in
+	 * @param {string} sCSSSelector - CSS-like selector to look for
+	 * @returns {Element} found domRef
 	 */
+
 	DOMUtil.getDomRefForCSSSelector = function(oDomRef, sCSSSelector) {
 		if (sCSSSelector && oDomRef) {
-			var $domRef = jQuery(oDomRef);
-
 			if (sCSSSelector === ":sap-domref") {
-				return $domRef;
+				return oDomRef;
 			}
 
-			// ":sap-domref > sapMPage" scenario
+			// Replace ":sap-domref" with ":scope" to make the selector compatible with browsers.
+			// Example: ":sap-domref > sapMPage" becomes ":scope > sapMPage", scoping the query to oDomRef.
 			if (sCSSSelector.indexOf(":sap-domref") > -1) {
-				return $domRef.find(sCSSSelector.replace(/:sap-domref/g, ""));
+				const sModifiedSelector = sCSSSelector.replace(/:sap-domref/g, ":scope");
+				return oDomRef.querySelector(sModifiedSelector);
 			}
 
-			// normal selector
-			return $domRef.find(sCSSSelector);
+			// Prefix ":scope" to child selectors (>) to scope the query to oDomRef.
+			// Example: "div > p, span > a" becomes "div :scope > p, span :scope > a".
+			const sScopedSelector = sCSSSelector.replace(/(^|,)\s*(>)/g, "$1:scope$2");
+			return oDomRef.querySelector(sScopedSelector);
 		}
 
-		// empty jQuery object for typing
-		return jQuery();
+		return undefined;
 	};
 
 	/**
@@ -346,31 +327,6 @@ sap.ui.define([
 			return iWidth > 0 && iHeight > 0;
 		}
 		return false;
-	};
-
-	/**
-	 * Sets the draggable attribute to a specified node
-	 * @param {HTMLElement} oNode - Target node to add the attribute to
-	 * @param {boolean} bValue - Attribute value
-	 */
-	DOMUtil.setDraggable = function(oNode, bValue) {
-		oNode.setAttribute("draggable", bValue);
-	};
-
-	/**
-	 * Sets the draggable attribute of a specified node
-	 * @param {HTMLElement} oNode - Target node to set the draggable attribute on
-	 * @returns {boolean|undefined} undefined when draggable is not set to the node
-	 */
-	DOMUtil.getDraggable = function(oNode) {
-		switch (oNode.getAttribute("draggable")) {
-			case "true":
-				return true;
-			case "false":
-				return false;
-			default:
-				return undefined;
-		}
 	};
 
 	/**
@@ -408,16 +364,16 @@ sap.ui.define([
 
 			// pseudo elements can't be inserted via js, so we should create a real elements,
 			// which copy pseudo styling
-			var oPseudoElement = jQuery("<span></span>");
+			var oPseudoElement = document.createElement("span");
 			if (sPseudoElement === ":after") {
-				oPseudoElement.appendTo(oDest);
+				oDest.appendChild(oPseudoElement);
 			} else {
-				oPseudoElement.prependTo(oDest);
+				oDest.insertBefore(oPseudoElement, oDest.firstChild);
 			}
 
-			oPseudoElement.text(sContent.replace(/(^['"])|(['"]$)/g, ""));
-			DOMUtil._copyStylesTo(mStyles, oPseudoElement.get(0));
-			oPseudoElement.css("display", "inline");
+			oPseudoElement.textContent = sContent.replace(/(^['"])|(['"]$)/g, "");
+			DOMUtil._copyStylesTo(mStyles, oPseudoElement);
+			oPseudoElement.style.display = "inline";
 		}
 	};
 
@@ -431,13 +387,13 @@ sap.ui.define([
 
 		DOMUtil._copyStylesTo(mStyles, oDest);
 
-		this._copyPseudoElement(":after", oSrc, oDest);
-		this._copyPseudoElement(":before", oSrc, oDest);
+		DOMUtil._copyPseudoElement(":after", oSrc, oDest);
+		DOMUtil._copyPseudoElement(":before", oSrc, oDest);
 	};
 
 	DOMUtil.copyComputedStyles = function(oSrc, oDest) {
 		for (var i = 0; i < oSrc.children.length; i++) {
-			this.copyComputedStyles(oSrc.children[i], oDest.children[i]);
+			DOMUtil.copyComputedStyles(oSrc.children[i], oDest.children[i]);
 		}
 
 		// we shouldn't copy classes because they can affect styling
@@ -449,12 +405,12 @@ sap.ui.define([
 		oDest.setAttribute("for", "");
 		oDest.setAttribute("tabindex", -1);
 
-		this.copyComputedStyle(oSrc, oDest);
+		DOMUtil.copyComputedStyle(oSrc, oDest);
 	};
 
 	DOMUtil.cloneDOMAndStyles = function(oNode, oTarget) {
 		var oCopy = oNode.cloneNode(true);
-		this.copyComputedStyles(oNode, oCopy);
+		DOMUtil.copyComputedStyles(oNode, oCopy);
 
 		oTarget.append(oCopy);
 	};
@@ -484,4 +440,4 @@ sap.ui.define([
 	};
 
 	return DOMUtil;
-}, /* bExport= */ true);
+});

@@ -16,6 +16,7 @@ sap.ui.define([
 	"sap/ui/core/ComponentContainer",
 	"sap/ui/base/Event",
 	"sap/ui/core/UIComponent",
+	"sap/ui/model/resource/ResourceModel",
 	"sap/m/BadgeCustomData",
 	"sap/m/MessageStrip",
 	"sap/ui/integration/util/DataProviderFactory",
@@ -48,6 +49,7 @@ sap.ui.define([
 		ComponentContainer,
 		Event,
 		UIComponent,
+		ResourceModel,
 		BadgeCustomData,
 		MessageStrip,
 		DataProviderFactory,
@@ -80,7 +82,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "L3 Request list content Card",
-					"subTitle": "Card subtitle",
+					"subtitle": "Card subtitle",
 					"icon": {
 						"src": "sap-icon://accept"
 					},
@@ -448,7 +450,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "L3 Request list content Card",
-					"subTitle": "Card subtitle"
+					"subtitle": "Card subtitle"
 				},
 				"content": {
 					"data": {
@@ -1486,7 +1488,7 @@ sap.ui.define([
 							}
 						],
 						"title": "L3 Request list content Card",
-						"subTitle": "Card subtitle",
+						"subtitle": "Card subtitle",
 						"icon": {
 							"initials": "AJ",
 							"shape": "Circle",
@@ -1562,7 +1564,7 @@ sap.ui.define([
 							}
 						},
 						"title": "Project Cloud Transformation Project Cloud Transformation Project Cloud Transformation Project Cloud Transformation Project Cloud Transformation Project Cloud Transformation Project Cloud Transformation ",
-						"subTitle": "Forecasted goal achievement depending on business logic and other important information Forecasted goal achievement depending on business logic and other important information",
+						"subtitle": "Forecasted goal achievement depending on business logic and other important information Forecasted goal achievement depending on business logic and other important information",
 						"unitOfMeasurement": "EUR",
 						"mainIndicator": {
 							"number": "{n}",
@@ -2772,7 +2774,7 @@ sap.ui.define([
 			}
 		});
 
-		QUnit.test("I18n module is initialized with integration library resource bundle", async function (assert) {
+		QUnit.test("I18n model is initialized with the public bundle files", async function (assert) {
 			// Arrange
 			this.oCard.setManifest("test-resources/sap/ui/integration/qunit/manifests/manifest.json");
 			this.oCard.placeAt(DOM_RENDER_LOCATION);
@@ -2780,10 +2782,11 @@ sap.ui.define([
 			// Assert
 			const oModel = this.oCard.getModel("i18n");
 			const oResourceBundle = await oModel.getResourceBundle();
-			assert.strictEqual(oResourceBundle, Library.getResourceBundleFor("sap.ui.integration"), "The i18n model of the card is correctly initialized.");
+
+			assert.ok(oResourceBundle.hasText("CARD.COUNT_X_OF_Y"), "'CARD.COUNT_X_OF_Y' exists in i18n model.");
 		});
 
-		QUnit.test("Integration library resource bundle is not enhanced", async function (assert) {
+		QUnit.test("I18n model is enhanced with the bundle files of the card", async function (assert) {
 			this.oCard.setManifest("test-resources/sap/ui/integration/qunit/testResources/cardWithTranslations/manifest.json");
 			this.oCard.placeAt(DOM_RENDER_LOCATION);
 
@@ -2791,8 +2794,12 @@ sap.ui.define([
 			await nextUIUpdate();
 
 			// Assert
-			var oResourceBundle = Library.getResourceBundleFor("sap.ui.integration");
-			assert.ok(oResourceBundle.aCustomBundles.length === 0, "The resource bundle for integration library is not enhanced.");
+			const oModel = this.oCard.getModel("i18n");
+			const oResourceBundle = await oModel.getResourceBundle();
+
+			assert.strictEqual(oResourceBundle.getText("title"), "Card Translation Bundle", "card-defined key exists in i18n model.");
+			assert.strictEqual(oResourceBundle.getText("translatedText"), "Some translated text", "card-defined key exists in i18n model.");
+			assert.ok(oResourceBundle.hasText("CARD.COUNT_X_OF_Y"), "'CARD.COUNT_X_OF_Y' still exists in the i18n model.");
 		});
 
 		QUnit.test("I18n module is isolated", function (assert) {
@@ -2836,6 +2843,53 @@ sap.ui.define([
 			// Assert
 			assert.strictEqual(this.oCard.getTranslatedText("SUBTITLE"), "Some subtitle", "The translation for SUBTITLE is correct.");
 			assert.strictEqual(this.oCard.getTranslatedText("COUNT_X_OF_Y", [3, 5]), "3 of custom 5", "The translation for COUNT_X_OF_Y is correct.");
+			assert.strictEqual(this.oCard.getTranslatedText("NOT_EXISTING_KEY"), "NOT_EXISTING_KEY", "Returns string value when key is not found.");
+			assert.strictEqual(this.oCard.getTranslatedText("NOT_EXISTING_KEY", [], true), undefined, "Returns undefined when key is not found and bIgnoreKeyFallback is set.");
+			assert.strictEqual(this.oCard.getTranslatedText(null), null, "Returns null when key is null.");
+			assert.strictEqual(this.oCard.getTranslatedText(null, [], true), undefined, "Returns undefined when key is null and bIgnoreKeyFallback is set.");
+		});
+
+		QUnit.test("Use getTranslatedText with no translations in manifest", async function (assert) {
+			this.oCard.setManifest("test-resources/sap/ui/integration/qunit/testResources/listCard.manifest.json");
+			this.oCard.placeAt(DOM_RENDER_LOCATION);
+
+			await nextCardReadyEvent(this.oCard);
+			await nextUIUpdate();
+
+			// Assert
+			assert.strictEqual(this.oCard.getTranslatedText("CARD.COUNT_X_OF_Y", [3, 5]), "3 of 5", "Returns correct value for COUNT_X_OF_Y if no i18n for the card is set.");
+			assert.strictEqual(this.oCard.getTranslatedText("NOT_EXISTING_KEY"), "NOT_EXISTING_KEY", "Returns string value when key is not found and no i18n for the card is set.");
+		});
+
+		QUnit.test("Use getTranslatedText directly after card creation", function (assert) {
+			const oCard = new Card();
+			const oSpy = this.spy(Log, "error");
+
+			// Assert
+			assert.strictEqual(oCard.getTranslatedText("CARD_MANIFEST"), "CARD_MANIFEST", "The key is returned.");
+			assert.strictEqual(oCard.getTranslatedText("CARD_MANIFEST", null, true), undefined, "ignoreKeyFallback is set, so undefined should be returned.");
+			assert.strictEqual(oCard.getTranslatedText("CARD.COUNT_X_OF_Y", [3, 5]), "CARD.COUNT_X_OF_Y", "The key is returned.");
+			assert.strictEqual(oSpy.callCount, 3, "Error is logged when getTranslatedText is used before card is ready.");
+			assert.ok(oSpy.alwaysCalledWith("'getTranslatedText' cannot be used before the card instance is ready. Consider using the event 'manifestApplied'."), "Error message is correct.");
+
+			oCard.destroy();
+		});
+
+		QUnit.test("Use getTranslatedText without waiting for card ready event", function (assert) {
+			const oCard = new Card();
+			const oSpy = this.spy(Log, "error");
+
+			oCard.setManifest("test-resources/sap/ui/integration/qunit/testResources/listCard.manifest.json");
+			oCard.placeAt(DOM_RENDER_LOCATION);
+
+			// Assert
+			assert.strictEqual(oCard.getTranslatedText("CARD_MANIFEST"), "CARD_MANIFEST", "The key is returned.");
+			assert.strictEqual(oCard.getTranslatedText("CARD_MANIFEST", null, true), undefined, "ignoreKeyFallback is set, so undefined should be returned.");
+			assert.strictEqual(oCard.getTranslatedText("CARD.COUNT_X_OF_Y", [3, 5]), "CARD.COUNT_X_OF_Y", "The key is returned.");
+			assert.strictEqual(oSpy.callCount, 3, "Error is logged when getTranslatedText is used before card is ready.");
+			assert.ok(oSpy.alwaysCalledWith("'getTranslatedText' cannot be used before the card instance is ready. Consider using the event 'manifestApplied'."), "Error message is correct.");
+
+			oCard.destroy();
 		});
 
 		QUnit.test("Refresh reloads translations correctly", async function (assert) {
@@ -3012,7 +3066,7 @@ sap.ui.define([
 			var iHeight = this.oCard.getCardContent().getDomRef().getBoundingClientRect().height;
 
 			// Assert
-			assert.strictEqual(iHeight, fFirstHeight, "The height of the content did not decrease.");
+			assert.ok(iHeight >= fFirstHeight, "The height of the content did not decrease.");
 
 			// Clean up
 			oServer.restore();
@@ -3333,7 +3387,7 @@ sap.ui.define([
 							}
 						},
 						"title": "Top 5 Products Sales",
-						"subTitle": "By Average Price",
+						"subtitle": "By Average Price",
 						"unitOfMeasurement": "EUR",
 						"mainIndicator": {
 							"number": "{number}",
@@ -3674,6 +3728,20 @@ sap.ui.define([
 						},
 						"sap.card": {
 							"type": "List",
+							"configuration": {
+								"destinations": {
+									"serviceName": {
+										"name": "serviceName",
+										"defaultUrl": "/fakeService"
+									}
+								},
+								"parameters": {
+									"urlName": {
+										"value": "Products",
+										"type": "string"
+									}
+								}
+							},
 							"header": {},
 							"content": {
 								"data": {
@@ -3693,6 +3761,72 @@ sap.ui.define([
 				this.oCard.destroy();
 				this.oCard = null;
 			}
+		});
+
+		QUnit.test("Request data using bindings to destination and parameter", async function (assert) {
+			// Arrange
+			const oServer = sinon.fakeServer.create({
+				autoRespond: true
+			});
+
+			const oResponseData = {
+				"results": [{
+					"Name": "Product 1"
+				}]
+			};
+
+			oServer.respondWith("/fakeService/Products", function (oXhr) {
+				oXhr.respond(200, {
+					"Content-Type": "application/json"
+				}, JSON.stringify(oResponseData));
+			});
+
+			// Act
+			const oResult = await this.oCard.request({
+				"url": "{{destinations.serviceName}}/{parameters>/urlName/value}",
+				"method": "GET"
+			});
+
+			// Assert
+			assert.deepEqual(oResult, oResponseData, "request should be successful");
+
+			// Clean up
+			oServer.restore();
+		});
+
+		QUnit.test("Request unsuccessful", function (assert) {
+			const done = assert.async();
+
+			// Arrange
+			const oServer = sinon.fakeServer.create({
+				autoRespond: true
+			});
+
+			oServer.respondWith("/fakeService/Products", function (oXhr) {
+				oXhr.respond(400, {"Content-Type": "text/plain"}, "Error");
+			});
+
+			// Act
+			this.oCard.request({
+				"url": "{{destinations.serviceName}}/{parameters>/urlName/value}",
+				"method": "GET"
+			}).catch(function(oResult) {
+				assert.strictEqual(oResult.message, "400 Bad Request", "request is unsuccessful");
+				assert.strictEqual(oResult.response.status, 400, "status code is 400");
+				assert.notOk(oResult.response.ok, "request is unsuccessful");
+				assert.strictEqual(oResult.responseText, "Error", "status text is 'Error'");
+				assert.strictEqual(oResult._requestSettings.url, '/fakeService/Products', "request URL is resolved");
+
+				assert.strictEqual(oResult[0], oResult.message, "message is accessible as array item");
+				assert.strictEqual(oResult[1], oResult.response, "response is accessible as array item");
+				assert.strictEqual(oResult[2], oResult.responseText, "responseText is accessible as array item");
+				assert.strictEqual(oResult[3], oResult._requestSettings, "_requestSettings is accessible as array item");
+
+				// Clean up
+				oServer.restore();
+
+				done();
+			});
 		});
 
 		QUnit.test("Request data with FormData", async function (assert) {
@@ -3716,19 +3850,18 @@ sap.ui.define([
 			oFormData.append("key", "value");
 
 			// Act
-			const res = await this.oCard.request({
+			const oResult = await this.oCard.request({
 				"url": "/uploadFormData",
 				"method": "POST",
 				"parameters": oFormData
 			});
 
 			// Assert
-			assert.strictEqual(res, "Success", "FormData should be uploaded successfully");
+			assert.strictEqual(oResult, "Success", "FormData should be uploaded successfully");
 
 			// Clean up
 			oServer.restore();
 		});
-
 	}
 );
 

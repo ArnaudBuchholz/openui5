@@ -29,11 +29,12 @@ sap.ui.define([
 	"sap/m/Dialog",
 	"sap/m/upload/FilePreviewDialog",
 	"sap/ui/codeeditor/CodeEditor",
-	"sap/m/Button"
+	"sap/m/Button",
+	"sap/ui/table/TreeTable"
 ], function (Text, MTable, MColumn, ColumnListItem, UploadSetwithTable, MDCTable, MDCColumn, JSONModel,
 			qutils, nextUIUpdate, GridColumn, GridTable, TemplateHelper, ActionsPlaceholder, OverflowToolbar,
 			Uploader, Boolean, EventBase, UploadItem, mLibrary, Log, Event, UploadItemConfiguration, Dialog,
-			FilePreviewDialog, CodeEditor, Button) {
+			FilePreviewDialog, CodeEditor, Button, TreeTable) {
 	"use strict";
 
 	const oJSONModel = new JSONModel();
@@ -134,6 +135,25 @@ sap.ui.define([
 		oTable.placeAt("qunit-fixture");
 		await nextUIUpdate();
 
+		return oTable;
+	}
+
+	async function createTreeTable(oSettings = {}) {
+
+		const mSettings = Object.assign({
+			columns: [
+				new GridColumn({ name: "File Name", template: TemplateHelper.getFileNameColumnTemplate() }),
+				new GridColumn({ name: "ID", template: TemplateHelper.getIdColumnTemplate() }),
+				new GridColumn({ name: "Status", template: TemplateHelper.getStatusColumnTemplate() })
+			],
+			rows: "{/documents}",
+			models: oJSONModel
+		}, oSettings);
+
+		const oTable = new TreeTable(mSettings);
+		oTable.placeAt("qunit-fixture");
+
+		await nextUIUpdate();
 		return oTable;
 	}
 
@@ -257,6 +277,30 @@ sap.ui.define([
 		});
 	});
 
+	QUnit.test("Plugin works with Tree Table", async function (assert) {
+		// arrange
+		const done = assert.async();
+
+		this.oTable = await createTreeTable();
+		this.oTable.addDependent(new UploadSetwithTable());
+
+		this.oUploadSetwithTablePlugin = this.oTable?.getDependents()?.find((oPlugin) => oPlugin.isA("sap.m.plugins.UploadSetwithTable"));
+
+		// act
+		this.oTable.attachEventOnce("rowsUpdated", () => {
+			const oBinding = this.oTable.getBinding("rows");
+
+			// assert
+			assert.ok(oBinding, "Table's items are bound");
+			assert.ok(this.oUploadSetwithTablePlugin, "UploadSetwithTable plugin is available as table's dependent.");
+
+			assert.equal(this.oUploadSetwithTablePlugin.getControl(), this.oTable, "The table is set as plugin owner for the UploadSetwithTable plugin");
+			assert.ok(this.oUploadSetwithTablePlugin.getEnabled(), "UploadSetwithTable Plugin is enabled");
+			assert.ok(this.oUploadSetwithTablePlugin.isActive(), "UploadSetwithTable is active");
+			done();
+		});
+	});
+
 	QUnit.test("plugin to fire onActivated & exit events on need", async function (assert) {
 		//arrange
 		const oTable = await createMDCTable();
@@ -359,6 +403,33 @@ sap.ui.define([
 		assert.ok(oUploadButton?.getAggregation("_actionButton")?.isA("sap.ui.unified.FileUploader") , "Grid Table has upload button rendered");
 
 		oGridTable.destroy();
+
+		/**
+		 * Tree Table with ActionsPlaceholder
+		 */
+
+		// arrange
+		const oTreeTable = await createTreeTable({
+			extension: [
+				new ActionsPlaceholder({ id:"uploadButton", placeholderFor:"UploadButtonPlaceholder"})
+			]
+		});
+
+		const oTreeTableUploadInstance = new UploadSetwithTable({
+			actions: ["uploadButton"]
+		});
+
+		// act
+		oTreeTable.addDependent(oTreeTableUploadInstance);
+
+		const oTreeTableToolbar = oTreeTable.getExtension();
+
+		const oTreeTableUploadButton = oTreeTableToolbar?.find((oAction) => oAction?.isA("sap.m.upload.ActionsPlaceholder"));
+
+		// assert
+		assert.ok(oTreeTableUploadButton?.getAggregation("_actionButton")?.isA("sap.ui.unified.FileUploader") , "Tree Table has upload button rendered");
+
+		oTreeTable.destroy();
 	});
 
 	QUnit.test("Plugin to render upload from cloud button at desired position in the view with correct actions association configured", async function (assert) {
@@ -456,6 +527,29 @@ sap.ui.define([
 
 		oGridTable.destroy();
 
+		/**
+		 * Tree table with ActionsPlaceholder
+		 */
+
+		// arrange
+		const oTreeTable = await createTreeTable({
+			extension: [
+				new ActionsPlaceholder({ id:"cloudUploadButtonTree", placeholderFor:"CloudFilePickerButtonPlaceholder"})
+			]
+		});
+		const oTreeTableUploadInstance = new UploadSetwithTable({
+			cloudFilePickerEnabled: true,
+			actions: ["cloudUploadButtonTree"]
+		});
+
+		// act
+		oTreeTable.addDependent(oTreeTableUploadInstance);
+		const oTreeTableToolbar = oTreeTable.getExtension();
+		const oTreeTableUploadButton = oTreeTableToolbar?.find((oAction) => oAction?.isA("sap.m.upload.ActionsPlaceholder"));
+
+		// assert
+		assert.ok(oTreeTableUploadButton?.getAggregation("_actionButton")?.isA("sap.m.Button") , "Tree Table has upload button rendered");
+		oTreeTable.destroy();
 
 	});
 
@@ -505,6 +599,20 @@ sap.ui.define([
 		// assert
 		assert.ok(!oGridUploadSetwithTablePlugin.getUploadEnabled(), "UploadSetwithTable Plugin coonected to grid table - uploading is disabled");
 		assert.ok(!oGridTable.getDragDropConfig().length, "DragDropConfig is not added to the table");
+
+		const oTreeTable = await createTreeTable();
+		const oTreeUploadSetwithTablePlugin = new UploadSetwithTable({
+			uploadEnabled: false
+
+		});
+
+		oTreeTable.addDependent(oTreeUploadSetwithTablePlugin);
+
+
+		assert.ok(!oTreeUploadSetwithTablePlugin.getUploadEnabled(), "UploadSetwithTable Plugin connected to Tree table - uploading is disabled");
+		assert.ok(!oTreeTable.getDragDropConfig().length, "DragDropConfig is not added to the table");
+
+		oTreeTable.destroy();
 	});
 
 	// Test to verify if dragdrop config is added to the table when uploadEnabled is enabled.
@@ -555,6 +663,20 @@ sap.ui.define([
 		assert.ok(oGridTable.getDragDropConfig().length, "DragDropConfig is added to the table");
 
 		oGridTable.destroy();
+
+		const oTreeTable = await createTreeTable();
+		const oTreeUploadSetwithTablePlugin = new UploadSetwithTable({
+			uploadEnabled: true
+		});
+
+		// act
+		oTreeTable.addDependent(oTreeUploadSetwithTablePlugin);
+
+		// assert
+		assert.ok(oTreeUploadSetwithTablePlugin.getUploadEnabled(), "UploadSetwithTable Plugin connected to Tree table - upload is enabled");
+		assert.ok(oTreeTable.getDragDropConfig().length, "DragDropConfig is added to the table");
+
+		oTreeTable.destroy();
 	});
 
 	// Test to verify if dragdrop config is removed from the table when uploadEnabled is toiggeled from enabled to disabled.
@@ -640,6 +762,31 @@ sap.ui.define([
 
 		// assert
 		assert.ok(oGridUploadSetwithTablePlugin.getConfig.calledWithExactly("cleanupPluginInstanceSettings", oGridTable, oGridUploadSetwithTablePlugin), "oGridTable Plugin cleanupPluginInstanceSettings settings are set");
+
+
+		const oTreeTable = await createTreeTable();
+		const oTreeUploadSetwithTablePlugin = new UploadSetwithTable({
+			uploadEnabled: true
+
+		});
+		this.spy(oTreeUploadSetwithTablePlugin, "getConfig");
+
+		// act
+		oTreeTable.addDependent(oTreeUploadSetwithTablePlugin);
+
+		// assert
+		assert.ok(oTreeUploadSetwithTablePlugin.getUploadEnabled(), "UploadSetwithTable Plugin connected to Tree table - uploading is enabled");
+		assert.ok(oTreeTable.getDragDropConfig().length, "DragDropConfig is added to the table");
+
+		oTreeUploadSetwithTablePlugin.setUploadEnabled(false);
+
+		// assert
+		assert.ok(oTreeUploadSetwithTablePlugin.getConfig.calledWithExactly("resetDragDropConfig", oTreeTable, oTreeUploadSetwithTablePlugin), "oTreeTable Plugin resetDragDropConfig settings are set");
+		assert.ok(!oTreeUploadSetwithTablePlugin.getUploadEnabled(), "UploadSetwithTable Plugin connected to Tree table - uploading is disabled");
+		assert.ok(!oTreeTable.getDragDropConfig().length, "DragDropConfig is removed from the table");
+		assert.ok(oTreeUploadSetwithTablePlugin.getConfig.calledWithExactly("setPluginDefaultSettings", oTreeTable, oTreeUploadSetwithTablePlugin), "oTreeTable Plugin setPluginDefaultSettings settings are set");
+		oTreeTable.destroy();
+
 	});
 
 	QUnit.test("Plugin to fire fileTypeMismatch event when file type is not supported", async function (assert) {
@@ -776,6 +923,7 @@ sap.ui.define([
 			oUploadSetwithTablePlugin.attachItemRenamed(fnRenamedHandler);
 
 			const oInput = oDialog.getContent()[1];
+			const iTextFieldId = oDialog.getContent()[2].getId();
 			const oApplyBtn = oDialog.getBeginButton();
 
 			// assert
@@ -789,6 +937,8 @@ sap.ui.define([
 
 			// assert input should not have error state
 			assert.ok(oInput.getValueState() === "None", "Input value state is set to none when valid characters are entered");
+			assert.ok(oInput.getDomRef().querySelector(".sapMInputBaseInner").hasAttribute('aria-describedby'), "Input has aria-describedby attribute");
+			assert.ok(oInput.getDomRef().querySelector(".sapMInputBaseInner").getAttribute('aria-describedby').includes(iTextFieldId), "Input has aria-describedby attribute with iTextFieldId id");
 
 			oDialog.close();
 			// done();
@@ -912,7 +1062,7 @@ sap.ui.define([
 		assert.equal(oUploadPluginInstance.getCloudFilePickerServiceUrl(), "", "UploadSetwithTable Plugin has no cloud file picker service url initially");
 		assert.equal(oUploadPluginInstance.getCloudFilePickerButtonText(), "", "UploadSetwithTable Plugin has no cloud file picker button text initially");
 		assert.deepEqual(oUploadPluginInstance.getFileTypes(), undefined, "UploadSetwithTable Plugin has no file types association initially");
-		assert.equal(oUploadPluginInstance.getHttpRequestMethod(), "POST", "UploadSetwithTable Plugin has POST http request method by default");
+		assert.equal(oUploadPluginInstance.getHttpRequestMethod().toUpperCase(), "POST", "UploadSetwithTable Plugin has POST http request method by default");
 		assert.equal(oUploadPluginInstance.getItemValidationHandler(), null, "UploadSetwithTable Plugin has no item validation handler initially");
 
 		oTable.destroy();
@@ -941,7 +1091,7 @@ sap.ui.define([
 			cloudFilePickerServiceUrl: "/cloudFiles/root/",
 			cloudFilePickerButtonText: "Select from Cloud",
 			fileTypes: ["jpg", "png"],
-			httpRequestMethod: "PUT",
+			httpRequestMethod: "Put",
 			itemValidationHandler: fnValidationHandler
 		};
 		const oUploadSetwithTablePlugin = new UploadSetwithTable(mSettings);
@@ -966,7 +1116,7 @@ sap.ui.define([
 		assert.equal(oUploadSetwithTablePlugin.getCloudFilePickerServiceUrl(), "/cloudFiles/root/", "UploadSetwithTable Plugin has cloud file picker service url set");
 		assert.equal(oUploadSetwithTablePlugin.getCloudFilePickerButtonText(), "Select from Cloud", "UploadSetwithTable Plugin has cloud file picker button text set");
 		assert.deepEqual(oUploadSetwithTablePlugin.getFileTypes(), ["jpg", "png"], "UploadSetwithTable Plugin has file types association set");
-		assert.equal(oUploadSetwithTablePlugin.getHttpRequestMethod(), "PUT", "UploadSetwithTable Plugin has PUT http request method set");
+		assert.equal(oUploadSetwithTablePlugin.getHttpRequestMethod().toUpperCase(), "PUT", "UploadSetwithTable Plugin has PUT http request method set");
 		assert.equal(oUploadSetwithTablePlugin.getItemValidationHandler(), fnValidationHandler, "UploadSetwithTable Plugin has item validation handler set");
 	});
 
@@ -1236,6 +1386,7 @@ sap.ui.define([
 			assert.ok(oDialog?.isOpen(), "File preview dialog is opened with the selected file");
 			oDialog?.getButtons()[1].firePress();
 			assert.ok(oUploadSetwithTablePluginCarouselPlugin.calledOnce, "DestroyPages is called");
+			assert.strictEqual(oDialog.getContentWidth(), "100%", "FilePreviewDialog dialog contentWidth is set to 100% by default");
 			oUploadSetwithTablePluginCarouselPlugin.restore();
 			oMdcTable.destroy();
 			done();
@@ -1320,6 +1471,7 @@ sap.ui.define([
 			assert.ok(oDialog.getContent()[0].getPages()[4].getAggregation("items")[0].hasStyleClass("image-scale"),"image has style to Fit within the viewport without cropping");
 			oDialog?.getButtons()[1].firePress();
 			assert.ok(oUploadSetwithTablePluginCarouselPlugin.calledOnce, "DestroyPages is called");
+			assert.strictEqual(oDialog.getContentWidth(), "100%", "FilePreviewDialog dialog contentWidth is set to 100% by default");
 			oUploadSetwithTablePluginCarouselPlugin.restore();
 			oMdcTable.destroy();
 			done();
@@ -1410,6 +1562,7 @@ sap.ui.define([
 			oDialog.close();
 
 			assert.ok(oUploadSetwithTablePluginCarouselPlugin.calledOnce, "DestroyPages is called");
+			assert.strictEqual(oDialog.getContentWidth(), "100%", "FilePreviewDialog dialog contentWidth is set to 100% by default");
 			oUploadSetwithTablePluginCarouselPlugin.restore();
 
 			oMdcTable.destroy();
@@ -1502,6 +1655,7 @@ sap.ui.define([
 			oDialog.close();
 
 			assert.ok(oUploadSetwithTablePluginCarouselPlugin.calledOnce, "DestroyPages is called");
+			assert.strictEqual(oDialog.getContentWidth(), "100%", "FilePreviewDialog dialog contentWidth is set to 100% by default");
 			oUploadSetwithTablePluginCarouselPlugin.restore();
 
 			oMdcTable.destroy();
@@ -1609,6 +1763,7 @@ sap.ui.define([
 			assert.ok(oDialog?.isOpen(), "File preview dialog is opened with the selected file and custom content with xml code editor is inserted");
 			oDialog?.getButtons()[1].firePress();
 			assert.ok(oUploadSetwithTablePluginCarouselPlugin.calledOnce, "DestroyPages is called");
+			assert.strictEqual(oDialog.getContentWidth(), "100%", "FilePreviewDialog dialog contentWidth is set to 100% by default");
 			oUploadSetwithTablePluginCarouselPlugin.restore();
 			oMdcTable.destroy();
 			done();
@@ -1714,6 +1869,7 @@ sap.ui.define([
 			assert.ok(oDialog?.isOpen(), "File preview dialog is opened with the selected file and custom content handler callback rejects the promise to display default illustration message");
 			oDialog?.getButtons()[1].firePress();
 			assert.ok(oUploadSetwithTablePluginCarouselPlugin.calledOnce, "DestroyPages is called");
+			assert.strictEqual(oDialog.getContentWidth(), "100%", "FilePreviewDialog dialog contentWidth is set to 100% by default");
 			oUploadSetwithTablePluginCarouselPlugin.restore();
 			oMdcTable.destroy();
 			done();
@@ -1947,9 +2103,12 @@ sap.ui.define([
 			this.uploadSetInstance = new UploadSetwithTable();
 			this.sandbox.stub(Log, "error");
 			this.sandbox.stub(this.uploadSetInstance, "getConfig");
+			this.server = sinon.createFakeServer();
+            this.server.autoRespond = true;
 		},
 		afterEach: function () {
 			this.sandbox.restore();
+			this.server.restore();
 		}
 	});
 
@@ -1975,9 +2134,66 @@ sap.ui.define([
 			this.uploadSetInstance.getConfig.calledWithExactly("download", {
 				oBindingContext: oBindingContext,
 				bAskForLocation: bAskForLocation
-			}, null, this.uploadSetInstance),
+			}, this.uploadSetInstance, null),
 			"getConfig was called with correct arguments"
 		);
+	});
+
+	QUnit.test("download API should invoke uploaderTableItem's download API", async function (assert) {
+		const done = assert.async();
+
+		this.uploadSetInstance = new UploadSetwithTable();
+
+		this.uploadSetInstance.getRowConfiguration = () => {
+			return new UploadItemConfiguration({
+			fileNamePath: "fileName",
+			urlPath: "url",
+			mediaTypePath: "mediaType",
+			fileSizePath: "size"
+		});
+		};
+
+		this.oTable = await createResponsiveTable();
+		this.oTable.addDependent(this.uploadSetInstance);
+
+		//  create a binding context
+		const oBindingContext = { dummy: "data" };
+		const bAskForLocation = true;
+		const aHeaderFields = [
+			{ getKey: () => "Authorization", getText: () => "Bearer token" },
+			{ getKey: () => "Custom-Header", getText: () => "CustomValue" }
+		];
+		const oItem = {
+			getUrl: () => "https://example.com/file.txt",
+			getFileName: () => "file.txt",
+			getMediaType: () => "text/plain"
+		};
+
+		// stub for getItemForContext
+		this.uploadSetInstance.getItemForContext = this.sandbox.stub().returns(
+			new UploadItem({
+				fileName: "file.txt",
+				url: "/fakeUrl"
+			})
+		);
+		// stub for getItemForContext
+		this.uploadSetInstance.getItemForContext = this.sandbox.stub().returns(
+			new UploadItem({
+				fileName: "file.txt",
+				url: "/fakeUrl"
+			})
+		);
+
+		const uploader = this.uploadSetInstance._getActiveUploader();
+		const oUploaderSpy = this.sandbox.spy(uploader, "download");
+		this.sandbox.stub(uploader, "_saveAsFile").returns(true);
+
+		this.uploadSetInstance.download(oBindingContext, bAskForLocation, oItem, aHeaderFields);
+
+		setTimeout(() => {
+			assert.ok(oUploaderSpy.calledOnce, "Uploader download method was called once");
+			done();
+		});
 	});
 
     QUnit.module("Plugin Drag and Drop Tests", {
@@ -2178,6 +2394,73 @@ sap.ui.define([
 	    }
 	    assert.strictEqual(this.oMockItem.getFileName(), "modified-file.txt", "File name was modified before upload.");
 	    done();
+	});
+
+	QUnit.test("Should throw error if itemValidationHandler is not a promise", async function (assert) {
+	    const done = assert.async();
+		// arrange
+		const oTable = await createMDCTable();
+		const oUploadSetwithTablePlugin = new UploadSetwithTable({
+			fileTypes: ["jpg", "png"]
+		});
+
+		oTable.addDependent(oUploadSetwithTablePlugin);
+		await oTable.initialized();
+
+		const oFile = new File([""], "test.txt", { type: "text/plain" });
+
+		const oEvent = new EventBase("change", oUploadSetwithTablePlugin, {
+			files: [oFile]
+		});
+
+		// act
+		const fnErrorSpy = this.spy(Log, "error");
+		oUploadSetwithTablePlugin.setItemValidationHandler(function test () {
+			return {
+				// This is not a valid promise, should throw an error
+			then: "not-a-function"
+			};
+		});
+
+		try {
+			oUploadSetwithTablePlugin._onFileUploaderChange(oEvent);
+			assert.ok(fnErrorSpy.called, "Log.error() method was called");
+			done();
+		} catch (error) {
+			assert.ok(fnErrorSpy.called, "Log.error() method was called");
+		}
+	});
+
+	QUnit.test("Should not throw error when itemValidationHandler is a valid promise", async function (assert) {
+	    const done = assert.async();
+		const fnErrorSpy = this.spy(Log, "error");
+
+		// arrange
+		const oTable = await createMDCTable();
+		const oUploadSetwithTablePlugin = new UploadSetwithTable({
+			fileTypes: ["jpg", "png"]
+		});
+
+		oTable.addDependent(oUploadSetwithTablePlugin);
+		await oTable.initialized();
+
+		const oFile = new File([""], "test.txt", { type: "text/plain" });
+
+		const oEvent = new EventBase("change", oUploadSetwithTablePlugin, {
+			files: [oFile]
+		});
+
+		oUploadSetwithTablePlugin.setItemValidationHandler(
+			function test() {
+				return  new Promise((resolve) => {
+					resolve();
+				});
+			}
+		);
+
+		oUploadSetwithTablePlugin._onFileUploaderChange(oEvent);
+		assert.ok(fnErrorSpy.notCalled, "Log.error() method was not called");
+		done();
 	});
 
 	QUnit.test("Should allow upload when itemValidationHandler is not set", function (assert) {
@@ -2397,4 +2680,5 @@ sap.ui.define([
 			oDialog.attachEventOnce("afterOpen", afterDialogOpen);
 		});
 	});
+
 });

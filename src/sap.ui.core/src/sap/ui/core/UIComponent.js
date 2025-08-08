@@ -5,6 +5,7 @@
 // Provides base class sap.ui.core.Component for all components
 sap.ui.define([
 	'../base/ManagedObject',
+	'../base/OwnStatics',
 	'./Component',
 	'./ComponentHooks',
 	'./Element',
@@ -13,12 +14,14 @@ sap.ui.define([
 	'./UIComponentMetadata',
 	'./mvc/Controller',
 	'./mvc/View',
+	'./mvc/_ViewFactory',
 	'sap/base/util/ObjectPath',
 	'sap/base/future',
 	'sap/base/Log'
 ],
 	function(
 		ManagedObject,
+		OwnStatics,
 		Component,
 		ComponentHooks,
 		Element,
@@ -27,11 +30,14 @@ sap.ui.define([
 		UIComponentMetadata,
 		Controller,
 		View,
+		_ViewFactory,
 		ObjectPath,
 		future,
 		Log
 	) {
 	"use strict";
+
+	const { runWithPreprocessors } = OwnStatics.get(ManagedObject);
 
 	/**
 	 * As <code>UIComponent</code> is an abstract base class for UI components, applications should not call the constructor.
@@ -240,46 +246,6 @@ sap.ui.define([
 	 */
 
 	/**
-	 * Callback handler which will be executed once a new Component instance is initialized.
-	 *
-	 * Example usage:
-	 * <pre>
-	 * sap.ui.require(['sap/ui/core/UIComponent'], function(UIComponent) {
-	 *   UIComponent._fnOnInstanceInitialized = function(oComponent) {
-	 *     // do some logic with the Component
-	 *   }
-	 * });
-	 * </pre>
-	 *
-	 * <b>ATTENTION:</b> This hook must only be used by Fiori 2.0 adapter.
-	 *
-	 * @private
-	 * @ui5-restricted sap.ushell
-	 * @since 1.37.0
-	 */
-	UIComponent._fnOnInstanceInitialized = null;
-
-	/**
-	 * Callback handler which will be executed when a Component instance is destroyed.
-	 *
-	 * Example usage:
-	 * <pre>
-	 * sap.ui.require(['sap/ui/core/UIComponent'], function(UIComponent) {
-	 *   UIComponent._fnOnInstanceDestroy = function(oComponent) {
-	 *     // do some logic with the Component
-	 *   }
-	 * });
-	 * </pre>
-	 *
-	 * <b>ATTENTION:</b> This hook must only be used by Fiori 2.0 adapter.
-	 *
-	 * @private
-	 * @ui5-restricted sap.ushell
-	 * @since 1.40
-	 */
-	UIComponent._fnOnInstanceDestroy = null;
-
-	/**
 	 * Initializes the component instance after creation.
 	 *
 	 * Applications must not call this hook method directly, it is called by the
@@ -307,9 +273,6 @@ sap.ui.define([
 		function setRootControl(vRootControl) {
 			var fnFireInstanceInitialized = function() {
 				ComponentHooks.onUIComponentInstanceInitialized.execute(that);
-				if (typeof UIComponent._fnOnInstanceInitialized === "function") {
-					UIComponent._fnOnInstanceInitialized(that);
-				}
 			};
 			var fnAggregateRootControl = function(oRootControl) {
 				that.setAggregation("rootControl", oRootControl);
@@ -361,12 +324,12 @@ sap.ui.define([
 			vRoutes = oRoutingManifestEntry.routes;
 
 		// If IAsyncContentCreation interface is implemented we enforce router view creation to async
-		if (this.isA("sap.ui.core.IAsyncContentCreation")) {
+		if (this.getManifestObject()?._getSchemaVersion() === 2 || this.isA("sap.ui.core.IAsyncContentCreation")) {
 			oRoutingConfig.async = true;
 		}
 
 	  // create the router for the component instance
-		const mRoutingClasses = UIComponent.collectRoutingClasses.call(this.getMetadata().getClass(), this) || {};
+		const mRoutingClasses = this.getMetadata().collectRoutingClasses(this) || {};
 		if (mRoutingClasses.routerClass) {
 			var fnRouterConstructor = mRoutingClasses.routerClass;
 
@@ -391,7 +354,7 @@ sap.ui.define([
 
 		// create the content
 		this.runAsOwner(function() {
-			ManagedObject.runWithPreprocessors(function() {
+			runWithPreprocessors(function() {
 				vRootControl = that.createContent();
 			}, oPreprocessors);
 		});
@@ -420,7 +383,13 @@ sap.ui.define([
 	function getConstructorFunctionFor (vRoutingObjectConstructor) {
 		var fnConstructor;
 		if (typeof vRoutingObjectConstructor === "string") {
-			const sRoutingClassName = vRoutingObjectConstructor.replace(/\./g, "/");
+			let sRoutingClassName;
+			if (vRoutingObjectConstructor.startsWith("module:")) {
+				sRoutingClassName = vRoutingObjectConstructor.slice("module:".length);
+			} else {
+				sRoutingClassName = vRoutingObjectConstructor.replace(/\./g, "/");
+			}
+
 			fnConstructor = sap.ui.require(sRoutingClassName);
 
 			/** @deprecated As of version 1.120**/
@@ -489,9 +458,6 @@ sap.ui.define([
 
 		// notify Component destruction callback handler
 		ComponentHooks.onUIComponentInstanceDestroy.execute(this);
-		if (typeof UIComponent._fnOnInstanceDestroy === "function") {
-			UIComponent._fnOnInstanceDestroy(this);
-		}
 		// destroy the router
 		this._destroyCreatedInstances();
 		// make sure that the component is destroyed properly
@@ -751,7 +717,7 @@ sap.ui.define([
 
 		if (oRootView && typeof oRootView === "object") {
 			// default ViewType to XML, except for typed views
-			if (!oRootView.type && !oRootView.name?.startsWith("module:")) {
+			if (!oRootView.type && !oRootView.viewName?.startsWith("module:")) {
 				oRootView.type = ViewType.XML;
 			}
 
@@ -759,6 +725,11 @@ sap.ui.define([
 			if (oRootView.id) {
 				oRootView.id = this.createId(oRootView.id);
 			}
+
+			if (this.getManifestObject()?._getSchemaVersion() === 2) {
+				oRootView.async = true;
+			}
+
 			/**
 			 * @deprecated because the 'Sequential' Mode is used by default and it's the only mode that will be supported
 			 * in the next major release
@@ -772,7 +743,7 @@ sap.ui.define([
 			if (bModernFactory) {
 				return View.create(oRootView);
 			} else {
-				return View._create(oRootView);
+				return _ViewFactory.create(oRootView);
 			}
 		} else if (oRootView) {
 			throw new Error("Configuration option 'rootView' of component '" + this.getMetadata().getName() + "' is invalid! 'rootView' must be type of string or object!");
@@ -913,38 +884,38 @@ sap.ui.define([
 	 * <code>_fnGetRouterClassName</code> hook, which is expected to be defined within a subclass of the UIComponent.
 	 *
 	 * @param {sap.ui.core.UIComponent} oInstance An UIComponent instance provided by the {@link sap.ui.core.UIComponent#init}.
-	 * @returns {object} Returns a map containing routing module names. Returns routing classes if <code>oInstane</code> is provided.
+	 * @returns {object} Returns a map containing routing module names. Returns routing classes if <code>oInstance</code> is provided.
 	 */
-	UIComponent.collectRoutingClasses = function(oInstance) {
+	UIComponentMetadata.prototype.collectRoutingClasses = function(oInstance) {
 		const mRoutingClasses = {};
-		const oMetadata = this.getMetadata();
 
 		// lookup rootView class
-		let sRootViewType;
-		const oRootView = oMetadata._getManifestEntry("/sap.ui5/rootView");
-		if (typeof oRootView === "string") {
-			// String as rootView defaults to ViewType XML
+		const oRootView = this._getManifestEntry("/sap.ui5/rootView");
+		const sRootViewName = typeof oRootView === "string" ? oRootView : oRootView?.viewName;
+		if (sRootViewName?.startsWith("module:")) {
+			mRoutingClasses["viewClass"] = sRootViewName;
+		} else if (sRootViewName) {
+			// View type defaults to ViewType XML
 			// See: UIComponent#createContent and UIComponentMetadata#_convertLegacyMetadata
-			sRootViewType = "XML";
-		} else if (oRootView && typeof oRootView === "object" && oRootView.type) {
-			sRootViewType = oRootView.type;
+			const sRootViewType = oRootView.type || "XML";
+			if (ViewType[sRootViewType]) {
+				const sViewClass = "sap/ui/core/mvc/" + ViewType[sRootViewType] + "View";
+				mRoutingClasses["viewClass"] = sViewClass;
+			}
 		}
-		if (sRootViewType && ViewType[sRootViewType]) {
-			const sViewClass = "sap/ui/core/mvc/" + ViewType[sRootViewType] + "View";
-			mRoutingClasses["viewClass"] = sViewClass;
-		}
+
 
 		// lookup of the router / targets and views class
 		// ASYNC Only: prevents lazy synchronous loading in UIComponent#init (regardless of manifirst or manilast)
-		const oRouting = oMetadata._getManifestEntry("/sap.ui5/routing", true);
+		const oRouting = this._getManifestEntry("/sap.ui5/routing", true);
 		if (oRouting) {
 			if (oRouting.routes) {
 				// the "sap.ui5/routing/config/routerClass" entry can also contain a Router constructor
 				// See the typedef "sap.ui.core.UIComponent.RoutingMetadata" in sap/ui/core/UIComponent.js
 				let vRouterClass;
-				const _fnGetRouterClassName = this.getMetadata().getStaticProperty("_fnGetRouterClassName");
+				const _fnGetRouterClassName = this.getStaticProperty("_fnGetRouterClassName");
 				if (typeof _fnGetRouterClassName === "function") {
-					vRouterClass = _fnGetRouterClassName(this.getMetadata().getManifestObject());
+					vRouterClass = _fnGetRouterClassName(this.getManifestObject());
 				}
 				vRouterClass ??= oInstance?._getRouterClassName() || oRouting.config?.routerClass || "sap.ui.core.routing.Router";
 

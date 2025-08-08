@@ -8,15 +8,35 @@ sap.ui.define([
 	'sap/ui/core/ComponentRegistry',
 	'sap/ui/core/Messaging',
 	'sap/ui/core/UIComponentMetadata',
+	'sap/ui/core/mvc/View',
+	'sap/ui/core/mvc/_ViewFactory',
 	'testdata/routing/Component',
 	'testdata/routing/RouterExtension',
 	'sap/base/Log',
 	'sap/base/util/deepExtend',
 	'sap/base/util/LoaderExtensions',
 	'sap/ui/core/Manifest',
-	'sap/base/i18n/ResourceBundle',
-	'sap/ui/VersionInfo'
-], function (createAndAppendDiv, nextUIUpdate, Component, ComponentHooks, Supportability, ComponentContainer, ComponentRegistry, Messaging, UIComponentMetadata, SamplesRoutingComponent, SamplesRouterExtension, Log, deepExtend, LoaderExtensions, Manifest, ResourceBundle, VersionInfo) {
+	'sap/base/i18n/ResourceBundle'
+], function (
+	createAndAppendDiv,
+	nextUIUpdate,
+	Component,
+	ComponentHooks,
+	Supportability,
+	ComponentContainer,
+	ComponentRegistry,
+	Messaging,
+	UIComponentMetadata,
+	View,
+	_ViewFactory,
+	SamplesRoutingComponent,
+	SamplesRouterExtension,
+	Log,
+	deepExtend,
+	LoaderExtensions,
+	Manifest,
+	ResourceBundle
+) {
 
 	"use strict";
 	/*global sinon, QUnit, foo*/
@@ -1179,6 +1199,9 @@ sap.ui.define([
 							}
 						}
 					}
+				},
+				properties: {
+					key1: { type: "string" }
 				}
 			},
 			constructor: function(mSettings) {
@@ -2525,8 +2548,6 @@ sap.ui.define([
 	});
 
 	QUnit.test("Component0 with Terminologies defined in Component Metadata", function (assert) {
-		var oCreateManifestModelsSpy = sinon.spy(Component, "_createManifestModels");
-
 		return Component.create({
 			name: "testdata.terminologies",
 			manifest: false,
@@ -2535,8 +2556,7 @@ sap.ui.define([
 			this.oComponent = oComponent;
 
 			// Check Resource Model creation
-			var oSettings = oCreateManifestModelsSpy.getCall(0).args[0].i18n.settings[0];
-			assert.equal(oCreateManifestModelsSpy.callCount, 1, "_createManifestModels should be called for the i18n model");
+			const oSettings = this.oComponent.getOwnModels()?.i18n?.oData;
 			assert.equal(oSettings.bundleUrl, "test-resources/sap/ui/core/qunit/component/testdata/terminologies/i18n/i18n.properties", "The bundleUrl should be resolved correctly");
 			assert.equal(oSettings.terminologies.oil.bundleUrl, "test-resources/sap/ui/core/qunit/component/testdata/terminologies/i18n/terminologies.oil.i18n.properties", "The bundleUrl should be resolved correctly");
 			assert.equal(oSettings.terminologies.retail.bundleUrl, "test-resources/sap/ui/core/qunit/component/testdata/terminologies/i18n/terminologies.retail.i18n.properties", "The bundleUrl should be resolved correctly");
@@ -2560,8 +2580,6 @@ sap.ui.define([
 			assert.ok(oEnhanceWith1.hasOwnProperty("fallbackLocale"), "The property 'fallbackLocale' should be available");
 
 			assert.deepEqual(this.oComponent.getActiveTerminologies(), ["oil", "retail"], "The list of terminologies should be correct");
-
-			oCreateManifestModelsSpy.restore();
 		}.bind(this));
 	});
 
@@ -2649,7 +2667,6 @@ sap.ui.define([
 
 	QUnit.test("Component1 with Terminologies defined in manifest.json file", function (assert) {
 		var oResourceBundleCreateSpy = sinon.spy(ResourceBundle, "create");
-		var oCreateManifestModelsSpy = sinon.spy(Component, "_createManifestModels");
 
 		return Component.create({
 			name: "testdata.terminologies.component1",
@@ -2680,7 +2697,7 @@ sap.ui.define([
 			assert.ok(oEnhanceWith1.hasOwnProperty("fallbackLocale"), "The property 'fallbackLocale' should be available");
 
 			// check if already processed properties have been removed when the ResourceModel constructor is called
-			var oSettingsAfterLoad = oCreateManifestModelsSpy.getCall(0).args[0].i18n.settings[0];
+			var oSettingsAfterLoad = oComponent.getOwnModels()?.i18n?.oData;
 			assert.notOk(oSettingsAfterLoad.enhanceWith, "enhanceWith was removed");
 			assert.notOk(oSettingsAfterLoad.terminologies, "terminologies was removed");
 			assert.notOk(oSettingsAfterLoad.activeTerminologies, "terminologies was removed");
@@ -2688,7 +2705,6 @@ sap.ui.define([
 			assert.deepEqual(this.oComponent.getActiveTerminologies(), ["oil", "retail"], "The list of terminologies should be correct");
 
 			oResourceBundleCreateSpy.restore();
-			oCreateManifestModelsSpy.restore();
 		}.bind(this));
 	});
 
@@ -2921,8 +2937,6 @@ sap.ui.define([
 		//		"uri": "i18n/i18n.properties",
 		//			"settings": {
 		// 				[...]
-		var oCreateManifestModelsSpy = sinon.spy(Component, "_createManifestModels");
-
 		return Component.create({
 			name: "testdata.terminologies.component5",
 			manifest: true,
@@ -2930,11 +2944,9 @@ sap.ui.define([
 		}).then(function (oComponent) {
 			this.oComponent = oComponent;
 
-			var oSettings = oCreateManifestModelsSpy.getCall(0).args[0].i18n.settings[0];
-			assert.ok(oSettings.hasOwnProperty("bundleUrl"), "Property 'bundleUrl' should be avaialble");
+			var oSettings = this.oComponent.getOwnModels()?.i18n?.oData;
+			assert.ok(oSettings.hasOwnProperty("bundleUrl"), "Property 'bundleUrl' should be available");
 			assert.equal(oSettings.bundleUrl, "test-resources/sap/ui/core/qunit/component/testdata/terminologies/component5/i18n/i18n.properties", "The bundleUrl should be resolved correctly");
-
-			oCreateManifestModelsSpy.restore();
 		}.bind(this));
 	});
 
@@ -2952,5 +2964,70 @@ sap.ui.define([
 			oStub.restore();
 			oLogStub.restore();
 		});
+	});
+
+	QUnit.module("Manifest 2.0");
+
+	/**
+	 * Only relevant for testing if root view is created asynchronously with Manifest 2.0 in UI5 1.x.
+	 * @deprecated
+	 */
+	QUnit.test("Manifest 2.0 is supported", async function(assert) {
+		const oViewCreateSpy = sinon.spy(_ViewFactory, "create");
+		const oComponent = await Component.create({
+			name: "testdata.manifest2.basic"
+		}).catch((error) => {
+			assert.notOk(error, "An error occurred while creating the component");
+		});
+
+		assert.ok(oComponent, "Component created successfully");
+
+		// check if we correctly identified the manifest version
+		assert.ok(oComponent.getManifestObject()._getSchemaVersion() === 2, "Manifest version is 2");
+
+		assert.ok(oComponent.getRootControl().isA("sap.ui.core.mvc.XMLView"), "Root control is XMLView");
+
+		assert.ok(oViewCreateSpy.calledWithExactly({viewName: "testdata.manifest2.basic.views.Main", type: "XML", async: true, processingMode: "Sequential"}), "_ViewFactory.create called with correct parameters");
+
+		oComponent.destroy();
+		oViewCreateSpy.restore();
+	});
+
+	QUnit.test("Manifest 2.0 is supported (typed view)", async function(assert) {
+		const oViewCreateSpy = sinon.spy(_ViewFactory, "create");
+		const oComponent = await Component.create({
+			manifest: sap.ui.require.toUrl("testdata/manifest2/basic/manifest_variant.json")
+		}).catch((error) => {
+			assert.notOk(error, "An error occurred while creating the component");
+		});
+
+		assert.ok(oComponent, "Component created successfully");
+
+		// check if we correctly identified the manifest version
+		assert.ok(oComponent.getManifestObject()._getSchemaVersion() === 2, "Manifest version is 2");
+
+		// check view typing
+		const TypedMain = sap.ui.require("testdata/manifest2/basic/views/TypedMain");
+		assert.ok(oComponent.getRootControl() instanceof TypedMain, "Root control is TypedMain");
+
+		assert.ok(oViewCreateSpy.calledWithExactly({viewName: "module:testdata/manifest2/basic/views/TypedMain", async: true}), "_ViewFactory.create called with correct parameters");
+
+		oComponent.destroy();
+		oViewCreateSpy.restore();
+	});
+
+	/**
+	 * Only relevant for testing if deprecated section is present in 1.x codeline.
+	 * Manifest 2.0 enforces the removal of said section.
+	 * @deprecated
+	 */
+	QUnit.test("Manifest 2.0 is supported, component creation fails due to declared 'js' resources", async function(assert) {
+		const oComponent = await Component.create({
+			manifest: sap.ui.require.toUrl("testdata/manifest2/basic/manifest_w_resource.json")
+		}).catch((error) => {
+			assert.deepEqual(error, new Error("'sap.ui5/resources/js' is deprecated and not supported with manifest version 2 (component 'testdata.manifest2.basic'."), "Expected error occurred while creating the component");
+		});
+
+		assert.notOk(oComponent, "Component not created successfully due to error");
 	});
 });

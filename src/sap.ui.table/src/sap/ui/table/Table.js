@@ -1824,21 +1824,11 @@ sap.ui.define([
 	};
 
 	Table.prototype.setFirstVisibleRow = function(iRowIndex) {
-		if (iRowIndex == null) {
-			iRowIndex = 0;
-		} else if (iRowIndex < 0) {
+		if (iRowIndex < 0) {
 			Log.error("The index of the first visible row must be greater than or equal to 0. The value has been set to 0.", this);
-			iRowIndex = 0;
-		} else if (this._bContextsAvailable) {
-			const iMaxRowIndex = this._getMaxFirstVisibleRowIndex();
-
-			if (iMaxRowIndex < iRowIndex) {
-				Log.warning("The index of the first visible row is too high. The value has been set to " + iMaxRowIndex + ".", this);
-				iRowIndex = iMaxRowIndex;
-			}
 		}
 
-		this._setFirstVisibleRowIndex(iRowIndex);
+		this._setFirstVisibleRowIndex(this.validateProperty("firstVisibleRow", iRowIndex));
 
 		return this;
 	};
@@ -2504,12 +2494,13 @@ sap.ui.define([
 	 * @see sap.ui.model.ListBinding#getContexts
 	 */
 	Table.prototype._getContexts = function(iStartIndex, iLength, iThreshold, bKeepCurrent) {
-		if (!this.getVisible()) {
+		const oBinding = this.getBinding();
+
+		if (!oBinding || !this.getVisible() && oBinding.isSuspended()) {
 			return [];
 		}
 
-		const oBinding = this.getBinding();
-		return oBinding ? oBinding.getContexts(iStartIndex, iLength, iThreshold, bKeepCurrent) : [];
+		return oBinding.getContexts(iStartIndex, iLength, iThreshold, bKeepCurrent);
 	};
 
 	/**
@@ -3058,7 +3049,7 @@ sap.ui.define([
 			const oCell = oRow && oRow.getCells()[iCol];
 			const iRealRowIndex = oRow && oRow.getIndex();
 			const sColId = Column.ofCell(oCell).getId();
-			const oRowBindingContext = oRow.getRowBindingContext();
+			const oRowBindingContext = TableUtils.getBindingContextOfRow(oRow);
 			const mParams = {
 				rowIndex: iRealRowIndex,
 				columnIndex: iCol,
@@ -4144,7 +4135,7 @@ sap.ui.define([
 	};
 
 	Table.prototype._getDefaultContextMenu = function() {
-		let oDefaultContextMenu = this.getAggregation("_hiddenDependents").find((oElement) => oElement.isA("sap.ui.table.menus.ContextMenu"));
+		let oDefaultContextMenu = this.getAggregation("_hiddenDependents")?.find((oElement) => oElement.isA("sap.ui.table.menus.ContextMenu"));
 
 		if (!oDefaultContextMenu) {
 			oDefaultContextMenu = new ContextMenu();

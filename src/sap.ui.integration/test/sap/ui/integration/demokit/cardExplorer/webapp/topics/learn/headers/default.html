@@ -68,11 +68,15 @@
 						<td>1.107</td>
 					</tr>
 					<tr>
-						<td>subTitle</td>
+						<td>subtitle</td>
 						<td>string</td>
 						<td></td>
 						<td>No</td>
-						<td>The subtitle.</td>
+						<td>
+							The subtitle.
+							<br>
+							<b>Note:</b> The property subTitle (with capital T) is now deprecated. Use subtitle instead.
+						</td>
 						<td>1.14.0</td>
 						<td>1.64</td>
 					</tr>
@@ -84,6 +88,8 @@
 						<td>
 							Limits the number of lines for the subtitle.<br>
 							<b>Note:</b> This property is experimental and may change!
+							<br>
+							<b>Note:</b> The property subTitleMaxLines (with capital T) is now deprecated. Use subtitleMaxLines instead.
 						</td>
 						<td>1.47.0</td>
 						<td>1.107</td>
@@ -152,7 +158,7 @@
 						<td>No</td>
 						<td>
 							Represents the Close button when a card is opened by the <a href="../../../index.html#/learn/actions/showCard" target="_parent">ShowCard action</a>.<br>
-							<b>Note:</b> This property is deprecated since 1.333. The button now appears in the footer. You can configure its visibility from <a href="../../../index.html#/learn/footer" target="_parent">there</a>.
+							<b>Note:</b> This property is deprecated since 1.133. The button now appears in the footer. To learn how to configure the visibility of the button see <a href="../../../index.html#/learn/footer" target="_parent">here</a>.
 						</td>
 						<td>1.59.0</td>
 						<td>1.119</td>
@@ -168,6 +174,18 @@
 						</td>
 						<td>1.63.0</td>
 						<td>1.122</td>
+					</tr>
+					<tr>
+						<td>infoSection</td>
+						<td><a href="../../../index.html#/learn/headers/infoSection" target="_parent">InfoSection</a></td>
+						<td></td>
+						<td>No</td>
+						<td>
+							Represents the info section of the header.
+							<b>Note:</b> This property is experimental and may change!
+						</td>
+						<td>1.73.0</td>
+						<td>1.136</td>
 					</tr>
 				</table>
 			</div>
@@ -301,7 +319,7 @@
 
 			<pre class="lang-json">"header": {
 	"title": "An example title",
-	"subTitle": "Some subtitle",
+	"subtitle": "Some subtitle",
 	"icon": {
 		"src": "sap-icon://business-objects-experience",
 		"visible": true

@@ -10,6 +10,7 @@ sap.ui.define([
 	"sap/ui/core/Renderer",
 	"sap/ui/core/IconPool",
 	"sap/ui/core/library",
+	"sap/ui/core/Lib",
 	"sap/ui/events/KeyCodes",
 	"sap/ui/util/openWindow",
 	"sap/ui/util/defaultLinkTypes",
@@ -21,6 +22,7 @@ sap.ui.define([
 	Renderer,
 	IconPool,
 	coreLibrary,
+	Lib,
 	KeyCodes,
 	openWindow,
 	defaultLinkTypes,
@@ -88,7 +90,7 @@ sap.ui.define([
 				 *
 				 * <b>Guidelines:</b>
 				 * <ul>
-				 * <li>External links should not be selectable.</li>
+				 * <li>Items that have a set href and target set to <code>_blank</code> should not be selectable.</li>
 				 * <li>Items that trigger actions (with design "Action") should not be selectable.</li>
 				 * </ul>
 				 *
@@ -101,6 +103,7 @@ sap.ui.define([
 				/**
 				 * Defines the link target URI. Supports standard hyperlink behavior. If a JavaScript action should be triggered,
 				 * this should not be set, but instead an event handler for the <code>select</code> event should be registered.
+				 *
 				 */
 				href: { type: "sap.ui.core.URI", group: "Data", defaultValue: null },
 
@@ -109,7 +112,14 @@ sap.ui.define([
 				 *
 				 * Options are the standard values for window.open() supported by browsers:
 				 * <code>_self</code>, <code>_top</code>, <code>_blank</code>, <code>_parent</code>, <code>_search</code>.
-				 * Alternatively, a frame name can be entered. This property is only used when the <code>href</code> property is set.
+				 * Alternatively, a frame name can be entered.
+				 *
+				 * <b>Guidelines:</b>
+                 * <ul>
+				 * <li>Use only when <code>href</code> property is set.</li>
+                 * <li>Items that have a set href and target set to <code>_blank</code> should not have children</li>
+                 * <li>Items that have a set href, should not use target for internal navigation/li>
+                 * </ul>
 				 */
 				target: { type: "string", group: "Behavior", defaultValue: null },
 
@@ -155,9 +165,11 @@ sap.ui.define([
 	NavigationListItem._getInvisibleText = function () {
 		if (!this._invisibleText) {
 			this._invisibleText = new InvisibleText().toStatic();
+			this._invisibleText.setText(Lib.getResourceBundleFor("sap.tnt").getText("NAVIGATION_LIST_EXTERNAL_LINK_DESCRIPTION"));
 		}
 		return this._invisibleText;
 	};
+
 
 	/**
 	 * Creates a popup list.
@@ -247,7 +259,9 @@ sap.ui.define([
 		const oItemInPopup = oEvent.getParameter("item"),
 			oRealItem = Element.getElementById(oItemInPopup.getKey());
 
-		oRealItem._firePress({ item: oRealItem });
+		if (!oRealItem._firePress(oEvent, oRealItem)) {
+			oEvent.preventDefault();
+		}
 	};
 
 	/**
@@ -280,16 +294,6 @@ sap.ui.define([
 		if (sHref) {
 			openWindow(sHref, this.getTarget() || "_self");
 		}
-	};
-
-	/**
-	 * Gets DOM reference of the accessibility element.
-	 *
-	 * @private
-	 * @returns {HTMLElement} dom ref
-	 */
-	NavigationListItem.prototype._getAccessibilityRef = function () {
-		return this.getDomRef().querySelector(".sapTntNLIFirstLevel");
 	};
 
 	/**
@@ -329,18 +333,8 @@ sap.ui.define([
 			return;
 		}
 
-		const bHasModifierKey = this._hasModifierKey(oEvent);
-
-		if ((oEvent.key ? oEvent.key === "Enter" : oEvent.keyCode === KeyCodes.ENTER) && !bHasModifierKey) {
-			this.getDomRef().classList.add("sapTntNLIActive");
+		if ((oEvent.key ? oEvent.key === "Enter" : oEvent.keyCode === KeyCodes.ENTER) ) {
 			this.ontap(oEvent);
-		} else if ((oEvent.key ? oEvent.key === " " : oEvent.keyCode === KeyCodes.SPACE) && !bHasModifierKey) {
-			this.getDomRef().classList.add("sapTntNLIActive");
-		}
-
-		//onkeyup is not called when new page is opened
-		if (this.getHref() && this.getTarget() === "_blank") {
-			this.getDomRef().classList.remove("sapTntNLIActive");
 		}
 
 		NavigationListItemBase.prototype.onkeydown.apply(this, arguments);
@@ -351,16 +345,8 @@ sap.ui.define([
 			return;
 		}
 
-		const bHasModifierKey = this._hasModifierKey(oEvent);
-
-		if ((oEvent.key ? oEvent.key === "Enter" : oEvent.keyCode === KeyCodes.ENTER) && !bHasModifierKey) {
-			this.getDomRef().classList.remove("sapTntNLIActive");
-		} else if ((oEvent.key ? oEvent.key === " " : oEvent.keyCode === KeyCodes.SPACE)) {
-			this.getDomRef().classList.remove("sapTntNLIActive");
-
-			if (!bHasModifierKey) {
-				this.ontap(oEvent);
-			}
+		if ((oEvent.key ? oEvent.key === " " : oEvent.keyCode === KeyCodes.SPACE)) {
+			this.ontap(oEvent);
 		}
 
 		if (oEvent.srcControl.getLevel() === 1) {
@@ -403,6 +389,7 @@ sap.ui.define([
 		oRM.openStart("li", this)
 			.attr("role", "none");
 
+
 		if (!bListExpanded) {
 			if (aItems.length && bEnabled) {
 				oRM.class("sapTntNLINotExpandedTriangle");
@@ -427,7 +414,7 @@ sap.ui.define([
 					label: this.getText()
 				});
 
-			if (!this.getExpanded()) {
+			if (!this.getExpanded() && !this._animateCollapse || this._animateExpand) {
 				oRM.class("sapTntNLIItemsContainerHidden");
 			}
 
@@ -446,9 +433,6 @@ sap.ui.define([
 	 *  @param {sap.ui.core.RenderManager} oRM renderer instance
 	 */
 	NavigationListItem.prototype._renderExternalLinkIcon =  function (oRM) {
-		if (!(this.getHref() && this.getTarget() === "_blank")) {
-			return;
-		}
 		const oIcon = this._getExternalIcon();
 		oRM.renderControl(oIcon);
 	};
@@ -468,7 +452,8 @@ sap.ui.define([
 			bExpanded = this.getExpanded(),
 			bSelectable = this.getSelectable(),
 			sDesign = this.getDesign(),
-			bExpanderVisible = !!aItems.length && this.getHasExpander();
+			bExpanderVisible = !!aItems.length && this.getHasExpander(),
+			bExternalLink = this.getHref() && this.getTarget() === "_blank";
 
 		oRM.openStart("div")
 			.class("sapTntNLI")
@@ -478,13 +463,17 @@ sap.ui.define([
 			oRM.class("sapTntNLIDisabled");
 		}
 
+		if (bExternalLink) {
+			oRM.class("sapTntNLIExternalLink");
+		}
+
 		let bSelected = false;
 		if (bSelectable && oNavigationList._selectedItem === this) {
 			oRM.class("sapTntNLISelected");
 			bSelected = true;
 		}
 
-		if (!bListExpanded && aItems.includes(oNavigationList._selectedItem)) {
+		if ((!bListExpanded || !bExpanded) && aItems.includes(oNavigationList._selectedItem)) {
 			oRM.class("sapTntNLISelected");
 			bSelected = true;
 		}
@@ -524,6 +513,7 @@ sap.ui.define([
 
 			if (this._isOverflow) {
 				oLinkAriaProps.haspopup = "menu";
+				oLinkAriaProps.label = this._resourceBundleTnt.getText("NAVIGATION_LIST_OVERFLOW_ITEM_LABEL");
 			}
 
 			if (bSelectable) {
@@ -561,7 +551,9 @@ sap.ui.define([
 
 		this._renderText(oRM);
 
-		this._renderExternalLinkIcon(oRM);
+		if (bExternalLink) {
+			this._renderExternalLinkIcon(oRM);
+		}
 
 		if (bListExpanded) {
 			const oIcon = this._getExpandIconControl();
@@ -590,7 +582,8 @@ sap.ui.define([
 	 * @private
 	 */
 	NavigationListItem.prototype.renderSecondLevelNavItem = function (oRM, oNavigationList) {
-		const bDisabled = !this.getEnabled() || !this.getAllParentsEnabled();
+		const bDisabled = !this.getEnabled() || !this.getAllParentsEnabled(),
+		bExternalLink = this.getHref() && this.getTarget() === "_blank";
 
 		oRM.openStart("li", this)
 			.class("sapTntNLI")
@@ -605,6 +598,10 @@ sap.ui.define([
 
 		if (bDisabled) {
 			oRM.class("sapTntNLIDisabled");
+		}
+
+		if (bExternalLink) {
+			oRM.class("sapTntNLIExternalLink");
 		}
 
 		if (this._isInsidePopover()) {
@@ -624,7 +621,9 @@ sap.ui.define([
 
 		this._renderText(oRM);
 
-		this._renderExternalLinkIcon(oRM);
+		if (bExternalLink) {
+			this._renderExternalLinkIcon(oRM);
+		}
 
 		this._renderCloseLink(oRM);
 
@@ -648,14 +647,16 @@ sap.ui.define([
 				...oAriaProps
 			});
 
-		const sTooltip = this.getTooltip_AsString() || this.getText();
+		const sTooltip = this.getTooltip_AsString();
 		if (sTooltip) {
 			oRM.attr("title", sTooltip);
 		}
 
-		if (!bDisabled) {
-			oRM.attr("tabindex", "-1");
+		if (bDisabled) {
+			oRM.attr("aria-disabled", "true");
 		}
+
+		oRM.attr("tabindex", "-1");
 
 		if (sHref) {
 			oRM.attr("href", sHref);
@@ -664,6 +665,11 @@ sap.ui.define([
 		if (sTarget) {
 			oRM.attr("target", sTarget)
 				.attr("rel", defaultLinkTypes("", sTarget));
+		}
+
+		if (sHref && sTarget === "_blank") {
+			const oInvisibleText = NavigationListItem._getInvisibleText();
+			oRM.attr("aria-describedby", oInvisibleText.getId());
 		}
 
 		oRM.openEnd();
@@ -804,7 +810,7 @@ sap.ui.define([
 	NavigationListItem.prototype._getFocusDomRefs = function () {
 		const aDomRefs = [];
 
-		if (!this.getEnabled() || !this.getVisible()) {
+		if (!this.getVisible()) {
 			return aDomRefs;
 		}
 
@@ -813,7 +819,7 @@ sap.ui.define([
 		}
 
 		if (this._isListExpanded() && this.getExpanded()) {
-			aDomRefs.push(...this.getDomRef().querySelectorAll(".sapTntNLISecondLevel:not(.sapTntNLIDisabled) a"));
+			aDomRefs.push(...this.getDomRef().querySelectorAll(".sapTntNLISecondLevel a"));
 		}
 
 		return aDomRefs;
@@ -858,20 +864,31 @@ sap.ui.define([
 		}
 	};
 
+
 	/**
-	 * Handles focusout event.
 	 * Removes the temporary class set which disabled the showing of the text during hover and focus.
 	 *
 	 * @private
 	 */
-	NavigationListItem.prototype.onfocusout = function () {
+	NavigationListItem.prototype._removeHoverEffect = function () {
 		var oMainRef = this.getDomRef()?.querySelector(".sapTntNLIFirstLevel");
 		if (oMainRef) {
 			oMainRef.classList.remove("sapTntNLINoHoverEffect");
 		}
 	};
 
-	NavigationListItem.prototype.onmouseout = function () {
+	/**
+	 * Handles focusout event.
+	 *
+	 * @private
+	 */
+	NavigationListItem.prototype.onfocusout = function () {
+		this._removeHoverEffect();
+	};
+
+	NavigationListItem.prototype.onmouseout = function (oEvent) {
+		NavigationListItemBase.prototype.onmouseout.call(this, oEvent);
+
 		const oMainRef = this.getDomRef()?.querySelector(".sapTntNLIFirstLevel");
 		const oNavList = this.getNavigationList();
 		const oSubItemSelected = this.getItems().find((oItem) => oItem === oNavList.getSelectedItem());
@@ -881,10 +898,16 @@ sap.ui.define([
 		}
 	};
 
-	NavigationListItem.prototype.onmouseover = NavigationListItem.prototype.onfocusout;
+	/**
+	 * Handles onmouseover event.
+	 *
+	 * @param {jQuery.Event} oEvent The event object triggered by the mouseover event.
+	 * @private
+	 */
+	NavigationListItem.prototype.onmouseover = function (oEvent) {
+		NavigationListItemBase.prototype.onmouseover.call(this, oEvent);
 
-	NavigationListItem.prototype._hasModifierKey = 	function hasModifierKeys(oEvent) {
-		return oEvent.shiftKey || oEvent.altKey || oEvent.ctrlKey || oEvent.metaKey;
+		this._removeHoverEffect();
 	};
 
 	return NavigationListItem;

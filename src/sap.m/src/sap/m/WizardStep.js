@@ -136,7 +136,7 @@ sap.ui.define([
 	var ButtonType = library.ButtonType;
 
 	// Add title propagation support
-	TitlePropagationSupport.call(WizardStep.prototype, "content", function () {return this.getId() + "-title";});
+	TitlePropagationSupport.call(WizardStep.prototype, "content", function () {return this.getId() + "-Title";});
 
 	WizardStep.prototype.init = function () {
 		this._oResourceBundle = Library.getResourceBundleFor("sap.m");
@@ -155,7 +155,7 @@ sap.ui.define([
 			text: this._oResourceBundle.getText("WIZARD_STEP") + 2,
 			type: ButtonType.Emphasized,
 			press: this._complete.bind(this)
-		}).addStyleClass("sapMWizardNextButtonVisible");
+		}).addStyleClass("sapMWizardNextButton");
 
 		this.setAggregation("_nextButton", this._oNextButton);
 	};
@@ -230,7 +230,7 @@ sap.ui.define([
 		oEventF6.target = oEvent.target;
 		oEventF6.key = 'F6';
 
-		if (this._oNextButton.hasStyleClass("sapMWizardNextButtonVisible")) {
+		if (!this._oNextButton.hasStyleClass("sapMWizardNextButtonHidden")) {
 			this._oNextButton.focus();
 		} else {
 			F6Navigation.handleF6GroupNavigation(oEventF6);
@@ -306,7 +306,6 @@ sap.ui.define([
 	WizardStep.prototype.setLast = function(bLast){
 		this.bLast = bLast;
 		this.toggleStyleClass("sapMWizardLastActivatedStep", bLast);
-		this.setButtonVisibility();
 	};
 
 	WizardStep.prototype.setButtonVisibility = function() {
@@ -321,10 +320,14 @@ sap.ui.define([
 	};
 
 	WizardStep.prototype.displayButton = function (bShow) {
+		this._oNextButton.removeStyleClass("sapMWizardNextButtonAnimated");
 		this._oNextButton.toggleStyleClass("sapMWizardNextButtonHidden", !bShow);
-		this._oNextButton.toggleStyleClass("sapMWizardNextButtonVisible", bShow);
 
-		this._oNextButton.setVisible(bShow);
+		if (bShow) {
+			window.requestAnimationFrame(() => {
+				this._oNextButton.addStyleClass("sapMWizardNextButtonAnimated");
+			});
+		}
 	};
 
 	WizardStep.prototype._activate = function () {

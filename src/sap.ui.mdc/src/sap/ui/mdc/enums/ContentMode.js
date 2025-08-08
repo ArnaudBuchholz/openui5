@@ -55,7 +55,13 @@ sap.ui.define(["sap/ui/base/DataType"], (DataType) => {
 		 * To support field help, in some cases a different control needs to be rendered.
 		 * @public
 		 */
-		EditForHelp: "EditForHelp"
+		EditForHelp: "EditForHelp",
+		/**
+		 * Edit mode for single value field that is rendered as <code>Select</code> control
+		 * @since 1.138
+		 * @public
+		 */
+		EditSelect: "EditSelect"
 	};
 
 	DataType.registerEnum("sap.ui.mdc.enums.ContentMode", ContentMode);

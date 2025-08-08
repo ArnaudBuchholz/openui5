@@ -47,6 +47,7 @@ sap.ui.define([
 	 * <li>{@link sap.ui.mdc.Table MDC Table}</li>
 	 * <li>{@link sap.m.Table Responsive Table}</li>
 	 * <li>{@link sap.m.GridTable Grid Table}</li>
+	 * <li>{@link sap.ui.table.TreeTable Tree Table}</li>
 	 * </ul>
 	 *
 	 * <caption>Consider the following before using the plugin: </caption>
@@ -54,6 +55,7 @@ sap.ui.define([
 	 * <li>It gets activated when it is added as a dependent to the table control. It gets deactivated when it is removed from the table control or when the table control is destroyed.</li>
 	 * <li>It fires onActivated and onDeactivated events when it is activated and deactivated, respectively.</li>
 	 * <li>Configuring the rowConfiguration aggregation (type {@link sap.m.upload.UploadItemConfiguration UploadItemConfiguration}) of this plugin is mandatory to use the features such as file preview, download etc.</li>
+	 * <li>For the plugin to work with the tree table control, the isDirectoryPath property of the rowConfiguration aggregation must be set. This indicates if the context of the row is a directory or a file. It helps the plugin with the file preview feature.</li>
 	 * <li>It works only with the table control when the table is bound to the model to perform the operations such as rename, download etc.</li>
 	 * </ul>
 	 *
@@ -164,7 +166,42 @@ sap.ui.define([
 				/**
 				  * The text of the CloudFile picker button. The default text is "Upload from cloud" (translated to the respective language).
 				  */
-				cloudFilePickerButtonText: { type: 'string', defaultValue: "" }
+				cloudFilePickerButtonText: { type: 'string', defaultValue: "" },
+
+				/**
+				 * @typedef {object} sap.m.plugins.UploadSetwithTable.FilenameValidationConfigMode
+				 * @description Key property of {@link sap.m.plugins.UploadSetwithTable.FilenameValidationConfig FileNameValidationConfig}. Used to determine the mode for file name validation.
+				 * @property {string} mode - The file name validation mode. The allowed values are 'include', 'exclude', or 'override'.
+				 * <br> <br> If the mode is 'include', the specified characters are added to the default restricted character set.
+				 * <br> If the mode is 'exclude', the specified characters are excluded from the default resrtricted character set.
+				 * <br> If the mode is 'override', the specified characters replace the entire default restricted character set.
+				 * <br> If the mode is not set, the default restricted file name character set is used.
+				 * @public
+				 * @since 1.136
+				 */
+
+				/**
+				 * @typedef {object} sap.m.plugins.UploadSetwithTable.FilenameValidationConfig An object type that represents the file name validation configuration.
+				 * @description This property type is used to define the file name validation configuration. Object is passed to {@link sap.m.plugins.UploadSetwithTable fileNameValidationConfig property}
+				 * @property {sap.m.plugins.UploadSetwithTable.FilenameValidationConfigMode} mode The file name validation config mode.
+				 * @property {string} characters The file name validation configuration characters.
+				 * <br> <br> The default restricted filename character set is: \:/*?"<>|[]{}@#$
+				 * @public
+				 * @since since 1.136
+				**/
+
+				/**
+				 * File name validation configuration.
+				 * <br> Set this property to configure the file name validation characters and the validation mode.
+				 * <br> This configuration is used to validate the file name when a file is selected for renaming.
+				 * <br> For the plugin to pick up this configuration, mode and characters of the property must be set to validate the file name.
+				 * <br> see {@link sap.m.plugins.UploadSetwithTable.FilenameValidationConfigMode mode} to configure the file name validation mode.
+				 * <br> <br> The default restricted filename character set is: \:/*?"<>|[]{}@#$
+				 * @type {sap.m.plugins.UploadSetwithTable.FilenameValidationConfig}
+				 * @public
+				 * @since 1.136
+				 */
+				fileNameValidationConfig: { type: 'object', defaultValue: null }
 			},
 				aggregations: {
 				/**
@@ -400,6 +437,8 @@ sap.ui.define([
 
 	UploadSetwithTable.findOn = PluginBase.findOn;
 
+	UploadSetwithTable.DEFAULT_INVALID_FILENAME_CHARACTERSET = "\\:/*?\"<>|[]{}@#$";
+
 	/**
 	 * Event Delegate that containts events, that need to be executed after control events.
 	 */
@@ -540,6 +579,51 @@ sap.ui.define([
 
 	UploadSetwithTable.prototype.getNoDataIllustration = function() {
 		return this._vNoDataIllustration;
+	};
+
+	UploadSetwithTable.prototype.setFileNameValidationConfig = function (oConfig) {
+
+		// set property to null if no config is passed
+		if (oConfig === undefined || oConfig === null) {
+			this.setProperty("fileNameValidationConfig", null);
+			return this;
+		}
+
+		// Validate that it's an object
+		if (typeof oConfig !== 'object') {
+			throw new Error("fileNameValidationConfig must be a non-null object with mode and characters properties");
+		}
+
+		// Extract keys from the object
+		const keys = Object.keys(oConfig);
+		const expectedKeys = ['mode', 'characters'];
+
+		// Check for exact match in keys (no more, no less)
+		const missingKeys = expectedKeys.filter((key) => !keys.includes(key));
+		const extraKeys = keys.filter((key) => !expectedKeys.includes(key));
+
+		if (missingKeys.length > 0 || extraKeys.length > 0) {
+			throw new Error(
+				`fileNameValidationConfig must contain only the following properties: ${expectedKeys.join(', ')}. ` +
+				(missingKeys.length > 0 ? `Missing: ${missingKeys.join(', ')}. ` : '') +
+				(extraKeys.length > 0 ? `Unexpected: ${extraKeys.join(', ')}.` : '')
+			);
+		}
+
+		// Validate `mode` is a string and one of the allowed values
+		const validModes = ['include', 'exclude', 'override'];
+		if (typeof oConfig.mode !== 'string' || !validModes.includes(oConfig.mode)) {
+			throw new Error(`fileNameValidationConfig.mode must be one of ${validModes.join(', ')}`);
+		}
+
+		// Validate `characters` is a string
+		if (typeof oConfig.characters !== 'string') {
+			throw new Error("fileNameValidationConfig.characters must be a string.");
+		}
+
+		// Call the default property setter (important!)
+		this.setProperty("fileNameValidationConfig", oConfig);
+		return this;
 	};
 
 	// Public API's
@@ -717,7 +801,7 @@ sap.ui.define([
 		this.getConfig("download", {
 			oBindingContext: oBindingContext,
 			bAskForLocation: bAskForLocation
-		}, this.getControl(), this);
+		}, this, this.getControl());
 	};
 
 	/**
@@ -772,6 +856,8 @@ sap.ui.define([
 		});
 		oTextField.addStyleClass("sapUiTinyMarginBegin");
 		oTextField.addStyleClass("sapUiTinyMarginTop");
+
+		oInput.addAriaDescribedBy(oTextField.getId());
 
 		// Label for Input
 		const oLabel = new Label({
@@ -895,15 +981,49 @@ sap.ui.define([
 			return;
 		}
 
-		const oCharacterRegex = new RegExp(/[@#$]/);
+		const sValidationCharacterSet = this._getFileNameValidationChracters();
+		const sEscapedSpecialCharcters = sValidationCharacterSet.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+		const oCharacterRegex = new RegExp(`[${sEscapedSpecialCharcters}]`);
 		if (oCharacterRegex.test(sValue)) {
 			oInput.setShowValueStateMessage(true);
 			oInput.setProperty("valueState", "Error", true);
-			oInput.setValueStateText(this._oRb.getText("UPLOADSET_WITH_TABLE_DOCUMENT_RENAME_SPLC_VALIDATION_ERROR_MESSAGE", ['@#$']));
+			oInput.setValueStateText(this._oRb.getText("UPLOADSET_WITH_TABLE_DOCUMENT_RENAME_SPLC_VALIDATION_ERROR_MESSAGE", [sValidationCharacterSet]));
 		} else {
 			oInput.setShowValueStateMessage(false);
 			oInput.setProperty("valueState", "None", true);
 		}
+	};
+
+	UploadSetwithTable.prototype._getFileNameValidationChracters = function() {
+		const {mode, characters} = this.getFileNameValidationConfig() || {};
+		switch (mode) {
+			case "include": {
+				// remove duplicate characters and the concatenate with default invalid characters
+				const aUniqueChars = [...new Set((UploadSetwithTable.DEFAULT_INVALID_FILENAME_CHARACTERSET + characters).split(""))];
+				const sUniqueChars = aUniqueChars.join("");
+				return sUniqueChars;
+			}
+
+			case "exclude": {
+				const aExcludeChars = [...new Set(characters.split(""))];
+				const sExcludeChars = aExcludeChars.join("");
+				// remove duplicate characters and the concatenate with default invalid characters
+				return excludeCharacters(UploadSetwithTable.DEFAULT_INVALID_FILENAME_CHARACTERSET, sExcludeChars);
+			}
+
+			case "override":
+				return characters;
+
+			default:
+				return UploadSetwithTable.DEFAULT_INVALID_FILENAME_CHARACTERSET;
+		}
+
+		function excludeCharacters(inputStr, charsToRemove) {
+			for (var char of charsToRemove) {
+			  inputStr = inputStr.split(char).join("");
+			}
+			return inputStr;
+		  }
 	};
 
 	UploadSetwithTable.prototype._onFileUploaderChange = function (oEvent) {
@@ -951,23 +1071,29 @@ sap.ui.define([
 				};
 
 				var oPromise = this.getItemValidationHandler()(oItemInfo);
-				if (oPromise && oPromise instanceof Promise) {
-					oPromise
-					.then((item) => {
-						if (item instanceof UploadItem) {
-							this._initateItemUpload(item);
-						}
-					})
-					.catch((item) => {
-						// Reset variable to avoid update if upload rejected.
-						if (item && this._oItemToUpdate && item instanceof UploadItem && item.getId() === this._oItemToUpdate.getId()) {
-							this._oItemToUpdate = null;
-						}
-					});
-				} else {
+				try {
+					if (oPromise && typeof oPromise?.then === "function") {
+						oPromise
+						.then((item) => {
+							if (item instanceof UploadItem) {
+								this._initateItemUpload(item);
+							}
+						})
+						.catch((item) => {
+							// Reset variable to avoid update if upload rejected.
+							if (item && this._oItemToUpdate && item instanceof UploadItem && item.getId() === this._oItemToUpdate.getId()) {
+								this._oItemToUpdate = null;
+							}
+						});
+					} else {
+						oItem.destroy();
+						// if promise is not returned to the ItemValidation hook log error and destroy the item
+						Log.error("Invalid usage, missing Promise: ItemValidationHandler callback expects Promise to be returned.");
+					}
+				} catch (error) {
 					oItem.destroy();
-					// if promise is not returned to the ItemValidation hook log error and destroy the item
-					Log.error("Invalid usage, missing Promise: ItemValidationHandler callback expects Promise to be returned.");
+					// If the ItemValidationHandler throws an error, log it and destroy the item
+					Log.error("Invalid usage, missing Promise: ItemValidationHandler callback expects Promise to be returned.", error);
 				}
 			} else {
 				/* if no validation handler is provided control continues with normal upload else waits for the application to manually
@@ -1486,8 +1612,8 @@ sap.ui.define([
 
 	UploadSetwithTable.prototype._getDefaultNoDataIllustration = function() {
 		const oIllustratedMessage =  new IllustratedMessage({
-			illustrationType: IllustratedMessageType.UploadCollection,
-			illustrationSize: IllustratedMessageSize.Spot,
+			illustrationType: IllustratedMessageType.DragFilesToUpload,
+			illustrationSize: IllustratedMessageSize.Small,
 			title: this._oRb.getText("UPLOADSET_WITH_TABLE_NO_DATA_TEXT"),
 			description: this._oRb.getText("UPLOADSET_WITH_TABLE_NO_DATA_DESCRIPTION")
 		});
@@ -1597,6 +1723,14 @@ sap.ui.define([
 					propertyPath: oRowConfiguration.getIsTrustedSourcePath(),
 					modelName: sModelName,
 					value: oBindingContext?.getProperty(oRowConfiguration?.getIsTrustedSourcePath())
+				}, createStaticBinding);
+			}
+			if (oRowConfiguration?._isDirectoryPathValidator(oBindingContext)) {
+				await this.bindItemProperty(oUploadSetItem, {
+					property: "isDirectory",
+					propertyPath: oRowConfiguration.getIsDirectoryPath(),
+					modelName: sModelName,
+					value: oBindingContext?.getProperty(oRowConfiguration.getIsDirectoryPath())
 				}, createStaticBinding);
 			}
 			return oUploadSetItem;
@@ -1731,7 +1865,7 @@ sap.ui.define([
 					oPlugin._oDragDropConfig = null;
 				}
 			},
-			// Handles the preview of the passed context. Requires access to all the contexts of inner table to setup the preview along with carousel.
+			// Handles the preview of the passed context. Requires an access to all the contexts of inner table to setup the preview along with the carousel.
 			openFilePreview: async function(oBindingContext, oControl, oPlugin) {
 				const oRowConfiguration = oPlugin.getRowConfiguration();
 				const oContexts = this.getTableContexts(oControl?._oTable);
@@ -1964,6 +2098,113 @@ sap.ui.define([
 			},
 			getTableContexts: function(oTable) {
 				return oTable?.getBinding("rows")?.getCurrentContexts() || null;
+			}
+		 },
+		 "sap.ui.table.TreeTable": {
+			_sModelName: undefined,
+			_bIsTableBound: false,
+			setPluginDefaultSettings: function(oControl, oPlugin) {
+				if (oPlugin.getUploadEnabled()) {
+					this.setDragDropConfig(oControl, oPlugin);
+				}
+				this.setDefaultIllustrations(oControl, oPlugin);
+			},
+			setIsTableBound: function(oControl) {
+				if (oControl?.getBinding("items")) {
+					this._bIsTableBound = true;
+				} else {
+					this._bIsTableBound = false;
+				}
+			},
+			getIsTableBound: function() {
+				return this._bIsTableBound;
+			},
+			setModelName: function(oControl) {
+				if (oControl?.isA("sap.ui.table.Table")) {
+					this._sModelName = oControl?.getBindingInfo("rows")?.model;
+				}
+			},
+			getModelName: function() {
+				return this._sModelName;
+			},
+			// Set the drag and drop configuration for the table when upload plugin is actived.
+			setDragDropConfig: function (oControl, oPlugin) {
+				var oDragDropConfig = oPlugin._oDragDropConfig = new DragDropInfo({
+					sourceAggregation: "rows",
+					targetAggregation: "rows"
+				});
+				var oDropConfig = oPlugin._oDropConfig = new DropInfo({
+					dropEffect:"Move",
+					dropPosition:"OnOrBetween",
+					dragEnter: [oPlugin?._onDragEnterFile, oPlugin],
+					drop: [oPlugin?._onDropFile, oPlugin]
+				});
+				oControl?.addDragDropConfig(oDragDropConfig);
+				oControl?.addDragDropConfig(oDropConfig);
+			},
+			resetDragDropConfig: function(oControl, oPlugin) {
+				if (oPlugin && oControl) {
+					oControl.removeDragDropConfig(oPlugin._oDragDropConfig);
+					oControl.removeDragDropConfig(oPlugin._oDropConfig);
+					oPlugin._oDragDropConfig = null;
+					oPlugin._oDropConfig = null;
+				}
+			},
+			// Set the default illustrations for the table when no data is available. Set only when the upload plugin is activated.
+			setDefaultIllustrations: function(oControl, oPlugin) {
+				const oNoDataIllustration = oPlugin?.getNoDataIllustration();
+				if (oControl && oPlugin) {
+					if (!oNoDataIllustration) {
+						oPlugin._illustratedMessage = oPlugin._getDefaultNoDataIllustration();
+					} else {
+						oPlugin._illustratedMessage = oNoDataIllustration;
+					}
+					oControl.setNoData(oPlugin._illustratedMessage);
+                                }
+			},
+			cleanupPluginInstanceSettings: function(oControl, oPlugin) {
+				// remove nodata aggregations added from plugin activation.
+				if (oControl) {
+					oControl.setNoData(null);
+				}
+				if (oPlugin) {
+					oPlugin.setPreviewDialog(null);
+					oPlugin._illustratedMessage = null;
+				}
+				if (oPlugin._oDragDropConfig && oControl) {
+					oControl.removeDragDropConfig(oPlugin._oDragDropConfig);
+					oPlugin._oDragDropConfig = null;
+				}
+			},
+			// Handles preview of the passed context. Requires access to all the contexts of inner table to setup the preview along with carousel.
+			openFilePreview: async function(oBindingContext, oControl, oPlugin) {
+				const oRowConfiguration = oPlugin.getRowConfiguration();
+				let oContexts = this.getTableContexts(oControl);
+				// Filter out the directory items from the contexts.
+				oContexts = oContexts.filter((oContext) => {
+					const sPath = oPlugin.getRowConfiguration().getIsDirectoryPath();
+					return oContext?.getProperty(sPath) != true;
+				});
+				let aUploadSetItems = [];
+				if (oContexts?.length) {
+					aUploadSetItems = await oPlugin.getItemsMap(oContexts, oRowConfiguration);
+					const oPreviewUploaditem = aUploadSetItems.find((oItem) => oItem?.data("path") === oBindingContext.getPath());
+					if (oPreviewUploaditem) {
+						oPlugin._initiateFilePreview(oPreviewUploaditem, aUploadSetItems);
+					}
+				}
+			},
+			// Handles download of the file through the context passed.
+			download: async function(mDownloadInfo, oPlugin) {
+				const {oBindingContext, bAskForLocation} = mDownloadInfo;
+				const oItem = await oPlugin.getItemForContext(oBindingContext);
+				if (oItem && oItem.getUrl()) {
+					return oPlugin._initiateFileDownload(oItem, bAskForLocation);
+				}
+				return false;
+			},
+			getTableContexts: function(oTable) {
+				return oTable?.getBinding("rows")?.getContexts(0, oTable?.getVisibleRowCount()) || null;
 			}
 		 }
 		}, UploadSetwithTable);

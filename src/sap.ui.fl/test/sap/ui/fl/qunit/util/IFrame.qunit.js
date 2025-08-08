@@ -1,19 +1,21 @@
 /* global QUnit */
 
 sap.ui.define([
+	"sap/base/security/URLListValidator",
+	"sap/base/Log",
+	"sap/ui/core/mvc/XMLView",
 	"sap/ui/fl/util/IFrame",
 	"sap/ui/fl/Utils",
-	"sap/base/security/URLListValidator",
 	"sap/ui/model/json/JSONModel",
-	"sap/ui/core/mvc/XMLView",
 	"sap/ui/qunit/utils/nextUIUpdate",
 	"sap/ui/thirdparty/sinon-4"
 ], function(
+	URLListValidator,
+	Log,
+	XMLView,
 	IFrame,
 	Utils,
-	URLListValidator,
 	JSONModel,
-	XMLView,
 	nextUIUpdate,
 	sinon
 ) {
@@ -31,14 +33,11 @@ sap.ui.define([
 	const sUserEmail = `${(`${sUserFirstName}.${sUserLastName}`).toLowerCase()}@sap.com`;
 
 	function checkUrl(assert, oIFrame, sExpectedUrl, sDescription) {
-		return (oIFrame._oSetUrlPromise || Promise.resolve())
-		.then(function() {
-			assert.strictEqual(
-				oIFrame.getUrl(),
-				sExpectedUrl,
-				sDescription || "then the url is properly updated"
-			);
-		});
+		assert.strictEqual(
+			oIFrame.getUrl(),
+			sExpectedUrl,
+			sDescription || "then the url is properly updated"
+		);
 	}
 
 	QUnit.module("Basic properties", {
@@ -57,9 +56,11 @@ sap.ui.define([
 		}
 	}, function() {
 		QUnit.test("when trying to set the url to an invalid value", function(assert) {
+			const oErrorStub = sandbox.stub(Log, "error");
 			// eslint-disable-next-line no-script-url
 			this.oIFrame.setUrl("javascript:someJs");
-			return checkUrl(assert, this.oIFrame, sOpenUI5Url, "then the value is rejected");
+			assert.ok(oErrorStub.calledOnce, "then an error is logged");
+			checkUrl(assert, this.oIFrame, sOpenUI5Url, "then the value is rejected");
 		});
 
 		QUnit.test("when changing a navigation parameter only", async function(assert) {
@@ -104,7 +105,7 @@ sap.ui.define([
 
 		QUnit.test("when iframe is updated with advanced settings", async function(assert) {
 			this.oIFrame.setAdvancedSettings({
-				additionalSandboxParameters: ["allow-downloads-without-user-activation"],
+				additionalSandboxParameters: ["allow-presentation"],
 				"allow-forms": true,
 				"allow-popups": false,
 				"allow-scripts": false,
@@ -114,7 +115,7 @@ sap.ui.define([
 			await nextUIUpdate();
 			assert.strictEqual(
 				this.oIFrame.getDomRef().sandbox.value,
-				"allow-forms allow-downloads-without-user-activation",
+				"allow-forms allow-presentation",
 				"then the custom sandbox attributes are set correctly"
 			);
 		});
@@ -221,7 +222,7 @@ sap.ui.define([
 			const oReplaceLocationSpy = sandbox.spy(this.oIFrame, "_replaceIframeLocation");
 			this.oModel.setProperty("/flavor", "sapui5");
 
-			await checkUrl(assert, this.oIFrame, sSapUI5Url);
+			checkUrl(assert, this.oIFrame, sSapUI5Url);
 			await nextUIUpdate();
 			assert.strictEqual(this.oIFrame.getFocusDomRef(), oFocusDomRef, "iframe DOM reference did not change");
 			assert.strictEqual(
@@ -311,6 +312,7 @@ sap.ui.define([
 					`<IFrame id="iframe3" url="${sOpenUI5Url}?domain={$user>/domain}&amp;{anyModel>/anyProperty}" />` +
 					`<IFrame id="iframe4" url="{= '${sOpenUI5Url}?domain=' + \${$user>/domain} }" />` +
 					`<IFrame id="iframe5" url="{= '${sOpenUI5Url}?domain=' + (\${$user>/domain}.indexOf('sap.com') !== -1 ? 'SAP' : 'EXTERNAL') }" />` +
+					"<IFrame id='iframe6' url='' />" +
 				"</mvc:View>"
 			});
 			var iFrame = this.myView.byId("iframe1");
@@ -342,11 +344,11 @@ sap.ui.define([
 			var iFrame = this.myView.byId("iframe2");
 			var sEncodedUrl = encodeURI(`${sOpenUI5Url}?someParameter=${sUserFullName}`);
 			iFrame.setUrl(sEncodedUrl);
-			return checkUrl(assert, iFrame, sEncodedUrl, "then it is not encoded again");
+			checkUrl(assert, iFrame, sEncodedUrl, "then it is not encoded again");
 		});
 		QUnit.test("Simple binding URL (with unexpected reference) should be reverted back to binding in settings", function(assert) {
 			var iFrame = this.myView.byId("iframe3");
-			assert.strictEqual(iFrame.getUrl(), "", "Displayed URL is empty since the binding can't be resolved");
+			assert.strictEqual(iFrame.getUrl(), "about:blank", "Displayed URL is default since the binding can't be resolved");
 			assert.strictEqual(iFrame.get_settings().url, `${sOpenUI5Url}?domain={$user>/domain}&{anyModel>/anyProperty}`, "Settings' URL is correct");
 		});
 		QUnit.test("Complex binding URL is 'converted' to simple binding ('simple' use case)", function(assert) {
@@ -358,6 +360,10 @@ sap.ui.define([
 			var iFrame = this.myView.byId("iframe5");
 			assert.strictEqual(iFrame.getUrl(), `${sOpenUI5Url}?domain=SAP`, "Displayed URL is correct");
 			assert.strictEqual(iFrame.get_settings().url, `${sOpenUI5Url}?domain=EXTERNAL`, "Settings' URL looks corrupted");
+		});
+		QUnit.test("Binding resolving to empty string (when the entire URL is a parameter resolving to falsy value)", function(assert) {
+			const iFrame = this.myView.byId("iframe6");
+			assert.strictEqual(iFrame.getUrl(), "about:blank", "URL remains default (about:blank)");
 		});
 	});
 

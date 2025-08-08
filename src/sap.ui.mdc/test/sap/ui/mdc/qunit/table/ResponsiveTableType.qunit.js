@@ -154,7 +154,7 @@ sap.ui.define([
 		const oInnerColumn = oTable._oTable.getColumns()[0];
 
 		oType.updateSortIndicator(oColumn, "Ascending");
-		assert.strictEqual(oInnerColumn.getSortIndicator(),"Ascending", "Inner table column sort order");
+		assert.strictEqual(oInnerColumn.getSortIndicator(), "Ascending", "Inner table column sort order");
 
 		oType.updateSortIndicator(oColumn, "Descending");
 		assert.strictEqual(oInnerColumn.getSortIndicator(), "Descending", "Inner table column sort order");
@@ -333,6 +333,12 @@ sap.ui.define([
 		assert.ok(this.oType._oShowDetailsButton.getVisible(), "button is visible since table has visible items and popins");
 	});
 
+	QUnit.test("The controller is registered and deregistered properly", function(assert) {
+		assert.ok(this.oTable.getEngine().getRegisteredControllers(this.oTable).includes("ShowDetails"), "ShowDetails controller is registered");
+		this.oType.setShowDetailsButton(false);
+		assert.notOk(this.oTable.getEngine().getRegisteredControllers(this.oTable).includes("ShowDetails"), "ShowDetails controller is deregistered");
+	});
+
 	QUnit.test("detailsButtonSetting property", function(assert) {
 		const bDesktop = Device.system.desktop;
 		const bTablet = Device.system.tablet;
@@ -403,7 +409,9 @@ sap.ui.define([
 		const oModificationHandler = TestModificationHandler.getInstance();
 		oModificationHandler.processChanges = function(aChanges) {
 			counter++;
-			let bExpectedValue, sExpectedName, sAction;
+			let bExpectedValue;
+			let sExpectedName;
+			let sAction;
 
 			if (counter === 1) {
 				bExpectedValue = true;
@@ -446,7 +454,7 @@ sap.ui.define([
 		await nextUIUpdate();
 
 		sinon.stub(this.oTable, "getCurrentState").returns({
-			xConfig: { aggregations: { type: { ResponsiveTable: { showDetails: true } } } }
+			xConfig: {aggregations: {type: {ResponsiveTable: {showDetails: true}}}}
 		});
 
 		assert.equal(counter, 1, "No modification happened since show/hide state did not change");
@@ -523,7 +531,7 @@ sap.ui.define([
 		});
 		this.oTable.setVariant(oVariant);
 
-		const fnGetCurrentStateStub = sinon.stub(this.oTable, "getCurrentState");
+		const fnGetCurrentStateStub = sinon.stub(this.oTable, "_getXConfig");
 		const oType = this.oTable.getType();
 
 		// Initial state
@@ -535,58 +543,52 @@ sap.ui.define([
 
 		// State (none) => State (showDetails: true)
 		fnGetCurrentStateStub.returns({
-			"xConfig": {
-				"aggregations": {
-					"type": {
-						"ResponsiveTable": {
-							"showDetails": true
-						}
+			"aggregations": {
+				"type": {
+					"ResponsiveTable": {
+						"showDetails": true
 					}
 				}
 			}
 		});
-		oType.onModifications(["ShowDetails"]); // Emulate change with ShowDetails
+		oType.onModifications(); // Emulate change with ShowDetails
 		await nextUIUpdate();
 
 		assert.equal(oType._oShowDetailsButton.getSelectedKey(), "showDetails", "Details are shown");
 
 		// State (showDetails: true) => State (showDetails: false)
 		fnGetCurrentStateStub.returns({
-			"xConfig": {
-				"aggregations": {
-					"type": {
-						"ResponsiveTable": {
-							"showDetails": false
-						}
+			"aggregations": {
+				"type": {
+					"ResponsiveTable": {
+						"showDetails": false
 					}
 				}
 			}
 		});
-		oType.onModifications(["ShowDetails"]); // Emulate change with ShowDetails
+		oType.onModifications(); // Emulate change with ShowDetails
 		await nextUIUpdate();
 
 		assert.equal(oType._oShowDetailsButton.getSelectedKey(), "hideDetails", "Details are now hidden");
 
 		// State (showDetails=false) => State (showDetails=true)
 		fnGetCurrentStateStub.returns({
-			"xConfig": {
-				"aggregations": {
-					"type": {
-						"ResponsiveTable": {
-							"showDetails": true
-						}
+			"aggregations": {
+				"type": {
+					"ResponsiveTable": {
+						"showDetails": true
 					}
 				}
 			}
 		});
-		oType.onModifications(["ShowDetails"]); // Emulate change with ShowDetails
+		oType.onModifications(); // Emulate change with ShowDetails
 		await nextUIUpdate();
 
 		assert.equal(oType._oShowDetailsButton.getSelectedKey(), "showDetails", "Details are now shown again");
 
 		// State (showDetails=true) => State (none)
 		fnGetCurrentStateStub.returns({});
-		oType.onModifications(["ShowDetails"]); // Emulate change with ShowDetails
+		oType.onModifications(); // Emulate change with ShowDetails
 		await nextUIUpdate();
 
 		assert.equal(oType._oShowDetailsButton.getSelectedKey(), "hideDetails", "Details are now hidden as default");
@@ -601,14 +603,12 @@ sap.ui.define([
 		});
 		this.oTable.setVariant(oVariant);
 
-		const fnGetCurrentStateStub = sinon.stub(this.oTable, "getCurrentState");
+		const fnGetCurrentStateStub = sinon.stub(this.oTable, "_getXConfig");
 		fnGetCurrentStateStub.returns({
-			"xConfig": {
-				"aggregations": {
-					"type": {
-						"ResponsiveTable": {
-							"showDetails": true
-						}
+			"aggregations": {
+				"type": {
+					"ResponsiveTable": {
+						"showDetails": true
 					}
 				}
 			}
@@ -623,7 +623,7 @@ sap.ui.define([
 		assert.ok(oType._oShowDetailsButton.getVisible(), "Show Details button is visible since table has popins");
 		assert.equal(oType._oShowDetailsButton.getSelectedKey(), "hideDetails", "Details are initially hidden");
 
-		this.oTable._onModifications(["ShowDetails"]);
+		this.oTable._onModifications();
 		await nextUIUpdate();
 
 		assert.ok(fnOnModificationsSpy.calledOnce, "onModifications is called");
@@ -632,18 +632,16 @@ sap.ui.define([
 		assert.equal(oType._oShowDetailsButton.getSelectedKey(), "showDetails", "Details are now shown");
 
 		fnGetCurrentStateStub.returns({
-			"xConfig": {
-				"aggregations": {
-					"type": {
-						"ResponsiveTable": {
-							"showDetails": false
-						}
+			"aggregations": {
+				"type": {
+					"ResponsiveTable": {
+						"showDetails": false
 					}
 				}
 			}
 		});
 
-		this.oTable._onModifications(["ShowDetails"]);
+		this.oTable._onModifications();
 		await nextUIUpdate();
 
 		assert.ok(fnOnModificationsSpy.calledTwice, "onModifications is called");
@@ -654,7 +652,7 @@ sap.ui.define([
 
 	QUnit.module("extendedSettings");
 
-	QUnit.test("Merge cell", async function (assert) {
+	QUnit.test("Merge cell", async function(assert) {
 		const oModel = new JSONModel();
 		oModel.setData({
 			testPath: [{
@@ -721,7 +719,7 @@ sap.ui.define([
 		oTable.placeAt("qunit-fixture");
 		await nextUIUpdate();
 
-		return TableQUnitUtils.waitForBindingInfo(oTable).then(function () {
+		return TableQUnitUtils.waitForBindingInfo(oTable).then(function() {
 			const aColumns = oTable._oTable.getColumns();
 
 			assert.ok(aColumns[0].getMergeDuplicates(), "First column property mergeDuplicates = true");
@@ -731,7 +729,8 @@ sap.ui.define([
 			assert.strictEqual(aColumns[1].getMergeFunctionName(), "getSrc", "Second column property mergeFunctionName = getSrc");
 
 			assert.notOk(aColumns[2].getMergeDuplicates(), "Third column property mergeDuplicates = false");
-			assert.strictEqual(aColumns[0].getMergeFunctionName(), "getText", "Third column property mergeFunctionName = getText as it's the default value");
+			assert.strictEqual(aColumns[0].getMergeFunctionName(), "getText",
+				"Third column property mergeFunctionName = getText as it's the default value");
 		});
 	});
 
@@ -793,7 +792,7 @@ sap.ui.define([
 		});
 	});
 
-	QUnit.test("Row actions with static settings", async function (assert) {
+	QUnit.test("Row actions with static settings", async function(assert) {
 		await this.createTable({
 			rowSettings: new RowSettings({
 				rowActions: [
@@ -825,7 +824,7 @@ sap.ui.define([
 			"Error thrown when setting wrong type");
 	});
 
-	QUnit.test("Row actions with bound settings", async function (assert) {
+	QUnit.test("Row actions with bound settings", async function(assert) {
 		await this.createTable({
 			rowSettings: new RowSettings({
 				rowActions: [
@@ -856,7 +855,7 @@ sap.ui.define([
 		assert.strictEqual(aItems[2].getType(), "Inactive", "Item 3 type");
 	});
 
-	QUnit.test("Row actions with bound settings and custom formatters", async function (assert) {
+	QUnit.test("Row actions with bound settings and custom formatters", async function(assert) {
 		await this.createTable({
 			rowSettings: new RowSettings({
 				rowActions: [
@@ -892,7 +891,7 @@ sap.ui.define([
 		assert.strictEqual(aItems[2].getType(), "Navigation", "Item 3 type");
 	});
 
-	QUnit.test("Bound row actions", async function (assert) {
+	QUnit.test("Bound row actions", async function(assert) {
 		await this.createTable({
 			rowSettings: new RowSettings({
 				rowActions: {
@@ -902,7 +901,8 @@ sap.ui.define([
 						text: "{namedModel>text}",
 						icon: "{namedModel>icon}",
 						visible: "{namedModel>visible}"
-					})
+					}),
+					templateShareable: false
 				}
 			})
 		});

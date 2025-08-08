@@ -960,11 +960,11 @@ sap.ui.define([
 	 *   Whether the binding always uses an own service request to read its data; only the value
 	 *   <code>true</code> is allowed.
 	 * @param {string[]} [mParameters.$$separate]
-	 *   An array of navigation property names which are omitted from the main list request and
-	 *   loaded in a separate request instead (@experimental as of version 1.129.0). This results in
-	 *   the main list becoming available faster, while the separate properties are merged as soon
-	 *   as the data is received. Note that the separate properties must be single valued and part
-	 *   of the '$expand' system query option, either automatically via the "autoExpandSelect" model
+	 *   An array of navigation property names which are omitted from the main list request (since
+	 *   1.137.0). Instead, each of them is loaded in a separate request. This results in the main
+	 *   list becoming available faster, while the separate properties are merged as soon as the
+	 *   data is received. Note that the separate properties must be single valued and part of the
+	 *   '$expand' system query option, either automatically via the "autoExpandSelect" model
 	 *   parameter (see {@link #constructor}) or manually. The <code>$$separate</code> parameter
 	 *   must not be combined with <code>$$aggregation</code>.
 	 * @param {boolean} [mParameters.$$sharedRequest]
@@ -1264,7 +1264,7 @@ sap.ui.define([
 	 * and missing headers remain unchanged. The following headers must not be used:
 	 * <ul>
 	 *   <li> OData V4 requests headers as specified in <a href=
-	 *     "https://docs.oasis-open.org/odata/odata/v4.0/os/part1-protocol/odata-v4.0-os-part1-protocol.html#_Common_Headers"
+	 *     "https://docs.oasis-open.org/odata/odata/v4.0/odata-v4.0-part1-protocol.html#_Common_Headers"
 	 *     >"8.1 Common Headers"</a> and "8.2 Request Headers" of the specification "OData Version
 	 *     4.0 Part 1: Protocol"
 	 *   <li> OData V2 request headers as specified in "2.2.5 HTTP Header Fields" of the
@@ -2878,7 +2878,8 @@ sap.ui.define([
 	 *   but take care to replace dashes with underscores.
 	 * @throws {Error}
 	 *   If the given group ID is not a valid group ID or has
-	 *   {@link sap.ui.model.odata.v4.SubmitMode.Direct}
+	 *   {@link sap.ui.model.odata.v4.SubmitMode.Direct} or if multiple requests that apply the
+	 *   preference "handling=strict" already exist in the same change set of the batch request
 	 *
 	 * @private
 	 * @since 1.134.0

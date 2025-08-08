@@ -5,7 +5,7 @@
 
 QUnit.config.autostart = false;
 
-// Note: to cover "sap/ui/base", this MUST happen after "qunit-coverage.js" is included!
+// Note: to cover "sap/ui/base", this MUST happen after "qunit-coverage-istanbul.js" is included!
 sap.ui.require([
 	"sap/ui/core/Core"
 ], function (Core) {
@@ -210,6 +210,7 @@ sap.ui.require([
 		// "sap/ui/core/qunit/odata/v2/DerivedTypes.qunit",
 		//TODO: get test running in 1RingModels.qunit; it uses ODataAnnotationsFakeService
 		// "sap/ui/core/qunit/odata/v2/ODataAnnotationsV2.qunit",
+		"sap/ui/core/qunit/odata/v2/ODataAnnotationsV2NoFakeService.qunit",
 		"sap/ui/core/qunit/odata/v2/ODataContextBindingNoFakeService.qunit",
 		"sap/ui/core/qunit/odata/v2/ODataListBindingNoFakeService.qunit",
 		"sap/ui/core/qunit/odata/v2/ODataModel.integration.qunit",

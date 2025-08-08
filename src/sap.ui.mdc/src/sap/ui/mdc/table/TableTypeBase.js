@@ -138,7 +138,7 @@ sap.ui.define([
 		const sDropPosition = oEvent.getParameter("dropPosition");
 		const iDraggedIndex = oInnerTable.indexOfColumn(oDraggedColumn);
 		const iDroppedIndex = oInnerTable.indexOfColumn(oDroppedColumn);
-		const iNewIndex = iDroppedIndex + (sDropPosition == "Before" ? 0 : 1) + (iDraggedIndex < iDroppedIndex ? -1 : 0);
+		const iNewIndex = iDroppedIndex + (sDropPosition === "Before" ? 0 : 1) + (iDraggedIndex < iDroppedIndex ? -1 : 0);
 
 		this.callHook("ColumnMove", oTable, {
 			column: oTable.getColumns()[iDraggedIndex],
@@ -175,6 +175,7 @@ sap.ui.define([
 	TableTypeBase.prototype.enableColumnResize = function() {};
 	TableTypeBase.prototype.disableColumnResize = function() {};
 	TableTypeBase.prototype.createColumnResizeMenuItem = function() {};
+	TableTypeBase.prototype.createColumnResizeInputMenuItem = function() {};
 	TableTypeBase.prototype.updateRowActions = function() {};
 	TableTypeBase.prototype.updateSortIndicator = function(oColumn, sSortOrder) {};
 	TableTypeBase.prototype.getTableStyleClasses = function() { return []; };

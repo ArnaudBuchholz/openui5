@@ -421,6 +421,18 @@ sap.ui.define([
 			}
 		},
 
+		/**
+		 * Returns the major schema version of the manifest.
+		 * Only used internally to check the manifest schema version for feature toggles.
+		 * @private
+		 *
+		 * @returns {number} The major version of the manifest
+		 */
+		_getSchemaVersion: function() {
+			const oJsonContent = this.getJson();
+			const sVersion = getObject(oJsonContent, "/_version");
+			return new Version(sVersion).getMajor();
+		},
 
 		/**
 		 * Loads the included CSS and JavaScript resources. The resources will be
@@ -446,6 +458,10 @@ sap.ui.define([
 			 * @deprecated As of version 1.94, standard dependencies should be used instead.
 			 */
 			if (mResources["js"]) {
+				if (this._getSchemaVersion() === 2) {
+					throw new Error(`'sap.ui5/resources/js' is deprecated and not supported with manifest version 2 (component '${sComponentName}'.`);
+				}
+
 				var aJSResources = mResources["js"];
 				var requireAsync = function (sModule) {
 					// Wrap promise within function because OPA waitFor (sap/ui/test/autowaiter/_promiseWaiter.js)
@@ -557,58 +573,59 @@ sap.ui.define([
 
 				// collect all "non-lazy" components
 				var mComponents = oDep["components"];
-				var aComponentDependencies = [];
 				if (mComponents) {
+					var aComponentDependencies = [];
 					for (var sName in mComponents) {
 						if (!mComponents[sName].lazy) {
 							aComponentDependencies.push(sName);
 						}
 					}
-				}
-
-				if (bAsync) {
-					// Async loading of Component, so that Component.load is available
-					var pComponentLoad = new Promise(function(fnResolve, fnReject) {
-						sap.ui.require(["sap/ui/core/Component"], function(Component) {
-							fnResolve(Component);
-						}, fnReject);
-					}).then(function(Component) {
-						// trigger Component.load for all "non-lazy" component dependencies (parallel)
-						return Promise.all(aComponentDependencies.map(function(sComponentName) {
-							// Component.load does not load the dependencies of a dependent component in case property manifest: false
-							// because this could have a negative impact on performance and we do not know if there is a necessity
-							// to load the dependencies
-							// If needed we could make this configurable via manifest.json by adding a 'manifestFirst' option
-							return Component.load({
-								name: sComponentName,
-								manifest: false
+					if (aComponentDependencies.length > 0) {
+						if (bAsync) {
+							// Async loading of Component, so that Component.load is available
+							var pComponentLoad = new Promise(function(fnResolve, fnReject) {
+								sap.ui.require(["sap/ui/core/Component"], function(Component) {
+									fnResolve(Component);
+								}, fnReject);
+							}).then(function(Component) {
+								// trigger Component.load for all "non-lazy" component dependencies (parallel)
+								return Promise.all(aComponentDependencies.map(function(sComponentName) {
+									// Component.load does not load the dependencies of a dependent component in case property manifest: false
+									// because this could have a negative impact on performance and we do not know if there is a necessity
+									// to load the dependencies
+									// If needed we could make this configurable via manifest.json by adding a 'manifestFirst' option
+									return Component.load({
+										name: sComponentName,
+										manifest: false
+									});
+								}));
 							});
-						}));
-					});
 
-					aPromises.push(pComponentLoad);
-				} else {
-					aComponentDependencies.forEach(function(sName) {
-						// Check for and execute preloaded component controller module
-						// Don't use sap.ui.component.load in order to avoid a warning log
-						// See comments in commit 83f4b601f896dbfcab76fffd455cce841f15b2fb
-						var sControllerModule = sName.replace(/\./g, "/") + "/Component";
-						var iModuleState = sap.ui.loader._.getModuleState(sControllerModule + ".js");
-						if (iModuleState === -1 /* PRELOADED */) {
-							sap.ui.requireSync(sControllerModule); // legacy-relevant: Sync path
-						} else if (iModuleState === 0 /* INITIAL */) {
-							Log.info("Component \"" + sComponentName + "\" is loading component: \"" + sName + ".Component\"");
-							// requireSync needed because of cyclic dependency
-							sap.ui.requireSync("sap/ui/core/Component"); // legacy-relevant: Sync path
-							sap.ui.component.load({ // legacy-relevant: Sync path
-								name: sName
+							aPromises.push(pComponentLoad);
+						} else {
+							aComponentDependencies.forEach(function(sName) {
+								// Check for and execute preloaded component controller module
+								// Don't use sap.ui.component.load in order to avoid a warning log
+								// See comments in commit 83f4b601f896dbfcab76fffd455cce841f15b2fb
+								var sControllerModule = sName.replace(/\./g, "/") + "/Component";
+								var iModuleState = sap.ui.loader._.getModuleState(sControllerModule + ".js");
+								if (iModuleState === -1 /* PRELOADED */) {
+									sap.ui.requireSync(sControllerModule); // legacy-relevant: Sync path
+								} else if (iModuleState === 0 /* INITIAL */) {
+									Log.info("Component \"" + sComponentName + "\" is loading component: \"" + sName + ".Component\"");
+									// requireSync needed because of cyclic dependency
+									sap.ui.requireSync("sap/ui/core/Component"); // legacy-relevant: Sync path
+									sap.ui.component.load({ // legacy-relevant: Sync path
+										name: sName
+									});
+								}
 							});
 						}
-					});
+					}
 				}
 			}
-			return Promise.all(aPromises);
 
+			return Promise.all(aPromises);
 		},
 
 		/**

@@ -13,6 +13,14 @@
 	},
 	"sap.card": {
 		"type": "Object",
+		"actions": [
+			{
+				"type": "Navigation",
+				"parameters": {
+					"url": "{url}"
+				}
+			}
+		],
 		"data": {
 			"request": {
 				"url": "../objectcontent/datahandling_employee.json"
@@ -26,7 +34,7 @@
 				"src": "{photo}"
 			},
 			"title": "{firstName} {lastName}",
-			"subTitle": "{position}"
+			"subtitle": "{position}"
 		},
 		"content": {
 			"data": {
@@ -86,15 +94,6 @@
 							]
 						}
 					]
-				}
-			],
-			"actions": [
-				{
-					"type": "Navigation",
-					"service": "Navigation2",
-					"parameters": {
-						"url": "{url}"
-					}
 				}
 			]
 		}

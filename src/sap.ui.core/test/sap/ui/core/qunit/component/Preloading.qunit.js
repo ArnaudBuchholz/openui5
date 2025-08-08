@@ -10,7 +10,6 @@ sap.ui.define([
 	"sap/ui/core/Manifest",
 	"sap/ui/core/UIComponent",
 	"sap/ui/core/UIComponentMetadata",
-	"sap/ui/core/theming/ThemeManager",
 	"sap/ui/VersionInfo"
 ], function(
 	Log,
@@ -23,7 +22,6 @@ sap.ui.define([
 	Manifest,
 	UIComponent,
 	UIComponentMetadata,
-	ThemeManager,
 	VersionInfo
 ) {
 
@@ -54,9 +52,6 @@ sap.ui.define([
 		constructor(sandbox) {
 			this.sandbox = sandbox;
 			this.#resetMocks();
-			// stub the `fireThemeApplied`` method away as it sporadically requires
-			// sap/ui/core/theming/Parameters which hinders the tests' expectations
-			this.sandbox.stub(ThemeManager, "fireThemeApplied");
 		}
 		#resetMocks() {
 			this.amdMock =
@@ -184,7 +179,6 @@ sap.ui.define([
 			.expectNoLibLoad()
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		// act
@@ -239,7 +233,6 @@ sap.ui.define([
 			.expectNoLibLoad()
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		const oComponent = await Component.create({name: "sap.test.mycomp"}).catch((err) => {
@@ -294,7 +287,6 @@ sap.ui.define([
 			.expectNoLibLoad()
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		// act
@@ -400,7 +392,6 @@ sap.ui.define([
 		this.helper
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		// act
@@ -432,7 +423,6 @@ sap.ui.define([
 			.expectNoLibLoad()
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		const oComponent = await Component.create({
@@ -454,7 +444,6 @@ sap.ui.define([
 		this.helper
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		const oComponent = await Component.create({
@@ -476,7 +465,6 @@ sap.ui.define([
 		this.helper
 			.expectCompPreload("sap.test.mycomp")
 			.expectRequire(["sap/test/mycomp/Component"], [Component])
-			.expectRequire(["sap/ui/core/Component"], [Component])
 			;
 
 		const oComponent = await sap.ui.component({
@@ -494,11 +482,11 @@ sap.ui.define([
 	QUnit.test("Manifest from component instance", async function(assert) {
 
 		//setup fake server and data
-		var oManifest = {
-			"sap.app" : {
-				"id" : "samples.components.button"
-			}
-		};
+		const oManifest = await LoaderExtensions.loadResource({
+			dataType: "json",
+			url: sap.ui.require.toUrl("testdata/instanceManifest/manifest.json"),
+			async: true
+		});
 
 		var oServer = this._oSandbox.useFakeServer();
 		oServer.autoRespond = true;
@@ -811,6 +799,31 @@ sap.ui.define([
 				assert.deepEqual(oOriginalManifest, manifestInCallback.getRawJson(),
 					"the raw manifest of the component instance should be the original manifest");
 			});
+		});
+	});
+
+	QUnit.test("Hook 'onPreprocessManifest' and 'onModelCreated'", function(assert) {
+		assert.expect(8);
+		const oPreprocessManifestExecutedSpy = sinon.spy(ComponentHooks.onPreprocessManifest, "execute");
+		const oModelCreatedExecutedSpy = sinon.spy(ComponentHooks.onModelCreated, "execute");
+
+		assert.notOk(Library._get("sap.ui.fl"), "sap.ui.fl library must not be loaded at the begining of this test.");
+		assert.notOk(ComponentHooks.onPreprocessManifest.isRegistered(), "No hook for 'preprocessManifest' is registered yet.");
+		assert.notOk(ComponentHooks.onModelCreated.isRegistered(), "No hook for 'modelCreated' is registered yet.");
+
+		return Component.create({
+			manifest: "test-resources/sap/ui/core/qunit/component/testdata/async/mysimplecomp/manifest.json",
+			asyncHints: {
+				libs: ['sap.ui.fl']
+			}
+		}).then(() => {
+			assert.ok(Library._get("sap.ui.fl"), "sap.ui.fl library should be loaded at the end of this test.");
+			assert.ok(ComponentHooks.onPreprocessManifest.isRegistered(), "Hook for 'preprocessManifest' is registered.");
+			assert.ok(ComponentHooks.onModelCreated.isRegistered(), "Hook for 'modelCreated' is registered.");
+			assert.strictEqual(oPreprocessManifestExecutedSpy.getCalls().length, 1, "'preprocessManifest' hook was executed exactly once");
+			assert.strictEqual(oModelCreatedExecutedSpy.getCalls().length, 1, "'modelCreated' hook was executed exactly once");
+			oPreprocessManifestExecutedSpy.restore();
+			oModelCreatedExecutedSpy.restore();
 		});
 	});
 

@@ -8,7 +8,7 @@
 			"type": "Table",
 			"header": {
 				"title": "Table Card",
-				"subTitle": "Table Card subtitle"
+				"subtitle": "Table Card subtitle"
 			},
 			"content": {
 				"data": {
@@ -129,15 +129,27 @@
 							"value": "{name}"
 						},
 						{
-							"title": "Net Amount",
-							"value": "{netAmount}"
+							"title": "Status",
+							"value": "{status}",
+							"state": "{statusState}",
+							"showStateIcon": "{showStateIcon}",
+							"customStateIcon": "{customStateIcon}"
 						},
 						{
 							"title": "Status",
 							"value": "{status}",
 							"state": "{statusState}",
 							"showStateIcon": "{showStateIcon}",
-							"customStateIcon": "{customStateIcon}"
+							"customStateIcon": "{customStateIcon}",
+							"actions": [
+								{
+									"type": "Navigation",
+									"parameters": {
+										"url": "https://www.sap.com",
+										"target": "_blank"
+									}
+								}
+							]
 						}
 					]
 				}
@@ -251,6 +263,77 @@
 						}
 					]
 				}
+			}
+		}
+	},
+	"tablecard7": {
+		"sap.app": {
+			"id": "tablecard7",
+			"type": "card"
+		},
+		"sap.card": {
+			"type": "Table",
+			"header": {
+				"title": "Table Pagination"
+			},
+			"content": {
+				"row": {
+					"columns": [
+						{ "title": "ID", "value": "{ID}" },
+						{ "title": "Full Name", "value": "{FullName}" },
+						{ "title": "Role", "width": "20%", "value": "{Role}" },
+						{ "title": "Department", "width": "20%", "value": "{Department}" },
+						{ "title": "Location", "width": "20%", "value": "{Location}" },
+						{ "title": "Status", "value": "{Status}" },
+						{ "title": "Score", "value": "{Score}" }
+					]
+				}
+			},
+			"footer": {
+				"paginator": {
+					"totalCount": "{/@count}",
+					"pageSize": 5
+				}
+			},
+			"data": {
+				"request": {
+					"url": "./cardcontent/tableitems.json"
+				},
+				"path": "/tableCard5"
+			}
+		}
+	},
+	"tablecard8": {
+		"sap.app": {
+			"id": "tablecard8",
+			"type": "card"
+		},
+		"sap.card": {
+			"type": "Table",
+			"header": {
+				"title": "Table Pagination"
+			},
+			"content": {
+				"row": {
+					"columns": [
+						{
+							"title": "A",
+							"value": "{A}"
+						}
+					]
+				}
+			},
+			"footer": {
+				"paginator": {
+					"totalCount": "{/@count}",
+					"pageSize": 5
+				}
+			},
+			"data": {
+				"request": {
+					"url": "./cardcontent/tableitems.json"
+				},
+				"path": "/tableCard4"
 			}
 		}
 	}

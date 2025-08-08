@@ -10,7 +10,8 @@ sap.ui.define([
 	"sap/ui/qunit/utils/MemoryLeakCheck",
 	"sap/ui/qunit/QUnitUtils",
 	"sap/ui/qunit/utils/nextUIUpdate",
-	"qunit/testResources/nextCardReadyEvent"
+	"qunit/testResources/nextCardReadyEvent",
+	"qunit/testResources/genericTests/actionEnablementTests"
 ], function (
 	mLibrary,
 	Library,
@@ -21,7 +22,8 @@ sap.ui.define([
 	MemoryLeakCheck,
 	QUnitUtils,
 	nextUIUpdate,
-	nextCardReadyEvent
+	nextCardReadyEvent,
+	actionEnablementTests
 ) {
 	"use strict";
 
@@ -55,7 +57,7 @@ sap.ui.define([
 			"header": {
 				"title": "L3 Request list content Card",
 				"titleMaxLines": 1,
-				"subTitle": "Card subtitle",
+				"subtitle": "Card subtitle",
 				"icon": {
 					"src": "sap-icon://accept"
 				},
@@ -140,7 +142,7 @@ sap.ui.define([
 			"type": "List",
 			"header": {
 				"title": "List Card",
-				"subTitle": "With static list items",
+				"subtitle": "With static list items",
 				"icon": {
 					"src": "sap-icon://business-objects-experience"
 				},
@@ -808,6 +810,110 @@ sap.ui.define([
 			}
 		}
 	};
+
+	actionEnablementTests("List Card Item", {
+		manifest: {
+			"sap.app": {
+				"id": "card.list.itemActionTest",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"header": {
+					"title": "Card Title"
+				},
+				"content": {
+					"data": {
+						"json": [{
+							"Name": "Comfort Easy"
+						}]
+					},
+					"item": {
+						"title": {
+							"value": "{Name}"
+						}
+					}
+				}
+			}
+		},
+		partUnderTestPath: "/sap.card/content/item",
+		getActionControl: (oCard) => {
+			return oCard.getCardContent().getAggregation("_content").getItems()[0];
+		},
+		DOM_RENDER_LOCATION,
+		QUnit,
+		sinon
+	});
+
+	actionEnablementTests("Info Status in List Card Item", {
+		manifest: {
+			"sap.app": {
+				"id": "card.list.statusActionsTest",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"header": {
+					"title": "Card Title"
+				},
+				"content": {
+					"data": {
+						"json": [{
+							"Name": "Product 1"
+						}]
+					},
+					"item": {
+						"title": "{Name}",
+						"info": {
+							"value": "Status"
+						}
+					}
+				}
+			}
+		},
+		partUnderTestPath: "/sap.card/content/item/info",
+		getActionControl: (oCard) => {
+			return oCard.getCardContent().getAggregation("_content").getItems()[0];
+		},
+		DOM_RENDER_LOCATION,
+		QUnit,
+		sinon
+	});
+
+	actionEnablementTests("List Card Item Attribute", {
+		manifest: {
+			"sap.app": {
+				"id": "card.list.statusActionsTestInAttribute",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "List",
+				"header": {
+					"title": "Card Title"
+				},
+				"content": {
+					"data": {
+						"json": [{
+							"Name": "Product 1"
+						}]
+					},
+					"item": {
+						"title": "{Name}",
+						"attributes": [{
+							"value": "Status Attribute"
+						}]
+					}
+				}
+			}
+		},
+		partUnderTestPath: "/sap.card/content/item/attributes/0",
+		getActionControl: (oCard) => {
+			return oCard.getCardContent().getAggregation("_content").getItems()[0].getAttributes()[0];
+		},
+		DOM_RENDER_LOCATION,
+		QUnit,
+		sinon
+	});
 
 	QUnit.module("List Card", {
 		beforeEach: function () {

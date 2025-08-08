@@ -48,12 +48,12 @@
 			padding: 0.125rem 0;
 			min-width: 2.5rem;
 
-			.sapMBtnInner::after,
-			.sapMBtnIcon {
+			.sapMBtnInner:not(.sapMBtnEmphasized)::after,
+            .sapMBtnInner:not(.sapMBtnEmphasized) .sapMBtnIcon {
 				background: transparent;
 				color: @sapUiShellInteractiveTextColor;
 			}
-			.sapMBtnContent {
+			.sapMBtnInner:not(.sapMBtnEmphasized) .sapMBtnContent {
 				background: transparent;
 				color: @sapUiShellTextColor;
 			}
@@ -165,9 +165,9 @@
 	.sapMTitle {
 		text-shadow: none;
 		line-height: 1.625rem;
-		font-size: 1.125rem;
-		font-weight: bold;
-		color: var(--sapShell_TextColor);
+		font-size: var(-sapFontHeader5Size);
+		font-family: var(--sapFontSemiboldDuplexFamily);
+		color: var(--sapShell_SubBrand_TextColor);
 	}
 
 	.sapMText,

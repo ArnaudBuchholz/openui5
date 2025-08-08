@@ -62,7 +62,7 @@ sap.ui.define([
 							label: "A",
 							dataType: "String",
 							path: "A"
-						},{
+						}, {
 							key: "B",
 							label: "B",
 							dataType: "String",
@@ -109,7 +109,9 @@ sap.ui.define([
 
 	QUnit.test("Open menu before the table is fully initialized", function(assert) {
 		const oTable = this.oTable;
-		let oColumn, oColumnMenu, oOpenMenuSpy;
+		let oColumn;
+		let oColumnMenu;
+		let oOpenMenuSpy;
 
 		oTable.setP13nMode([
 			"Sort"
@@ -188,7 +190,7 @@ sap.ui.define([
 			assert.ok(oQuickAction.isA("sap.m.table.columnmenu.QuickSort"), "The QuickActionContainer contains a QuickSort");
 
 			const fSortSpy = sinon.spy(PersonalizationUtils, "createSortChange");
-			const aSortItemContent =  oQuickAction.getItems()[0]._getAction().getContent();
+			const aSortItemContent = oQuickAction.getItems()[0]._getAction().getContent();
 
 			aSortItemContent[0].getButtons()[1].firePress();
 			assert.ok(fSortSpy.calledOnce, "createSortChange is called");
@@ -210,7 +212,8 @@ sap.ui.define([
 		return TableQUnitUtils.openColumnMenu(oTable, 0).then(function() {
 			const oQuickAction = oTable._oQuickActionContainer.getQuickActions()[0];
 			assert.equal(oQuickAction.getLabel(), "", "label is empty");
-			assert.equal(oQuickAction.getContent()[0].getText(), Library.getResourceBundleFor("sap.m").getText("table.COLUMNMENU_RESIZE"), "button text is correct");
+			assert.equal(oQuickAction.getContent()[0].getText(), Library.getResourceBundleFor("sap.m").getText("table.COLUMNMENU_RESIZE"),
+				"button text is correct");
 
 			const oColumnResizer = oTable._oTable.getDependents()[0];
 			oColumnResizer.startResizing = function() {};
@@ -219,6 +222,29 @@ sap.ui.define([
 			assert.ok(fnResizeSpy.calledOnce, "Resizing started");
 
 			ColumnResizer._isInTouchMode.restore();
+		});
+	});
+
+	QUnit.test("Responsive table - Accessible resize alternative", function(assert) {
+		const oTable = this.oTable;
+
+		oTable.setType("ResponsiveTable");
+
+		return TableQUnitUtils.openColumnMenu(oTable, 0).then(function() {
+			const oQuickResize = oTable._oQuickActionContainer.getQuickActions().filter(function(oQuickAction) {
+				return oQuickAction.isA("sap.m.table.columnmenu.QuickResize");
+			})[0];
+			assert.ok(oQuickResize, "The QuickActionContainer contains a QuickResize");
+			const oQuickResizeAction = oQuickResize.getEffectiveQuickActions()[0];
+			const oStepInput = oQuickResizeAction.getContent()[0];
+			assert.ok(oStepInput.isA("sap.m.StepInput"), "The content is a StepInput");
+
+			const oColumn = oTable.getColumns()[0].getInnerColumn();
+			assert.equal(oStepInput.getValue(), parseInt(getComputedStyle(oColumn.getDomRef()).width),
+						"The StepInput value is correct");
+			oStepInput.setValue(300);
+			oStepInput.fireChange({value: 300});
+			assert.equal(oColumn.getWidth(), "300px", "The column width is set correctly");
 		});
 	});
 
@@ -268,7 +294,7 @@ sap.ui.define([
 
 		return TableQUnitUtils.openColumnMenu(oTable, 0).then(function() {
 			oTable._getSortedProperties = function() {
-				return [{ name: "test", Descending: false }];
+				return [{name: "test", Descending: false}];
 			};
 			oTable._getGroupedProperties = function() {
 				return [];
@@ -279,7 +305,7 @@ sap.ui.define([
 				return [];
 			};
 			oTable._getGroupedProperties = function() {
-				return [{ name: "test" }];
+				return [{name: "test"}];
 			};
 			testUpdateQuickActions("None", true);
 		});

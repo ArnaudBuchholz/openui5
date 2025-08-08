@@ -26,8 +26,7 @@ sap.ui.define([
 	"sap/ui/dt/TaskManager",
 	"sap/ui/dt/TaskRunner",
 	"sap/ui/dt/util/ZIndexManager",
-	"sap/ui/dt/Util",
-	"sap/ui/thirdparty/jquery"
+	"sap/ui/dt/Util"
 ], function(
 	_curry,
 	_difference,
@@ -52,8 +51,7 @@ sap.ui.define([
 	TaskManager,
 	TaskRunner,
 	ZIndexManager,
-	Util,
-	jQuery
+	Util
 ) {
 	"use strict";
 
@@ -632,8 +630,7 @@ sap.ui.define([
 		})
 		.then(
 			function(oElementOverlay) {
-				// TODO remove jQuery when Overlay.render() returns DOM Element
-				jQuery(Overlay.getOverlayContainer()).append(oElementOverlay.render());
+				Overlay.getOverlayContainer().append(oElementOverlay.render());
 				this._oTaskManager.add({
 					type: "applyStyles",
 					callbackFn: oElementOverlay.applyStyles.bind(oElementOverlay),
@@ -1114,9 +1111,9 @@ sap.ui.define([
 						// If creation of one of the children is aborted, we still continue our execution
 						.catch(function(oError) {
 							const mError = this._enrichChildCreationError(oError, oChildElement, sParentElementClassName, sAggregationName);
-							// Omit error message if the parent was already destroyed
+							// Omit error message if the parent or the DesignTime instance was already destroyed
 							// e.g. SimpleForm move where many elements are created/destroyed in a row
-							if (!oElement.isDestroyed() && !oElementOverlay.isDestroyed()) {
+							if (!oElement.isDestroyed() && !oElementOverlay.isDestroyed() && !this.bIsDestroyed) {
 								Log[mError.severity](mError.message);
 							}
 							return mError.errorObject;

@@ -36,6 +36,7 @@ sap.ui.define([
 	"sap/ui/model/odata/CountMode",
 	"sap/ui/model/odata/MessageScope",
 	"sap/ui/model/odata/ODataMetaModel",
+	"sap/ui/model/odata/UpdateMethod",
 	"sap/ui/model/odata/type/Decimal",
 	"sap/ui/model/odata/v2/Context",
 	"sap/ui/model/odata/v2/ODataModel",
@@ -48,7 +49,8 @@ sap.ui.define([
 ], function (Log, Localization, merge, uid, FlexBox, Input, Label, Text, Device, BindingInfo, ManagedObjectObserver,
 		SyncPromise, Element, Library, Messaging, UI5Date, FieldHelp, FieldHelpUtil, Message, MessageType, Controller,
 		View, Rendering, BindingMode, Filter, FilterOperator, FilterType, Model, Sorter, JSONModel, MessageModel,
-		CountMode, MessageScope, ODataMetaModel, Decimal, Context, ODataModel, XMLModel, TestUtils, datajs, XMLHelper) {
+		CountMode, MessageScope, ODataMetaModel, UpdateMethod, Decimal, Context, ODataModel, XMLModel, TestUtils,
+		datajs, XMLHelper) {
 	/*global QUnit, sinon*/
 	/*eslint max-nested-callbacks: 0, no-warning-comments: 0, quote-props: 0*/
 	"use strict";
@@ -407,7 +409,7 @@ sap.ui.define([
 		var oDocument;
 
 		oDocument = XMLHelper.parse(
-			'<mvc:View xmlns="sap.m" xmlns:f="sap.f" xmlns:mvc="sap.ui.core.mvc" \
+			'<mvc:View xmlns="sap.m" xmlns:f="sap.f" xmlns:mvc="sap.ui.core.mvc" xmlns:core="sap.ui.core" \
 				xmlns:t="sap.ui.table" xmlns:trm="sap.ui.table.rowmodes">'
 			+ sViewXML
 			+ '</mvc:View>',
@@ -11722,6 +11724,49 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 });
 
 	//*********************************************************************************************
+	// Scenario: For Unit Types do not show any decimal places if the type of the measure part is an integer type unless
+	// the unit type itself is configured to do so.
+	// SNOW: DINC0532239
+[
+	{sFormatOptions : "", sNumber : "12", sUnit : "12 kg"},
+	// explicitly set format options may overwrite the default of 0 resulting from the integer type
+	{sFormatOptions : "{minFractionDigits : 2, maxFractionDigits : 2}", sNumber : "12.00", sUnit : "12.00 kg"}
+].forEach(({sFormatOptions, sNumber, sUnit}, i) => {
+	QUnit.test(`UnitType with measure part as integer (${i})`, async function (assert) {
+		const oModel = createSpecialCasesModel({defaultBindingMode : "TwoWay"});
+		const sView = `
+<FlexBox binding="{/ProductSet('P1')}">
+	<Input id="weight" value="{
+		parts : [{
+			path : 'WeightMeasure',
+			type : 'sap.ui.model.odata.type.Int32'
+		}, {
+			path : 'WeightUnit',
+			type : 'sap.ui.model.odata.type.String'
+		}, {
+			mode : 'OneTime',
+			path : '/##@@requestUnitsOfMeasure',
+			targetType : 'any'
+		}],
+		mode : 'TwoWay',
+		type : 'sap.ui.model.odata.type.Unit'
+		${sFormatOptions ? ", formatOptions : " + sFormatOptions : ""}
+	}"/>
+</FlexBox>`;
+		this.expectHeadRequest()
+			.expectRequest("ProductSet('P1')", {
+				ProductID : "P1",
+				WeightMeasure : 12,
+				WeightUnit : "mass-kilogram"
+			})
+			.expectValue("weight", sNumber)
+			.expectValue("weight", sUnit);
+
+		await this.createView(assert, sView, oModel);
+	});
+});
+
+	//*********************************************************************************************
 	// Scenario: Do not show more decimal places than available for the amount/quantity part
 	// Observe different formats if the scale of the amount part type's changes
 	// JIRA: CPOUI5MODELS-1600
@@ -11760,25 +11805,25 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 					ExternalCode : "KWH"
 				}]
 			})
-			.expectValue("weight", "12.341 KWH"); // amount type's scale wins
+			.expectValue("weight", "12.341\u00a0KWH"); // amount type's scale wins
 
 		return this.createView(assert, sView, oModel).then(() => {
 			oBindingPart = this.oView.byId("weight").getBinding("value").getBindings()[0];
-			this.expectValue("weight", "12.3410000 KWH");
+			this.expectValue("weight", "12.3410000\u00a0KWH");
 
 			// code under test
 			oBindingPart.setType(new Decimal(undefined, {precision : 13, scale : "variable"}));
 
 			return this.waitForChanges(assert, "change scale to variable -> unit's decimals wins");
 		}).then(() => {
-			this.expectValue("weight", "12.34 KWH");
+			this.expectValue("weight", "12.34\u00a0KWH");
 
 			// code under test
 			oBindingPart.setType(new Decimal(undefined, {precision : 13, scale : 2}));
 
 			return this.waitForChanges(assert, "change scale to 2 -> amount type's scale wins");
 		}).then(() => {
-			this.expectValue("weight", "12 KWH");
+			this.expectValue("weight", "12\u00a0KWH");
 
 			// code under test
 			oBindingPart.setType(new Decimal(undefined, {precision : 13}));
@@ -11796,12 +11841,12 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 	// JIRA: CPOUI5MODELS-1600
 	// SNOW: DINC0152691 => consider scale default value 0 for sap.ui.model.odata.type.Decimal
 [
-	{iMaxFractionDigits: 1, iScale: 3, sExpected: "12.3 KWH"},  // maxFractionDigits wins
-	{iMaxFractionDigits: 9, iScale: 3, sExpected: "12.3410000 KWH"}, // unit's decimal places wins
-	{iMaxFractionDigits: undefined, iScale: 3, sExpected: "12.341 KWH"}, // scale wins
-	{iMaxFractionDigits: undefined, iScale: "'variable'", sExpected: "12.3410000 KWH"}, // unit's decimal places wins
+	{iMaxFractionDigits: 1, iScale: 3, sExpected: "12.3\u00a0KWH"},  // maxFractionDigits wins
+	{iMaxFractionDigits: 9, iScale: 3, sExpected: "12.3410000\u00a0KWH"}, // unit's decimal places wins
+	{iMaxFractionDigits: undefined, iScale: 3, sExpected: "12.341\u00a0KWH"}, // scale wins
+	{iMaxFractionDigits: undefined, iScale: "'variable'", sExpected: "12.3410000\u00a0KWH"}, // decimal places win
 	// DINC0152691: Decimal type scale defaults to 0 => scale wins
-	{iMaxFractionDigits: undefined, iScale: undefined, sExpected: "12 KWH"}
+	{iMaxFractionDigits: undefined, iScale: undefined, sExpected: "12\u00a0KWH"}
 ].forEach(({iMaxFractionDigits, iScale, sExpected}, i) => {
 	QUnit.test(`CPOUI5MODELS-1600: UnitType with unit maxFractionDigits, ${i}`, function (assert) {
 		const oModel = createModel("/sap/opu/odata/sap/ZUI5_GWSAMPLE_BASIC/?sap-language=EN",
@@ -12602,20 +12647,20 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 					UnitCode : "KG"
 				}]
 			})
-			.expectValue("weight", "12.340 KG");
+			.expectValue("weight", "12.340\u00a0KG");
 
 		return this.createView(assert, sView, oModel).then(function () {
 			oControl = that.oView.byId("weight");
 
 			// change event for each part of the composite type
-			that.expectValue("weight", "23.400 KG")
-				.expectValue("weight", "23.400 KG");
+			that.expectValue("weight", "23.400\u00a0KG")
+				.expectValue("weight", "23.400\u00a0KG");
 
 			// code under test
 			oControl.setValue("23.4 KG");
 
-			that.expectValue("weight", "0.000 KG")
-				.expectValue("weight", "0.000 KG");
+			that.expectValue("weight", "0.000\u00a0KG")
+				.expectValue("weight", "0.000\u00a0KG");
 
 			// code under test
 			oControl.setValue("");
@@ -12645,13 +12690,13 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 					type : "Error"
 				}]
 				: [])
-				.expectValue("weight", "1.1 EA")
+				.expectValue("weight", "1.1\u00a0EA")
 				.expectValueState(that.oView.byId("weight"), oFixture.sMessageType,
 					oFixture.sMessageText);
 
 			TestUtils.withNormalizedMessages(function () {
 				// code under test
-				oControl.setValue("1.1 EA");
+				oControl.setValue("1.1\u00a0EA");
 			});
 
 			return that.waitForChanges(assert);
@@ -16849,7 +16894,7 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 		<Text id="salesOrderID" text="{SalesOrderID}"/>\
 		<Text id="note" text="{Note}"/>\
 		<Select items="{path : \'ToLineItems\', templateShareable : true}">\
-			<MenuItem text="{Note}" />\
+			<core:Item text="{Note}" />\
 		</Select>\
 		<Text id="name" text="{ToBusinessPartner/CompanyName}"/>\
 	</t:Table>\
@@ -18450,7 +18495,7 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 			oRequestPromise = new Promise(function (resolve) { fnResolve = resolve; }),
 			sView = '\
 <Select id="salesOrderList" items="{/SalesOrderSet}">\
-	<MenuItem text="{SalesOrderID}" />\
+	<core:Item text="{SalesOrderID}" />\
 </Select>\
 <FlexBox id="objectPage">\
 	<Text id="customer" text="{CustomerName}"/>\
@@ -22365,7 +22410,7 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 <FlexBox id="salesOrderPage">\
 	<Input id="note_input" value="{Note}"/>\
 	<Select id="lineItemsList" items="{ToLineItems}">\
-		<MenuItem text="{ProductID}" />\
+		<core:Item text="{ProductID}" />\
 	</Select>\
 </FlexBox>',
 			that = this;
@@ -24569,7 +24614,7 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 <FlexBox id="form" binding="{/SalesOrderSet('1')}">
 	<Label labelFor="select" text="Currency" />
 	<Select id="select" selectedKey="{CurrencyCode}" items="{/VH_CurrencySet}">
-		<MenuItem key="{Waers}" text="{Ltext}" />
+		<core:Item key="{Waers}" text="{Ltext}" />
 	</Select>
 </FlexBox>`;
 
@@ -26968,5 +27013,29 @@ ToProduct/ToSupplier/BusinessPartnerID\'}}">\
 
 		await this.waitForChanges(assert);
 		FieldHelp.getInstance().deactivate();
+	});
+
+	//*********************************************************************************************
+	// Scenario: It has to be possible to update a property with Edm.Binary type with a large value
+	// SNOW: CS20250009904175
+	QUnit.test("Updating Edm.Binary properties", async function (assert) {
+		const oModel = createSpecialCasesModel({
+			defaultBindingMode: BindingMode.TwoWay, defaultUpdateMethod: UpdateMethod.PUT, tokenHandling: false});
+
+		await this.createView(assert, "", oModel);
+
+		const sData = "A".repeat(10000000); // 10 MB of data
+		this.expectRequest({
+			data: sData,
+			deepPath: "/Employees('Foo')/Photo/$value",
+			headers: {},
+			method: "PUT",
+			requestUri: "Employees('Foo')/Photo/$value"
+		});
+
+		// code under test
+		oModel.update("/Employees('Foo')/Photo/$value", sData);
+
+		await this.waitForChanges(assert);
 	});
 });

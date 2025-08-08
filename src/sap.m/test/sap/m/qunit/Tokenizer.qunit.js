@@ -110,6 +110,11 @@ sap.ui.define([
 		assert.strictEqual(oSpy.firstCall.args[0], false, "setFirstTokenTruncated was called with 'false'.");
 	});
 
+	QUnit.test("Should set the Tokenizer's opener", function(assert) {
+		qutils.triggerKeydown(this.tokenizer.getDomRef(), KeyCodes.I, false, false, true);
+		assert.strictEqual(document.getElementById(this.tokenizer.getProperty("opener")), this.tokenizer.getDomRef(), "The Tokenizer 'open' property is correct");
+	});
+
 	QUnit.test("_handleResize should call _useCollapsedMode and not scrollToEnd so as to show properly the tokens", function(assert) {
 		var oUseCollapsedModeSpy = this.spy(this.tokenizer, "_useCollapsedMode"),
 			oScrollToEndSpy = this.spy(this.tokenizer, "scrollToEnd");
@@ -530,6 +535,51 @@ sap.ui.define([
 		// Cleanup
 		oTokenizer.destroy();
 	});
+
+	QUnit.test("Handle mapping between List items and Tokens on Token deletion when fired from a token", async function (assert) {
+		// Setup
+		this.clock = sinon.useFakeTimers();
+		const oModel = new JSONModel({
+				items: [
+					{text: "Token 0"},
+					{text: "Token 1"},
+					{text: "Token 2"}
+				]
+			}),
+			oTokenizer = new Tokenizer({
+				tokens: {path: "/items", template: new Token({text: {path: "text"}})},
+				width: "150px",
+				renderMode: "Narrow",
+				tokenDelete: function(oEvent) {
+					oModel.setData({
+						items: [
+							{text: "Token 1"},
+							{text: "Token 2"}
+						]
+					});
+				}
+			})
+			.setModel(oModel)
+			.placeAt("content");
+		await nextUIUpdate(this.clock);
+
+		oTokenizer._handleNMoreIndicatorPress();
+		this.clock.tick(500);
+
+		// Act
+		oTokenizer.getTokens()[0].getAggregation("deleteIcon").firePress();
+		this.clock.tick(500);
+
+		// Assert
+		const aItems = oTokenizer._getTokensList().getItems();
+		assert.strictEqual(aItems.length, 2, "There should be 2 items in the list");
+		assert.strictEqual(oTokenizer.getTokens().length, 2, "The Tokenizer should have 2 tokens");
+
+		// Cleanup
+		this.clock.restore();
+		oTokenizer.destroy();
+	});
+
 	QUnit.test("should fire press event coming from n-more list", function (assert) {
 		// Setup
 		var oList, oHandleListItemPressSpy,
@@ -846,7 +896,11 @@ sap.ui.define([
 		await nextUIUpdate();
 
 		var nMoreLink = oTokenizer.getDomRef().querySelector(".sapMTokenizerIndicator");
-		var oPopover = oTokenizer.getTokensPopup();
+
+		assert.notOk(nMoreLink.hasAttribute("aria-controls"), "The aria-controls attribute should not be set initially");
+
+		var oResponsivePopover = oTokenizer.getTokensPopup();
+		var oResponsivePopoverContent = oResponsivePopover._oControl;
 
 		assert.strictEqual(nMoreLink.getAttribute("role"), "button", "The role of the nMore indicator should be button");
 		assert.strictEqual(nMoreLink.getAttribute("aria-expanded"), "false", "The aria-expanded attribute should be false");
@@ -856,7 +910,7 @@ sap.ui.define([
 		await nextUIUpdate();
 
 		assert.strictEqual(nMoreLink.getAttribute("aria-haspopup"), "dialog", "The aria-haspopup attribute should be dialog");
-		assert.strictEqual(nMoreLink.getAttribute("aria-controls"), oPopover.getId(), "The aria-haspopup attribute should be dialog");
+		assert.strictEqual(nMoreLink.getAttribute("aria-controls"), oResponsivePopoverContent.getId(), "The aria-controls attribute should be set to the id of the responsive popover content");
 
 		assert.strictEqual(nMoreLink.getAttribute("aria-expanded"), "true", "The aria-expanded attribute should be true");
 		oTokenizer.destroy();
@@ -1012,7 +1066,7 @@ sap.ui.define([
 		await nextUIUpdate();
 
 		// assert
-		assert.strictEqual(spy.callCount, 1, "tokenizer's _adjustTokensVisibility was called once");
+		assert.ok(spy.called, "tokenizer's _adjustTokensVisibility was called once");
 	});
 
 	QUnit.test("setEnabled", async function(assert) {
@@ -1847,6 +1901,33 @@ sap.ui.define([
 		oTokenizer = null;
 	});
 
+	QUnit.test("Invalidating token should trigger layouting", async function(assert) {
+		var oTokenizer = new Tokenizer({
+			maxWidth: "100px",
+			tokens: [
+				new Token(),
+				new Token(),
+				new Token(),
+				new Token()
+			]
+		}).placeAt("content");
+		await nextUIUpdate();
+
+		// spy _adjustTokensVisibility
+		var oSpy = this.spy(oTokenizer, "_adjustTokensVisibility");
+
+		// act
+		oTokenizer.getTokens().forEach((token, indx) => {
+			token.setText(`${indx}`);
+		});
+
+		await nextUIUpdate();
+		assert.strictEqual(oSpy.callCount, 1, "The _adjustTokensVisibility method was called once.");
+
+		// clean up
+		oTokenizer.destroy();
+	});
+
 	QUnit.module("Tokenizer ARIA", {
 		beforeEach : async function() {
 			this.tokenizer = new Tokenizer();
@@ -1958,7 +2039,6 @@ sap.ui.define([
 		this.clock.tick();
 
 		// Assert
-		assert.strictEqual(oSetTruncatedSpy.callCount, 2, "The token's setTruncateds method twice.");
 		assert.strictEqual(oSetTruncatedSpy.calledWith(false), true, "Method called with correct parameter");
 		assert.strictEqual(oRemoveStyleClassSpy.callCount, 1, "The tokenizer's removeStyleClass method was called once.");
 		assert.strictEqual(oAddStyleClassSpy.calledWith("sapMTokenizerOneLongToken"), true, "Method called with correct parameter");

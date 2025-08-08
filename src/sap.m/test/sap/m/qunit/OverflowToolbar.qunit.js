@@ -1591,16 +1591,10 @@ sap.ui.define([
 	});
 
 	QUnit.test("[bindAggregation] Binding the control to a model makes it load the items from the model", function (assert) {
-		var oOverflowTB,
-				oModel,
-				oButtonTemplate,
-				oData,
-				widthTypes = getSampleWidths();
+		var oModel, oData,
+			widthTypes = getSampleWidths();
 
 		// The template
-		oButtonTemplate = new Button({
-			text: "{text}"
-		});
 
 		// The data
 		oData = {
@@ -1637,10 +1631,16 @@ sap.ui.define([
 		oModel = new JSONModel();
 		oModel.setData(oData);
 
-		widthTypes.forEach(function (sWidth) {
-			oOverflowTB = createOverflowToolbar({width: sWidth}, getDefaultContent());
+		widthTypes.forEach((sWidth) => {
+			const oOverflowTB = createOverflowToolbar({width: sWidth}, getDefaultContent());
+			const oButtonTemplate = new Button({
+				text: "{text}"
+			});
 			oOverflowTB.setModel(oModel);
-			oOverflowTB.bindAggregation("content", "/buttons", oButtonTemplate);
+			oOverflowTB.bindAggregation("content", {
+				path: "/buttons",
+				template: oButtonTemplate
+			});
 			this.clock.tick(1000);
 			assert.strictEqual(oOverflowTB.getContent().length, oData.buttons.length, "When the width is: " + sWidth + ", the toolbar properly displays all buttons from the data source");
 
@@ -1651,7 +1651,7 @@ sap.ui.define([
 			}
 
 			oOverflowTB.destroy();
-		}, this);
+		});
 
 	});
 
@@ -3799,6 +3799,32 @@ sap.ui.define([
 		oOverflowTB.destroy();
 	});
 
+	QUnit.test("Interactive controls count", function (assert) {
+		// Arrange
+		var oOverflowTB = createOverflowToolbar({width: '500px'}, [
+				new Button({text: "Button 1", width: "150px"}),
+				new Button({text: "Button 2", width: "150px"})
+			]);
+
+		oOverflowTB.placeAt("qunit-fixture");
+		oCore.applyChanges();
+
+		// Assert
+		assert.strictEqual(oOverflowTB._getToolbarInteractiveControls().length, 2,
+			"Interactive controls count is correct when overflow button is not visible (two Buttons)");
+
+		// Act
+		oOverflowTB.setWidth("250px");
+		oCore.applyChanges();
+
+		// Assert
+		assert.strictEqual(oOverflowTB._getToolbarInteractiveControls().length, 2,
+			"Interactive controls count is correct when overflow button is visible (one Button + overflow button)");
+
+		// Clean up
+		oOverflowTB.destroy();
+	});
+
 	QUnit.module("Special cases", {
 		beforeEach: function () {
 			sinon.config.useFakeTimers = false;
@@ -4018,6 +4044,71 @@ sap.ui.define([
 		//Cleanup
 		oOtb.destroy();
 	 });
+
+	QUnit.test("Button with no width is not moved to the overflow", async function (assert) {
+		// Arrange
+		var CustomButtonWithNoWidth = Button.extend("CustomButtonWithNoWidth", {
+			interfaces: ["sap.m.IOverflowToolbarContent"],
+			renderer: function (oRm, oControl) {
+				oRm.openStart("div", oControl);
+				oRm.openEnd();
+				oRm.close("div");
+			},
+			getOverflowToolbarConfig: function() {
+				return {
+					canOverflow: true,
+					propsUnrelatedToSize: ["enabled", "type"]
+				};
+			}
+		}),
+		oNonOverflowingButton = new Button(
+			{text: "Cannot overflow",
+			layoutData: new OverflowToolbarLayoutData({priority: OverflowToolbarPriority.NeverOverflow})
+		}),
+		oCustomButtonWithNoWidth = new CustomButtonWithNoWidth({text: "Custom button with no width"}),
+		oOtb = new OverflowToolbar({
+			content: [
+				oCustomButtonWithNoWidth,
+				oNonOverflowingButton
+			]
+		});
+
+		oOtb.placeAt("qunit-fixture");
+		await nextUIUpdate();
+
+		// Assert init state
+		assert.strictEqual(oCustomButtonWithNoWidth.getDomRef().offsetWidth, 0, "Custom button has no width");
+
+		 // Act: Set OTB width to one that requires overflow
+		oOtb.getDomRef().style.width = (oNonOverflowingButton.getDomRef().offsetWidth - 2) + "px";
+		oOtb._moveControlsToPopover(oOtb.getDomRef().offsetWidth);
+
+		// Assert: Custom button with no width is not moved to the overflow
+		assert.notOk(oOtb._aButtonsToMoveToPopover.includes(oCustomButtonWithNoWidth), "Custom button with no width is NOT in the list of buttons to move to Popover");
+
+		//Cleanup
+		oOtb.destroy();
+	});
+
+	QUnit.test("OverflowToolbar with Buttons, _getControlMargins returns 0 instead of NaN", function (assert) {
+		// Arrange
+		var oButton1 = new Button({text: "Button 1", width: "100px"}),
+			oButton2 = new Button({text: "Button 2", width: "100px"}),
+			oOverflowToolbar = new OverflowToolbar({
+				content: [oButton1, oButton2]
+			});
+
+		// Act
+		var oMargins1 = OverflowToolbar._getControlMargins(oButton1),
+			oMargins2 = OverflowToolbar._getControlMargins(oButton2);
+
+		// Assert
+		assert.strictEqual(oMargins1, 0, "Button 1 margins are 0, as Button is not rendered yet");
+		assert.strictEqual(oMargins2, 0, "Button 2 margins are 0, as Button is not rendered yet");
+
+		//Cleanup
+		oOverflowToolbar.destroy();
+	});
 
 	QUnit.module("Associative popover");
 

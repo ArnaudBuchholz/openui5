@@ -8,14 +8,16 @@ sap.ui.define([
 	"sap/ui/integration/library",
 	"sap/m/IllustratedMessageType",
 	"sap/ui/core/ComponentContainer",
-	"sap/ui/core/ComponentHooks"
+	"sap/ui/core/ComponentHooks",
+	"sap/ui/core/Lib"
 ], function (
 	BaseContent,
 	ComponentContentRenderer,
 	library,
 	IllustratedMessageType,
 	ComponentContainer,
-	ComponentHooks
+	ComponentHooks,
+	Library
 ) {
 	"use strict";
 
@@ -114,8 +116,8 @@ sap.ui.define([
 			componentFailed: () => {
 				this.fireEvent("_actionContentReady");
 				this.handleError({
-					illustrationType: IllustratedMessageType.ErrorScreen,
-					title: oCard.getTranslatedText("CARD_DATA_LOAD_ERROR"),
+					illustrationType: IllustratedMessageType.UnableToLoad,
+					title: Library.getResourceBundleFor("sap.ui.integration").getText("CARD_DATA_LOAD_ERROR"),
 					description: "Card content failed to create component"
 				});
 			}

@@ -12,7 +12,8 @@ sap.ui.define([
 
 		started: null,
 		init: function() {
-			let mockData, metadata;
+			let mockData;
+			let metadata;
 			const sLocalServicePath = sap.ui.require.toUrl("sap/ui/mdc/table/OpaTests/mockserver");
 
 			this.started = jQuery.get(sLocalServicePath + "/ProductList.json").then(function(data, status, jqXHR) {
@@ -35,8 +36,6 @@ sap.ui.define([
 
 			function generateResponse(fServer) {
 				fServer.respondWith("GET", /\/sap\/opu\/odata4\/IWBEP\/V4_SAMPLE\/default\/IWBEP\/V4_GW_SAMPLE_BASIC\/0001\//, function(xhr, id) {
-					const oParams = new URLSearchParams(xhr.url);
-					let sFilter = oParams.get("$filter");
 					const oFilteredData = jQuery.extend({}, (mockData));
 					if (xhr.url.indexOf("metadata") > -1) {
 						return xhr.respond(200, {
@@ -46,32 +45,40 @@ sap.ui.define([
 					}
 					//search
 					if (xhr.url.indexOf("$search") > -1) {
-						const sSearchString = oParams.get("$search");
-
+						const sSearchString = xhr.url.match(/\$search=([^&]+)/)[1];
 						oFilteredData.value = searchData(sSearchString, oFilteredData.value);
 					}
 					if (xhr.url.indexOf("$filter") > 0) {
-						//sFilter = xhr.url.match(/\$filter=(.*)&/)[1];
-
-						if (sFilter.indexOf("&$skip=0") > -1) {
-							sFilter = sFilter.slice(0, sFilter.indexOf("&$skip=0"));
-						}
-
+						const sFilter = decodeURIComponent(xhr.url.match(/\$filter=([^&]+)/)[1]);
 						oFilteredData.value = recursiveOdataQueryFilter(mockData.value, sFilter);
-
 					}
 					if (xhr.url.indexOf("$orderby") > -1) {
 						let bDesc = false;
 						if (xhr.url.indexOf("desc") > -1) {
 							bDesc = true;
 						}
-						const sOrderByProperty = oParams.get("$orderby"),
-							//sEntitySet = "ProductList",
-							//sEntityType = "Product",
-							sOrderByString = sOrderByProperty.split(' ')[0],
-							//oFilteredData.value = sortData(sOrderByString, oFilteredData.value);
-							aSearchableProperty = ["ProductID", "TypeCode", "Category", "Name", "NameLanguage", "Description", "DescriptionLanguage", "SupplierID", "SupplierName", "MeasureUnit", "WeightUnit", "CurrencyCode", "DimUnit"];
+						const sOrderByProperty = xhr.url.match(/\$orderby=([^&]+)/)[1];
+						//sEntitySet = "ProductList",
+						//sEntityType = "Product",
+						const sOrderByString = sOrderByProperty.split(' ')[0];
+						//oFilteredData.value = sortData(sOrderByString, oFilteredData.value);
+						const aSearchableProperty = [
+							"ProductID", "TypeCode", "Category", "Name", "NameLanguage", "Description", "DescriptionLanguage", "SupplierID",
+							"SupplierName", "MeasureUnit", "WeightUnit", "CurrencyCode", "DimUnit"
+						];
 						oFilteredData.value = sortData(sOrderByString, oFilteredData.value, aSearchableProperty, bDesc);
+					}
+					if (xhr.url.indexOf("$select") > -1) {
+						const aSelect = xhr.url.match(/\$select=([^&]+)/)[1].split(",");
+						oFilteredData.value = oFilteredData.value.map((oEntry) => {
+							const mNewEntry = {};
+							for (const sProperty of aSelect) {
+								if (sProperty in oEntry) {
+									mNewEntry[sProperty] = oEntry[sProperty];
+								}
+							}
+							return mNewEntry;
+						});
 					}
 					if (xhr.url.indexOf("ProductList") > -1) {
 						return xhr.respond(200, {
@@ -104,6 +111,7 @@ sap.ui.define([
 				});
 			}
 
+			// eslint-disable-next-line complexity
 			function filterData(aData, sODataQueryValue) {
 				if (aData.length === 0) {
 					return aData;
@@ -154,9 +162,13 @@ sap.ui.define([
 					return aData.filter(function(oEntry) {
 						// return false if not found
 						if (aODataFilterValues[3].match(/'([^']+)'/)) {
-							return oEntry.hasOwnProperty(aODataFilterValues[1]) ? oEntry[aODataFilterValues[1]].toString() === aODataFilterValues[3].match(/'([^']+)'/)[1] : false;
+							return oEntry.hasOwnProperty(aODataFilterValues[1])
+								? oEntry[aODataFilterValues[1]].toString() === aODataFilterValues[3].match(/'([^']+)'/)[1]
+								: false;
 						} else { //In case the property is of numeric type, it wont be enclosed inside braces
-							return oEntry.hasOwnProperty(aODataFilterValues[1]) ? oEntry[aODataFilterValues[1]].toString() === aODataFilterValues[3] : false;
+							return oEntry.hasOwnProperty(aODataFilterValues[1])
+								? oEntry[aODataFilterValues[1]].toString() === aODataFilterValues[3]
+								: false;
 						}
 					});
 				}
@@ -164,9 +176,13 @@ sap.ui.define([
 					return aData.filter(function(oEntry) {
 						// return false if not found
 						if (aODataFilterValues[3].match(/'([^']+)'/)) {
-							return oEntry.hasOwnProperty(aODataFilterValues[1]) ? oEntry[aODataFilterValues[1]].toString() !== aODataFilterValues[3].match(/'([^']+)'/)[1] : false;
+							return oEntry.hasOwnProperty(aODataFilterValues[1])
+								? oEntry[aODataFilterValues[1]].toString() !== aODataFilterValues[3].match(/'([^']+)'/)[1]
+								: false;
 						} else { //In case the property is of numeric type, it wont be enclosed inside braces
-							return oEntry.hasOwnProperty(aODataFilterValues[1]) ? oEntry[aODataFilterValues[1]].toString() !== aODataFilterValues[3] : false;
+							return oEntry.hasOwnProperty(aODataFilterValues[1])
+								? oEntry[aODataFilterValues[1]].toString() !== aODataFilterValues[3]
+								: false;
 						}
 					});
 				}
@@ -177,7 +193,9 @@ sap.ui.define([
 			function _getBracketIndices(sString) {
 				const aStack = [];
 				let bReserved = false;
-				let iStartIndex, iEndIndex = 0;
+				let iStartIndex;
+				let iEndIndex = 0;
+
 				for (let character = 0; character < sString.length; character++) {
 					if (sString[character] === '(') {
 						if (/[contains|endswith|startswith]$/.test(sString.substring(0, character))) {
@@ -230,6 +248,7 @@ sap.ui.define([
 				}, array);
 			}
 
+			// eslint-disable-next-line complexity
 			function recursiveOdataQueryFilter(aDataSet, sODataQueryValue) {
 				if (sODataQueryValue) {
 
@@ -242,9 +261,10 @@ sap.ui.define([
 
 					// find brackets that are not related to the reserved words
 					const rExp = /([^contains|endswith|startswith]|^)\((.*)\)/;
-					let aSet2, aParts;
-
+					let aSet2;
+					let aParts;
 					let sOperator;
+
 					if (rExp.test(sODataQueryValue)) {
 						const sBracketed = sODataQueryValue.substring(oIndices.start, oIndices.end + 1);
 						let rExp1 = new RegExp("(.*) +(or|and) +(" + trim(escapeStringForRegExp(sBracketed)) + ".*)");
@@ -277,11 +297,6 @@ sap.ui.define([
 
 						// base case
 						if (aParts.length === 1) {
-							// IE8 handling
-							if (sODataQueryValue.match(/ +and | or +/)) {
-								throw new Error("400");
-							}
-
 							return filterData(aDataSet, trim(sODataQueryValue));
 						}
 

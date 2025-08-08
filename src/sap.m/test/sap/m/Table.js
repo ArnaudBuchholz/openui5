@@ -7,6 +7,7 @@ sap.ui.define([
 	"sap/m/library",
 	"sap/ui/core/Item",
 	"sap/m/Select",
+	"sap/m/Slider",
 	"sap/m/ToggleButton",
 	"sap/ui/model/Sorter",
 	"sap/ui/model/Filter",
@@ -18,15 +19,17 @@ sap.ui.define([
 	"sap/m/Title",
 	"sap/m/Button",
 	"sap/m/plugins/CopyProvider",
+	"sap/m/plugins/ColumnAIAction",
 	"sap/m/plugins/PasteProvider",
 	"sap/m/Column",
 	"sap/m/Link",
 	"sap/m/ColumnListItem",
+	"sap/m/ListItemAction",
 	"sap/m/CheckBox",
 	"sap/m/RatingIndicator",
 	"sap/m/DatePicker",
 	"sap/m/Table",
-	"sap/m/table/columnmenu/Item",
+	"sap/m/table/columnmenu/ActionItem",
 	"sap/m/table/columnmenu/Menu",
 	"sap/m/table/columnmenu/QuickAction",
 	"sap/m/Page"
@@ -39,6 +42,7 @@ sap.ui.define([
 	mobileLibrary,
 	Item,
 	Select,
+	Slider,
 	ToggleButton,
 	Sorter,
 	Filter,
@@ -50,10 +54,12 @@ sap.ui.define([
 	Title,
 	Button,
 	CopyProvider,
+	ColumnAIAction,
 	PasteProvider,
 	Column,
 	Link,
 	ColumnListItem,
+	ListItemAction,
 	CheckBox,
 	RatingIndicator,
 	DatePicker,
@@ -73,6 +79,9 @@ sap.ui.define([
 
 	// shortcut for sap.m.ListMode
 	var ListMode = mobileLibrary.ListMode;
+
+	// shortcut for sap.m.ListItemActionType
+	const ListItemActionType = mobileLibrary.ListItemActionType;
 
 	var aData = [
 		{id: Math.random(), lastName: "Dente", name: "Al", checked: true, linkText: "www.sap.com", href: "http://www.sap.com", src: "employee", gender: "male", rating: 4, money: 5.67, birthday: "1984-06-01", currency: "EUR", type: "Inactive"},
@@ -256,6 +265,17 @@ sap.ui.define([
 		}
 	});
 
+	const oItemActionCount = new Slider({
+		min: 0,
+		max: 2,
+		value: 2,
+		width: "150px",
+		enableTickmarks: true,
+		change: function(e) {
+			oTable.setItemActionCount(oItemActionCount.getValue());
+		}
+	});
+
 	var oGrowing = new ToggleButton({
 		text : "Growing",
 		pressed: true,
@@ -316,8 +336,7 @@ sap.ui.define([
 
 	var oTableActions = new OverflowToolbar({
 		content : [
-			oModes, oTypes, new ToolbarSpacer(), oNoData, new ToolbarSpacer(), oGrowing, oGrouping, oMerging
-
+			oModes, oTypes, oItemActionCount, new ToolbarSpacer(), oNoData, new ToolbarSpacer(), oGrowing, oGrouping, oMerging
 		]
 	});
 
@@ -364,7 +383,7 @@ sap.ui.define([
 			new ColumnMenuQuickAction({label: "Quick Action A", content: new Button({text: "Execute"})})
 		],
 		items: [
-			new ColumnMenuItem({label: "Item A", icon: "sap-icon://sort", content: new Button({text: "Execute"})})
+			new ColumnMenuItem({label: "Item A", icon: "sap-icon://sort"})
 		]
 	});
 
@@ -372,8 +391,13 @@ sap.ui.define([
 		new Column({
 			header : new Label({
 				text : "LastName",
-				wrapping: true,
+				wrapping: false,
 				wrappingType: "Hyphenated"
+			}),
+			dependents: new ColumnAIAction({
+				press: function(oEvent) {
+					MessageBox.show("ColumnAIAction pressed " + oEvent.getParameter("action").getId());
+				}
 			})
 		}).data("clipboard", "lastName"),
 		new Column({
@@ -442,7 +466,12 @@ sap.ui.define([
 			footer : oSalaryFooter.clone(),
 			minScreenWidth : "Desktop",
 			popinDisplay : "Inline",
-			demandPopin : true
+			demandPopin : true,
+			dependents: new ColumnAIAction({
+				press: function(oEvent) {
+					MessageBox.show("ColumnAIAction pressed " + oEvent.getParameter("action").getId());
+				}
+			})
 		}).data("clipboard", "money")
 	];
 	aColumns[0].setHeaderMenu(oMenu.getId());
@@ -454,6 +483,12 @@ sap.ui.define([
 			setTimeout(function() {
 				MessageToast.show("detail is pressed");
 			}, 10);
+		},
+		navigated: {
+			path: "money",
+			formatter: function(fSalary) {
+				return (fSalary === 10.45);
+			}
 		},
 		highlight: {
 			path: "money",
@@ -520,6 +555,18 @@ sap.ui.define([
 			new MText({
 				text : "{money} EUR"
 			})
+		],
+		actions: [
+			new ListItemAction({
+				text: "Accept",
+				icon: "sap-icon://accept"
+			}),
+			new ListItemAction({
+				type: ListItemActionType.Edit
+			}),
+			new ListItemAction({
+				type: ListItemActionType.Delete
+			})
 		]
 	});
 
@@ -537,15 +584,17 @@ sap.ui.define([
 		growingThreshold: 5,
 		growingScrollToLoad : true,
 		footerText : "Static table footer text",
+		sticky: ["HeaderToolbar", "InfoToolbar", "ColumnHeaders", "GroupHeaders"],
 		headerToolbar : oTableHeader,
 		infoToolbar : oTableInfo,
 		swipeContent : oSwipe,
+		inset: true,
 		columns : aColumns,
-		/*dependents: new CopyProvider({
+		dependents: [new CopyProvider({
 			extractData: function(oContext, oColumn) {
 				return oContext.getProperty(oColumn.data("clipboard"));
 			}
-		}),*/
+		}), new sap.m.plugins.ColumnResizer()],
 		selectionChange : function(e) {
 			MessageToast.show("selection is changed");
 		},
@@ -573,6 +622,14 @@ sap.ui.define([
 		},
 		itemPress : function(e) {
 			MessageToast.show("item is pressed");
+		},
+		itemActionCount: 2,
+		itemActionPress: function(oEvent) {
+			const oItem = oEvent.getParameter("listItem");
+			const oAction = oEvent.getParameter("action");
+			const iItemIndex = oItem.getParent().indexOfItem(oItem) + 1;
+			const sAction = oAction.getText() || oAction.getType();
+			MessageToast.show(`${sAction} action of row ${iItemIndex} is pressed`);
 		},
 		paste: applyPastedData
 	});

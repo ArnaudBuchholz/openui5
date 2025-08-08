@@ -31,7 +31,7 @@
 		"header": {
 			"type": "Numeric",
 			"title": "Julia Neil",
-			"subTitle": "Complete your time recording",
+			"subtitle": "Complete your time recording",
 			"mainIndicator": {
 				"number": "35",
 				"unit": "h",
@@ -139,10 +139,17 @@
 							"showStateIcon": true
 						},
 						{
-							"value": "Information",
+							"value": "Information (Interactive)",
 							"state": "Information",
 							"type": "Status",
-							"showStateIcon": true
+							"showStateIcon": true,
+							"actions": [{
+								"type": "Navigation",
+								"parameters": {
+									"url": "https://www.sap.com",
+									"target": "_blank"
+								}
+							}]
 						},
 						{
 							"value": "Information - custom state icon",

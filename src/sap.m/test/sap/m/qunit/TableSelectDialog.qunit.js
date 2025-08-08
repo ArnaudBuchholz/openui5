@@ -275,7 +275,7 @@ sap.ui.define([
 
 	// then set model & bind Aggregation
 	oTableSelectDialog1.setModel(oModel);
-	oTableSelectDialog1.bindAggregation("items", "/navigation", template);
+	oTableSelectDialog1.bindAggregation("items", "/navigation", template.clone());
 
 	// attach confirm listener
 	oTableSelectDialog1.attachConfirm(function(evt) {
@@ -340,6 +340,13 @@ sap.ui.define([
 	});
 
 	app.addPage(page).placeAt("content");
+
+	QUnit.done(() => {
+		template.destroy();
+		oTableSelectDialog.destroy();
+		oTableSelectDialog1.destroy();
+		app.destroy();
+	});
 
 	QUnit.module("Initial Check", {
 		beforeEach : function () {
@@ -654,7 +661,7 @@ sap.ui.define([
 
 	QUnit.test("Proper selection reset after canceling filtered table with selected items", function(assert) {
 		this.oTableSelectDialog.setModel(oModel);
-		this.oTableSelectDialog.bindAggregation("items", "/navigation", template);
+		this.oTableSelectDialog.bindAggregation("items", "/navigation", template.clone());
 		this.oTableSelectDialog.open();
 
 		var oTable = this.oTableSelectDialog._oTable;
@@ -696,7 +703,7 @@ sap.ui.define([
 				}
 			]
 		}));
-		this.oTableSelectDialog.bindAggregation("items", "/navigation", template);
+		this.oTableSelectDialog.bindAggregation("items", "/navigation", template.clone());
 		this.oTableSelectDialog.setRememberSelections(true);
 		this.oTableSelectDialog.open();
 
@@ -1210,7 +1217,7 @@ sap.ui.define([
 
 		this.stub(Device, "system", oSystem);
 		this.oTableSelectDialog.setModel(oModel);
-		this.oTableSelectDialog.bindAggregation("items", "/navigation", template);
+		this.oTableSelectDialog.bindAggregation("items", "/navigation", template.clone());
 
 		// Act
 		this.oTableSelectDialog.open();
@@ -1234,7 +1241,7 @@ sap.ui.define([
 		this.oTableSelectDialog.open();
 		this.clock.tick(500);
 		this.oTableSelectDialog.setModel(oModel);
-		this.oTableSelectDialog.bindAggregation("items", "/navigation", template);
+		this.oTableSelectDialog.bindAggregation("items", "/navigation", template.clone());
 		this.oTableSelectDialog._oDialog.getContent()[1].attachEventOnce("updateFinished", function() {
 			this.clock.tick(1);
 			// Assert
@@ -1254,7 +1261,7 @@ sap.ui.define([
 
 		this.stub(Device, "system", oSystem);
 		this.oTableSelectDialog.setModel(oModel);
-		this.oTableSelectDialog.bindAggregation("items", "/navigation", template);
+		this.oTableSelectDialog.bindAggregation("items", "/navigation", template.clone());
 		this.oTableSelectDialog.setInitialFocus(SelectDialogInitialFocus.SearchField);
 
 		// Act
@@ -1298,12 +1305,6 @@ sap.ui.define([
 
 
 	QUnit.module("OpenClose", {
-		beforeEach : function () {
-			sinon.config.useFakeTimers = true;
-		},
-		afterEach : function () {
-			sinon.config.useFakeTimers = false;
-		}
 	});
 
 	QUnit.test("Closing without filtering doesn't re-filter the model", function(assert) {
@@ -1320,36 +1321,36 @@ sap.ui.define([
 	});
 
 	QUnit.test("LiveSearchUpdates", function(assert) {
+		var done = assert.async();
+		var searchField = oTableSelectDialog1._oSearchField;
+
 		oTableSelectDialog1.open();
 
-		var searchField = oTableSelectDialog1._oSearchField;
+		oTableSelectDialog1.attachEventOnce("updateFinished", () => {
+			var oTable = UI5Element.getElementById("oTableSelectDialog1-table");
+
+			assert.equal(oTable.getItems().length, 3, 'filtered items are ok');
+
+			oTableSelectDialog1.attachEventOnce("updateFinished", () => {
+				oTableSelectDialog1.attachEventOnce("updateFinished", () => {
+					assert.equal(oTable.getItems().length, 3, 'filtered items are ok');
+
+					oTableSelectDialog1._oDialog.close();
+					oTableSelectDialog1._fireConfirmAndUpdateSelection();
+
+					done();
+				});
+
+				searchField.setValue("m");
+				searchField.fireLiveChange({newValue: "m"});
+			});
+
+			searchField.setValue("");
+			searchField.fireLiveChange({newValue: ""});
+		});
+
 		searchField.setValue('m');
 		searchField.fireLiveChange({newValue: "m"});
-
-		oCore.applyChanges();
-		this.clock.tick(500);
-
-		var oTable = UI5Element.getElementById("oTableSelectDialog1-table");
-
-		assert.equal(oTable.getItems().length, 3, 'filtered items are ok');
-
-		oTableSelectDialog1._fireConfirmAndUpdateSelection();
-		oTableSelectDialog1._oDialog.close();
-
-		oCore.applyChanges();
-		this.clock.tick(500);
-
-		oTableSelectDialog1.open();
-		searchField.fireLiveChange({newValue: ""});
-		searchField.fireLiveChange({newValue: "m"});
-
-		oCore.applyChanges();
-		this.clock.tick(500);
-
-		assert.equal(oTable.getItems().length, 3, 'filtered items are ok');
-
-		oTableSelectDialog1._oDialog.close();
-		oTableSelectDialog1._fireConfirmAndUpdateSelection();
 	});
 
 	QUnit.module("Clear functionality", {

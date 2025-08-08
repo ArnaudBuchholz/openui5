@@ -388,12 +388,8 @@ sap.ui.define([
 			rm.class("sapUiTableHeaderCell");
 			rm.class("sapUiTableRowActionHeaderCell");
 			rm.attr("tabindex", "-1");
+			rm.attr("aria-label", TableUtils.getResourceText("TBL_ROW_ACTION_COLUMN_LABEL"));
 			rm.openEnd();
-			rm.openStart("span");
-
-			rm.openEnd();
-			rm.text(TableUtils.getResourceText("TBL_ROW_ACTION_COLUMN_LABEL"));
-			rm.close("span");
 
 			rm.close("div");
 		}
@@ -506,8 +502,7 @@ sap.ui.define([
 
 		const mAccParams = {
 			column: oColumn,
-			headerId: sHeaderId,
-			index: iIndex
+			headerId: sHeaderId
 		};
 
 		if (nSpan > 1) {
@@ -595,9 +590,15 @@ sap.ui.define([
 		rm.style("justify-content", mFlexCellContentAlignment[sHAlign]);
 		rm.openEnd();
 
-		if (oLabel) {
-			rm.renderControl(oLabel);
+		const oAction = oColumn.getAggregation("_action");
+		if (oAction && iHeader === 0) {
+			if (oColumn.getMultiLabels().length > 0) {
+				Log.error(`${oColumn}: ColumnAIAction is not compatible with multi labels`);
+			} else {
+				rm.renderControl(oAction);
+			}
 		}
+		rm.renderControl(oLabel);
 
 		rm.close("div");
 
@@ -926,7 +927,7 @@ sap.ui.define([
 			// check whether the row can be clicked to change the selection
 			const bSelectOnCellsAllowed = TableUtils.isRowSelectionAllowed(oTable);
 			const bRowsDraggable = oTable.getDragDropConfig().some(function(oDragDropInfo) {
-				return oDragDropInfo.getMetadata().isInstanceOf("sap.ui.core.dnd.IDragInfo") && oDragDropInfo.getSourceAggregation() === "rows";
+				return oDragDropInfo.isDraggable(oTable, "rows");
 			});
 
 			const iLastFixedColumnIndex = this.getLastFixedColumnIndex(oTable);
@@ -1006,7 +1007,7 @@ sap.ui.define([
 		rm.class("sapUiTableRow");
 		rm.class("sapUiTableHeaderRow");
 		rm.class("sapUiTableColHdrTr");
-		oTable._getAccRenderExtension().writeAriaAttributesFor(rm, oTable, "ColumnHeaderRow");
+		oTable._getAccRenderExtension().writeAriaAttributesFor(rm, oTable, "ColumnHeaderRow", {rowIndex: iRow});
 		rm.openEnd();
 
 		//
@@ -1143,7 +1144,6 @@ sap.ui.define([
 			const bIsLastFixedColumn = bFixedTable && iLastFixedColumnIndex === iColIndex;
 
 			const oParams = {
-				index: iColIndex,
 				column: oColumn,
 				row: oRow,
 				fixed: bFixedTable,
@@ -1196,7 +1196,7 @@ sap.ui.define([
 			const oRow = oCell.getParent();
 			rm.openStart("span", oRow.getId() + "-treeicon");
 			rm.class("sapUiTableTreeIcon");
-			rm.attr("tabindex", "-1");
+			rm.attr("tabindex", "0");
 			oTable._getAccRenderExtension().writeAriaAttributesFor(rm, oTable, "TreeIcon", {row: oRow});
 			rm.openEnd();
 			rm.close("span");

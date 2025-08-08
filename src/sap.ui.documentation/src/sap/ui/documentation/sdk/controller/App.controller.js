@@ -107,11 +107,16 @@ sap.ui.define([
 
 			for (var i = 0; i < aOriginalArr.length; i++) {
 				sCurrGroupTitle = aOriginalArr[i].groupTitle;
+				if (aOriginalArr[i]?.version?.includes("legacy-free")) {
+					continue;
+				}
 				iCounter = 0;
 				aNodes = [];
 				while (aOriginalArr[i] && aOriginalArr[i].groupTitle && aOriginalArr[i].groupTitle === sCurrGroupTitle) {
-					aNodes.push(aOriginalArr[i]);
-					iCounter++;
+					if (!aOriginalArr[i]?.version?.includes("legacy-free")) {
+						aNodes.push(aOriginalArr[i]);
+						iCounter++;
+					}
 					i++;
 				}
 				i--;
@@ -181,6 +186,13 @@ sap.ui.define([
 
 				if (this._sKey) {
 					this.appendPageTitle(null).appendPageTitle(WEB_PAGE_TITLE[this._sKey]);
+				}
+
+			}.bind(this));
+
+			this.getOwnerComponent().loadMessagesInfo().then(function (data) {
+				if (data) {
+					this._updateMessagesModel(data);
 				}
 
 			}.bind(this));
@@ -331,6 +343,20 @@ sap.ui.define([
 			this._cacheRouteEventDetails(oEvent);
 		},
 
+		onCloseImportantMessage: function (oEvent) {
+			var aMessageCookie = this._oConfigUtil.getCookieValue(this._oCookieNames.DEMOKIT_IMPORTANT_MESSAGES_READ)
+					.split(",").filter(function(id) { return id !== ''; }),
+				oCustomData = oEvent.getSource().getCustomData().find(function(oCustomData) {
+					return oCustomData.getKey() === "messageID";
+				}),
+				sId = oCustomData.getValue();
+
+			aMessageCookie.push(sId);
+			this._oConfigUtil.setCookie(this._oCookieNames.DEMOKIT_IMPORTANT_MESSAGES_READ, aMessageCookie.join(","));
+
+			this._updateMessagesModel(this.getModel("messagesData").getData());
+		},
+
 		toggleMaster: function (oEvent) {
 			var oViewModel = this.getModel("appView"),
 				sMasterViewId = oViewModel.getProperty("/sMasterViewId"),
@@ -428,6 +454,30 @@ sap.ui.define([
 				sItemLink = oItem.getCustomData()[0].getValue();
 
 			URLHelper.redirect(sItemLink, true);
+		},
+
+		_updateMessagesModel: function(oMessagesData) {
+			var oMessageCookie = this._oConfigUtil.getCookieValue(this._oCookieNames.DEMOKIT_IMPORTANT_MESSAGES_READ),
+				iVisibleMessagesCount = 0,
+				sFullVersion = this._getFullVersion(),
+				sRegExpValidator;
+
+			oMessagesData.messages.length && oMessagesData.messages.forEach(function(message) {
+				message.isMessageVisible = message.mandatory || ((new Date(message.expire).getTime() - new Date()) > 0 &&
+					!oMessageCookie.includes(message.id));
+
+					if (message.isMessageVisible && message.versionValidator) {
+						sRegExpValidator = new RegExp(message.versionValidator);
+						message.isMessageVisible = sRegExpValidator.test(sFullVersion);
+					}
+
+				message.isMessageVisible && iVisibleMessagesCount++;
+			});
+
+			oMessagesData.iVisibleMessagesCount = iVisibleMessagesCount;
+
+			this.getModel("messagesData").setData(oMessagesData);
+
 		},
 
 		_syncNewsModelWithNewsInfo: function () {

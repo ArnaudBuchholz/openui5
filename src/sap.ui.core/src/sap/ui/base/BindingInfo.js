@@ -14,9 +14,6 @@ sap.ui.define([
 	function(BaseConfig, DesignTime, getCompatibilityVersion, BindingParser, BindingMode) {
 	"use strict";
 
-	// Marker to not 'forget' ui5Objects
-	const UI5_OBJECT_MARKER = Symbol("ui5object");
-
 	// Marker that is used for aggregation binding. It's set on the instance
 	// cloned from the given template with value pointing to the original
 	// parent where the aggregation is defined. In case the aggregation is
@@ -57,7 +54,7 @@ sap.ui.define([
 	 * @alias sap.ui.base.BindingInfo
 	 * @namespace
 	 * @private
-	 * @ui5-restricted sap.ui.base, sap.ui.core
+	 * @ui5-restricted sap.ui.base, sap.ui.core, sap.ui.model, sap.m, sap.ui.integration, sap.ui.fl, sap.fe
 	 */
 	var BindingInfo = {
 		/**
@@ -173,14 +170,15 @@ sap.ui.define([
 				if (oValue.Type) {
 					// if value contains the 'Type' property (capital 'T'), this is not a binding info.
 					oBindingInfo = undefined;
-				} else if (oValue[UI5_OBJECT_MARKER]) {
+				} else if (oValue[this.UI5ObjectMarker]) {
 					// no bindingInfo, delete marker
-					delete oValue[UI5_OBJECT_MARKER];
+					delete oValue[this.UI5ObjectMarker];
 				} else if (oValue.ui5object) {
 					// if value contains ui5object property, this is not a binding info,
 					// remove it and not check for path or parts property
 					delete oValue.ui5object;
-				} else if (oValue.path != undefined || oValue.parts || (bDetectValue && oValue.value != undefined)) {
+				} else if (oValue.path != undefined || oValue.parts
+						|| (bDetectValue || oValue[this.UI5ObjectMarker] === false) && oValue.value != undefined) {
 					oBindingInfo = oValue;
 				}
 			}
@@ -188,7 +186,12 @@ sap.ui.define([
 			// property:"{path}" or "\{path\}"
 			if (typeof oValue === "string") {
 				// either returns a binding info or an unescaped string or undefined - depending on binding syntax
-				oBindingInfo = BindingInfo.parse(oValue, oScope, true);
+				const args = [oValue, oScope, true];
+				// provide variable "$control" to be used with ".bind()" in the binding string
+				// see BindingParser.complexParser
+				args[8] = { "$control": null };
+
+				oBindingInfo = BindingInfo.parse(...args);
 			}
 			return oBindingInfo;
 		},
@@ -219,7 +222,7 @@ sap.ui.define([
 			}
 		},
 
-		UI5ObjectMarker: UI5_OBJECT_MARKER,
+		UI5ObjectMarker: BindingParser.UI5ObjectMarker,
 		OriginalParent: ORIGINAL_PARENT
 	};
 
@@ -239,6 +242,12 @@ sap.ui.define([
 		return sBindingSyntax;
 	}
 
+	/**
+	 * Parses the given binding info string and returns a binding info object if valid.
+	 * @see sap.ui.base.BindingParser
+	 * @private
+	 * @ui5-restricted sap.ui.base, sap.ui.core, sap.ui.model, sap.m, sap.ui.integration, sap.ui.fl, sap.fe
+	 */
 	Object.defineProperty(BindingInfo, "parse", {
 		get: function () {
 			if (!this.oParser) {

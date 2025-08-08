@@ -64,7 +64,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Request list content Card",
-					"subTitle": "Card Subtitle",
+					"subtitle": "Card Subtitle",
 					"icon": {
 						"src": "sap-icon://accept"
 					},
@@ -74,31 +74,6 @@ sap.ui.define([
 					"actions": [{
 						"type": "Navigation",
 						"service": "Navigation2",
-						"parameters": {
-							"url": "https://www.sap.com"
-						}
-					}]
-				}
-			}
-		};
-
-		var oManifest_Header_Url = {
-			"_version": "1.8.0",
-			"sap.app": {
-				"id": "test.card.actions.card2",
-				"type": "card"
-			},
-			"sap.card": {
-				"type": "List",
-				"header": {
-					"title": "Request list content Card 2",
-					"subTitle": "Card Subtitle",
-					"icon": {
-						"src": "sap-icon://accept"
-					},
-					"status": "100 of 200",
-					"actions": [{
-						"type": "Navigation",
 						"parameters": {
 							"url": "https://www.sap.com"
 						}
@@ -117,7 +92,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Request list content Card",
-					"subTitle": "Card Subtitle"
+					"subtitle": "Card Subtitle"
 				},
 				"content": {
 					"data": {
@@ -155,7 +130,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Request list content Card",
-					"subTitle": "Card Subtitle",
+					"subtitle": "Card Subtitle",
 					"actions": [{
 						"parameters": {
 							"url": "https://www.sap.com"
@@ -206,7 +181,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Request list content Card",
-					"subTitle": "Card Subtitle",
+					"subtitle": "Card Subtitle",
 					"icon": {
 						"src": "sap-icon://accept"
 					},
@@ -252,7 +227,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Request list content Card",
-					"subTitle": "Card Subtitle"
+					"subtitle": "Card Subtitle"
 				},
 				"content": {
 					"data": {
@@ -301,7 +276,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "List Card",
-					"subTitle": "With static list items"
+					"subtitle": "With static list items"
 				},
 				"content": {
 					"data": {
@@ -349,7 +324,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Sales Orders",
-					"subTitle": "Static Data",
+					"subtitle": "Static Data",
 					"icon": {
 						"src": "sap-icon://sales-order"
 					},
@@ -397,7 +372,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Sales Orders",
-					"subTitle": "Static Data",
+					"subtitle": "Static Data",
 					"icon": {
 						"src": "sap-icon://sales-order"
 					},
@@ -446,7 +421,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "Sales Orders",
-					"subTitle": "Static Data",
+					"subtitle": "Static Data",
 					"icon": {
 						"src": "sap-icon://sales-order"
 					},
@@ -502,7 +477,7 @@ sap.ui.define([
 						"src": "{photo}"
 					},
 					"title": "{firstName} {lastName}",
-					"subTitle": "{position}"
+					"subtitle": "{position}"
 				},
 				"content": {
 					"groups": [{
@@ -620,7 +595,7 @@ sap.ui.define([
 						"src": "{photo}"
 					},
 					"title": "{firstName} {lastName}",
-					"subTitle": "{position}",
+					"subtitle": "{position}",
 					"actions": [{
 						"type": "Navigation",
 						"parameters": {
@@ -748,7 +723,7 @@ sap.ui.define([
 						}
 					}],
 					"title": "Integration Card with action",
-					"subTitle": "Card subtitle",
+					"subtitle": "Card subtitle",
 					"icon": {
 						"src": "sap-icon://activities"
 					},
@@ -810,7 +785,7 @@ sap.ui.define([
 				"type": "Table",
 				"header": {
 					"title": "Table Card with Top 5 Products",
-					"subTitle": "These are the top sellers this month",
+					"subtitle": "These are the top sellers this month",
 					"icon": {
 						"src": "sap-icon://sales-order"
 					},
@@ -848,66 +823,6 @@ sap.ui.define([
 								}]
 							}
 						]
-					}
-				}
-			}
-		};
-
-		var oManifest_TimelineCard_No_Request = {
-			"_version": "1.8.0",
-			"sap.app": {
-				"id": "test.card.actions.card.timeline",
-				"type": "card"
-			},
-			"sap.card": {
-				"type": "Timeline",
-				"header": {
-					"title": "Past Activities",
-					"subTitle": "For October"
-				},
-				"content": {
-					"maxItems": 3,
-					"data": {
-						"json": [{
-								"Title": "Weekly sync: Marketplace / Design Stream",
-								"Description": "MRR WDF18 C3.2(GLASSBOX)",
-								"Icon": "sap-icon://appointment-2",
-								"Time": "2021-10-25T10:00:00.000Z",
-								"Url": "/activity1"
-							},
-							{
-								"Title": "Video Conference for FLP@SF, S4,Hybris",
-								"Icon": "sap-icon://my-view",
-								"Time": "2021-10-25T14:00:00.000Z",
-								"Url": "/activity2"
-							},
-							{
-								"Title": "Call 'Project Nimbus'",
-								"Icon": "sap-icon://outgoing-call",
-								"Time": "2021-10-25T16:00:00.000Z",
-								"Url": "/activity3"
-							}
-						]
-					},
-					"item": {
-						"dateTime": {
-							"value": "{Time}"
-						},
-						"description": {
-							"value": "{Description}"
-						},
-						"title": {
-							"value": "{Title}"
-						},
-						"icon": {
-							"src": "{Icon}"
-						},
-						"actions": [{
-							"type": "Navigation",
-							"parameters": {
-								"url": "{Url}"
-							}
-						}]
 					}
 				}
 			}
@@ -982,7 +897,7 @@ sap.ui.define([
 				"type": "List",
 				"header": {
 					"title": "List Card",
-					"subTitle": "With static list items"
+					"subtitle": "With static list items"
 				},
 				"content": {
 					"data": {
@@ -1190,7 +1105,7 @@ sap.ui.define([
 			oCard.destroy();
 		});
 
-		QUnit.module("Action Enablement - Header", {
+		QUnit.module("Action Enablement with Service - Header", {
 			beforeEach: function () {
 				this.oCard = new Card({
 					width: "400px",
@@ -1234,292 +1149,6 @@ sap.ui.define([
 
 			//Act
 			oCardHeader.firePress();
-		});
-
-		QUnit.test("Action URL should navigate", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction"),
-				oStubOpenUrl = sinon.stub(NavigationAction.prototype, "execute").callsFake(function () {
-					Log.error(LOG_MESSAGE);
-				});
-
-			// Act
-			this.oCard.setManifest(oManifest_Header_Url);
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			// Assert
-			var oCardHeader = this.oCard.getCardHeader();
-			assert.ok(oCardHeader.getDomRef().querySelector(".sapFCardHeaderMainPart").classList.contains("sapFCardSectionClickable"), "Card Header main part has clickable class");
-
-			// Act
-			oCardHeader.firePress();
-			await nextUIUpdate();
-
-			// Assert
-			assert.ok(oActionSpy.callCount, "Card Header is clicked");
-
-			// Clean up
-			oStubOpenUrl.restore();
-			oActionSpy.restore();
-		});
-
-		QUnit.test("Action URL should navigate without parameters", async function (assert) {
-			var oStubOpenUrl = sinon.stub(NavigationAction.prototype, "execute").callsFake(function () {
-					Log.error(LOG_MESSAGE);
-				});
-
-			// Act
-			this.oCard.setManifest(oIntegrationCardManifest);
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			var oCardHeader = this.oCard.getCardHeader();
-
-			//Act
-			oCardHeader.firePress();
-			await nextUIUpdate();
-
-			// Assert
-			assert.strictEqual(oStubOpenUrl.callCount, 1, "Header has navigate to new url");
-
-			//Clean up
-			oStubOpenUrl.restore();
-		});
-
-		QUnit.test("Enabled property of header action set to 'false'", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction");
-
-			// Act
-			this.oCard.setManifest({
-				"sap.app": {
-					"id": "test.card.actions.enabledPropertySetToFalse",
-					"type": "card"
-				},
-				"sap.card": {
-					"type": "List",
-					"header": {
-						"title": "Card Title",
-						"actions": [{
-							"enabled": false,
-							"type": "Navigation",
-							"parameters": {
-								"url": "https://www.sap.com"
-							}
-						}]
-					}
-				}
-			});
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			const oMainPartDomRef = this.oCard.getCardHeader().getDomRef().querySelector(".sapFCardHeaderMainPart");
-
-			// Assert
-			assert.notOk(oMainPartDomRef.classList.contains("sapFCardSectionClickable"), "Card Header doesn't have a clickable style");
-
-			//Act
-			qutils.triggerEvent("tap", oMainPartDomRef);
-
-			// Assert
-			assert.ok(oActionSpy.notCalled, "Clicking on the header shouldn't fire action event");
-
-			//Clean up
-			oActionSpy.restore();
-		});
-
-		QUnit.test("Enabled property of header action set to 'false' with binding", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction");
-
-			// Act
-			this.oCard.setManifest({
-				"sap.app": {
-					"id": "test.card.actions.enabledPropertySetToFalseWithBinding",
-					"type": "card"
-				},
-				"sap.card": {
-					"type": "List",
-					"data": {
-						"json": {
-							"headerActionEnabled": false
-						}
-					},
-					"header": {
-						"title": "Card Title",
-						"actions": [{
-							"enabled": "{/headerActionEnabled}",
-							"type": "Navigation",
-							"parameters": {
-								"url": "https://www.sap.com"
-							}
-						}]
-					}
-				}
-			});
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			const oMainPartDomRef = this.oCard.getCardHeader().getDomRef().querySelector(".sapFCardHeaderMainPart");
-
-			// Assert
-			assert.notOk(oMainPartDomRef.classList.contains("sapFCardSectionClickable"), "Card Header doesn't have a clickable style");
-
-			// Act
-			qutils.triggerEvent("tap", oMainPartDomRef);
-
-			// Assert
-			assert.ok(oActionSpy.notCalled, "Clicking on the header shouldn't fire action event");
-
-			// Clean up
-			oActionSpy.restore();
-		});
-
-		QUnit.test("No actions available", async function (assert) {
-			var oAttachNavigationSpy = sinon.spy(CardActions.prototype, "_attachAction");
-
-			// Act
-			this.oCard.setManifest(oManifest_ListCard_No_Actions);
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			var oCardHeader = this.oCard.getCardHeader();
-
-			// Assert
-			assert.notOk(oCardHeader.$().hasClass("sapFCardSectionClickable"), "Card Header has not a clickable style is added");
-			assert.ok(oAttachNavigationSpy.callCount === 0, "_attachAction should not be called");
-
-			//Clean up
-			oAttachNavigationSpy.restore();
-		});
-
-		QUnit.test("No action type available", async function (assert) {
-			var oAttachNavigationSpy = sinon.spy(CardActions.prototype, "_attachAction");
-
-			// Act
-			this.oCard.setManifest(oManifest_ListCard_Actions_Missing_Type);
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			var oCardHeader = this.oCard.getCardHeader();
-
-			// Assert
-			assert.notOk(oCardHeader.hasStyleClass("sapFCardHeaderClickable"), "Card Header has not a clickable style is added");
-			assert.ok(oAttachNavigationSpy.callCount === 0, "_attachAction should not be called");
-
-			//Clean up
-			oAttachNavigationSpy.restore();
-		});
-
-		QUnit.module("Action Enablement - NumericHeader", {
-			beforeEach: function () {
-				this.oCard = new Card({
-					width: "400px",
-					height: "600px",
-					baseUrl: "test-resources/sap/ui/integration/qunit/testResources/"
-				});
-
-				this.oCard.placeAt(DOM_RENDER_LOCATION);
-			},
-			afterEach: function () {
-				this.oCard.destroy();
-				this.oCard = null;
-			}
-		});
-
-		QUnit.test("Enabled property of numeric header action set to 'false'", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction");
-
-			// Act
-			this.oCard.setManifest({
-				"sap.app": {
-					"id": "test.card.actions.numeric.enabledPropertySetToFalse",
-					"type": "card"
-				},
-				"sap.card": {
-					"type": "List",
-					"header": {
-						"title": "Card Title",
-						"type": "Numeric",
-						"actions": [{
-							"enabled": false,
-							"type": "Navigation",
-							"parameters": {
-								"url": "https://www.sap.com"
-							}
-						}]
-					}
-				}
-			});
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			const oMainPartDomRef = this.oCard.getCardHeader().getDomRef().querySelector(".sapFCardHeaderMainPart");
-
-			// Assert
-			assert.notOk(oMainPartDomRef.classList.contains("sapFCardSectionClickable"), "Card Header doesn't have a clickable style");
-
-			//Act
-			qutils.triggerEvent("tap", oMainPartDomRef);
-
-			// Assert
-			assert.ok(oActionSpy.notCalled, "Clicking on the header shouldn't fire action event");
-
-			//Clean up
-			oActionSpy.restore();
-		});
-
-		QUnit.test("Enabled property of numeric header action set to 'false' with binding", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction");
-
-			// Act
-			this.oCard.setManifest({
-				"sap.app": {
-					"id": "test.card.actions.numeric.enabledPropertySetToFalseWithBinding",
-					"type": "card"
-				},
-				"sap.card": {
-					"type": "List",
-					"data": {
-						"json": {
-							"headerActionEnabled": false
-						}
-					},
-					"header": {
-						"title": "Card Title",
-						"type": "Numeric",
-						"actions": [{
-							"enabled": "{/headerActionEnabled}",
-							"type": "Navigation",
-							"parameters": {
-								"url": "https://www.sap.com"
-							}
-						}]
-					}
-				}
-			});
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			const oMainPartDomRef = this.oCard.getCardHeader().getDomRef().querySelector(".sapFCardHeaderMainPart");
-
-			// Assert
-			assert.notOk(oMainPartDomRef.classList.contains("sapFCardSectionClickable"), "Card Header doesn't have a clickable style");
-
-			// Act
-			qutils.triggerEvent("tap", oMainPartDomRef);
-
-			// Assert
-			assert.ok(oActionSpy.notCalled, "Clicking on the header shouldn't fire action event");
-
-			// Clean up
-			oActionSpy.restore();
 		});
 
 		QUnit.module("Navigation Service - List Content", {
@@ -1675,51 +1304,6 @@ sap.ui.define([
 			oAttachNavigationSpy.restore();
 		});
 
-		QUnit.module("Navigation Action - List Content", {
-			beforeEach: function () {
-				this.oCard = new Card({
-					width: "400px",
-					height: "600px"
-				});
-
-			},
-			afterEach: function () {
-				this.oCard.destroy();
-				this.oCard = null;
-			}
-		});
-
-		QUnit.test("List should be actionable ", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction"),
-				oStubOpenUrl = sinon.stub(NavigationAction.prototype, "execute").callsFake(function () {
-					Log.error(LOG_MESSAGE);
-				});
-
-			// Act
-			this.oCard.setManifest(oManifest_ListCard_No_Request);
-			this.oCard.placeAt(DOM_RENDER_LOCATION);
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			var oCardListItems = this.oCard.getCardContent()._getList().getItems();
-
-			// Assert
-			assert.strictEqual(oCardListItems[0].getType(), ListType.Active, "Card list item is actionable");
-			assert.strictEqual(oCardListItems[1].getType(), ListType.Inactive, "Card list item is NOT actionable");
-
-			//Act
-			oCardListItems[0].firePress();
-			await nextUIUpdate();
-
-			// Assert
-			assert.ok(oActionSpy.callCount === 1, "Card List Item is clicked");
-
-			// Cleanup
-			oActionSpy.restore();
-			oStubOpenUrl.restore();
-		});
-
 		QUnit.module("Navigation Action - Object Content", {
 			beforeEach: function () {
 				this.oCard = new Card({
@@ -1816,48 +1400,6 @@ sap.ui.define([
 
 			// Assert
 			assert.ok(oContent.$().hasClass("sapFCardSectionClickable"), "Card Content is clickable");
-			assert.ok(oActionSpy.callCount === 1, "Field with type='action' is clicked and action event is fired");
-
-			// Cleanup
-			oActionSpy.restore();
-			oStubOpenUrl.restore();
-		});
-
-		QUnit.module("Navigation Action - Table Content", {
-			beforeEach: function () {
-				this.oCard = new Card({
-					width: "400px",
-					height: "600px",
-					baseUrl: "test-resources/sap/ui/integration/qunit/testResources/"
-				});
-
-				this.oCard.placeAt(DOM_RENDER_LOCATION);
-			},
-			afterEach: function () {
-				this.oCard.destroy();
-				this.oCard = null;
-			}
-		});
-
-		QUnit.test("Pressing a table row column with type 'action' should fire an action", async function (assert) {
-			var oActionSpy = sinon.spy(CardActions, "fireAction"),
-				oStubOpenUrl = sinon.stub(NavigationAction.prototype, "execute").callsFake(function () {});
-
-			// Act
-			this.oCard.setManifest(tableContent_action_on_cell);
-
-			await nextCardReadyEvent(this.oCard);
-			await nextUIUpdate();
-
-			var oContent = this.oCard.getCardContent();
-
-			//Act
-			var oLink = Element.closestTo(oContent.$().find(".sapMLnk:not(.sapMLnkDsbl)")[0]);
-			qutils.triggerKeydown(oLink.getDomRef(), KeyCodes.ENTER);
-
-			await nextUIUpdate();
-
-			// Assert
 			assert.ok(oActionSpy.callCount === 1, "Field with type='action' is clicked and action event is fired");
 
 			// Cleanup
@@ -2133,52 +1675,39 @@ sap.ui.define([
 			oStubOpenUrl.restore();
 		});
 
-		return Library.load("sap.suite.ui.commons").then(function () {
-			QUnit.module("Navigation Action - Timeline Content", {
-				beforeEach: function () {
-					this.oCard = new Card({
-						width: "400px",
-						height: "600px"
-					});
-				},
-				afterEach: function () {
-					this.oCard.destroy();
-					this.oCard = null;
-				}
-			});
+		QUnit.test("Action should not fire when text is selected", async function (assert) {
+			var oActionSpy = sinon.spy(CardActions, "fireAction"),
+				oStubOpenUrl = sinon.stub(NavigationAction.prototype, "execute").callsFake(function () {});
 
-			QUnit.test("Timeline should be actionable ", async function (assert) {
-				var oActionSpy = sinon.spy(CardActions, "fireAction"),
-					oStubOpenUrl = sinon.stub(NavigationAction.prototype, "execute").callsFake(function () {
-						Log.error(LOG_MESSAGE);
-					});
+			this.oCard.setManifest(oManifestListCardRequest);
+			this.oCard.placeAt(DOM_RENDER_LOCATION);
+			await nextCardReadyEvent(this.oCard);
+			await nextUIUpdate();
 
-				// Act
-				this.oCard.setManifest(oManifest_TimelineCard_No_Request);
-				this.oCard.placeAt(DOM_RENDER_LOCATION);
+			var oHeaderDom = this.oCard.getCardHeader().getDomRef().querySelector(".sapFCardHeaderMainPart");
 
-				await nextCardReadyEvent(this.oCard);
-				await nextUIUpdate();
+			// Simulate text selection in the header
+			var oRange = document.createRange();
+			var oTextNode = oHeaderDom.childNodes[0];
+			if (oTextNode && oTextNode.nodeType === Node.TEXT_NODE) {
+				oRange.selectNodeContents(oTextNode);
+			} else {
+				oRange.selectNodeContents(oHeaderDom);
+			}
+			var oSelection = window.getSelection();
+			oSelection.removeAllRanges();
+			oSelection.addRange(oRange);
 
-				var oContentItems = this.oCard.getCardContent().getInnerList().getContent();
+			// Try to trigger the header action
+			qutils.triggerKeydown(oHeaderDom, KeyCodes.ENTER);
+			await nextUIUpdate();
 
-				//Act
-				oContentItems[0].fireSelect();
-				await nextUIUpdate();
+			assert.strictEqual(oActionSpy.callCount, 0, "Action should NOT be fired when text is selected");
+			assert.strictEqual(oStubOpenUrl.callCount, 0, "Navigation should NOT be executed when text is selected");
 
-				// Assert
-				assert.ok(oActionSpy.callCount === 1, "Timeline item action is fired");
-
-				// Cleanup
-				oActionSpy.restore();
-				oStubOpenUrl.restore();
-			});
-		}).catch(function () {
-			QUnit.module("Navigation Action - Timeline Content");
-			QUnit.test("Timeline not supported", function (assert) {
-				assert.ok(true, "Timeline content type is not available with this distribution.");
-			});
+			oActionSpy.restore();
+			oStubOpenUrl.restore();
 		});
-	}
 
+	}
 );

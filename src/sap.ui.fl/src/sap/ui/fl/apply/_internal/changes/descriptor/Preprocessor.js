@@ -7,7 +7,7 @@ sap.ui.define([
 	"sap/ui/fl/apply/_internal/changes/descriptor/Applier",
 	"sap/ui/fl/apply/_internal/changes/descriptor/ApplyStrategyFactory",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/performance/Measurement",
 	"sap/ui/fl/Utils"
 ], function(
@@ -55,28 +55,28 @@ sap.ui.define([
 			});
 
 			// in case the asyncHints already mention that there is no change for the manifest, just trigger the loading
-			// partialFlexState has to be true as there is no guarantee that the flex bundle is already available at this point
-			if (!ManifestUtils.getChangeManifestFromAsyncHints(oConfig.asyncHints)) {
+			// skipLoadBundle has to be true as there is no guarantee that the flex bundle is already available at this point
+			if (!ManifestUtils.getChangeManifestFromAsyncHints(oConfig.asyncHints, sReference)) {
 				FlexState.initialize({
 					componentData: oComponentData,
 					asyncHints: oConfig.asyncHints,
 					rawManifest: oManifest,
 					componentId: oConfig.id,
 					reference: sReference,
-					partialFlexState: true
+					skipLoadBundle: true
 				}).then(Measurement.end.bind(undefined, "flexStateInitialize"));
 
 				return Promise.resolve(oManifest);
 			}
 
-			// partialFlexState has to be true as there is no guarantee that the flex bundle is already available at this point
+			// skipLoadBundle has to be true as there is no guarantee that the flex bundle is already available at this point
 			return FlexState.initialize({
 				componentData: oComponentData,
 				asyncHints: oConfig.asyncHints,
 				rawManifest: oManifest,
 				componentId: oConfig.id,
 				reference: sReference,
-				partialFlexState: true
+				skipLoadBundle: true
 			}).then(function() {
 				Measurement.end("flexStateInitialize");
 				Measurement.start("flexAppDescriptorMerger", "Client side app descriptor merger", ["sap.ui.fl"]);

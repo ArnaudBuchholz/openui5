@@ -3,7 +3,7 @@
  */
 
 sap.ui.define([
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/write/_internal/SaveAs",
 	"sap/ui/fl/write/_internal/connectors/LrepConnector",
 	"sap/ui/fl/write/api/FeaturesAPI",
@@ -44,6 +44,7 @@ sap.ui.define([
 		 * @param {object} mPropertyBag - Object with parameters as properties
 		 * @param {sap.ui.fl.Selector} mPropertyBag.selector - Selector
 		 * @param {string} mPropertyBag.id - App variant ID
+		 * @param {object} [mPropertyBag.oParsedHash] - Parsed Hash containing semantic object, action and parameters for inbound
 		 * @param {sap.ui.fl.Layer} mPropertyBag.layer - Current working layer
 		 * @returns {Promise} Promise that resolves with the app variant save response
 		 *

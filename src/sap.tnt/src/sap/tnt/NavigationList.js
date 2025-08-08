@@ -11,6 +11,7 @@ sap.ui.define([
 	"sap/ui/core/Control",
 	"sap/ui/core/ResizeHandler",
 	"sap/ui/core/Popup",
+	"sap/m/library",
 	"sap/m/Popover",
 	"sap/ui/core/delegate/ItemNavigation",
 	"sap/ui/core/InvisibleText",
@@ -18,7 +19,6 @@ sap.ui.define([
 	"./NavigationListMenuItem",
 	"./NavigationListRenderer",
 	"sap/m/Menu",
-	"sap/m/MenuItem",
 	"sap/base/Log"
 ], function (
 	library,
@@ -28,6 +28,7 @@ sap.ui.define([
 	Control,
 	ResizeHandler,
 	Popup,
+	mLibrary,
 	Popover,
 	ItemNavigation,
 	InvisibleText,
@@ -35,10 +36,12 @@ sap.ui.define([
 	NavigationListMenuItem,
 	NavigationListRenderer,
 	Menu,
-	MenuItem,
 	Log
 ) {
 	"use strict";
+
+	// shortcut for sap.m.PlacementType
+	var PlacementType = mLibrary.PlacementType;
 
 	/**
 	 * Constructor for a new <code>NavigationList</code>.
@@ -125,11 +128,36 @@ sap.ui.define([
 				 * Fired when an item is pressed.
 				 */
 				itemPress: {
+					allowPreventDefault: true,
 					parameters: {
 						/**
 						 * The pressed item.
 						 */
-						item: { type: "sap.ui.core.Item" }
+						item: { type: "sap.ui.core.Item" },
+						/**
+						 * Indicates whether the CTRL key was pressed when the link was selected.
+						 * @since 1.137
+						 */
+						ctrlKey: { type: "boolean" },
+						/**
+						 * Indicates whether the Shift key was pressed when the link was selected.
+						 * @since 1.137
+						 */
+						shiftKey: { type: "boolean" },
+						/**
+						 * Indicates whether the Alt key was pressed when the link was selected.
+						 * @since 1.137
+						 */
+						altKey: { type: "boolean" },
+						/**
+						 * Indicates whether the "meta" key was pressed when the link was selected.
+						 *
+						 * On Macintosh keyboards, this is the command key (⌘).
+						 * On Windows keyboards, this is the windows key (⊞).
+						 *
+						 * @since 1.137
+						 */
+						metaKey: { type: "boolean" }
 					}
 				}
 			}
@@ -193,6 +221,9 @@ sap.ui.define([
 	 */
 	NavigationList.prototype.onAfterRendering = function () {
 		this._oItemNavigation.setRootDomRef(this.getDomRef());
+
+		this._animateExpandCollapse();
+
 		this._updateNavItems();
 
 		if (this.getExpanded()) {
@@ -204,6 +235,35 @@ sap.ui.define([
 		this._sResizeListenerId = ResizeHandler.register(this.getDomRef().parentNode, this._resize.bind(this));
 
 		Theming.attachApplied(this._handleThemeAppliedBound);
+	};
+
+	NavigationList.prototype._animateExpandCollapse = function () {
+		const aAllItems = this.getItems().flatMap((item) => [item, ...item.getItems()]);
+		const oAnimateExpandItem = aAllItems.find((oItem) => oItem._animateExpand);
+
+		if (oAnimateExpandItem) {
+			oAnimateExpandItem._animateExpand = false;
+			oAnimateExpandItem.$()
+				.find(".sapTntNLIItemsContainer")
+				.first()
+				.stop(true, true)
+				.slideDown("fast", () => {
+					oAnimateExpandItem.$().find(".sapTntNLIItemsContainer").first().removeClass("sapTntNLIItemsContainerHidden");
+				});
+		}
+
+		const oAnimateCollapseItem = aAllItems.find((oItem) => oItem._animateCollapse);
+
+		if (oAnimateCollapseItem) {
+			oAnimateCollapseItem._animateCollapse = false;
+			oAnimateCollapseItem.$()
+				.find(".sapTntNLIItemsContainer")
+				.first()
+				.stop(true, true)
+				.slideUp("fast", () => {
+					oAnimateCollapseItem.$().find(".sapTntNLIItemsContainer").first().addClass("sapTntNLIItemsContainerHidden");
+				});
+		}
 	};
 
 	NavigationList.prototype._deregisterResizeHandler = function () {
@@ -297,93 +357,30 @@ sap.ui.define([
 		oOpener.getDomRef().querySelector(".sapTntNLI").classList.add("sapTntNLIActive");
 
 		const oMenu = this._createOverflowMenu(oOpener);
+
+		const oPopover = oMenu._getPopover();
+		oPopover.setPlacement(PlacementType.Right);
+
 		oMenu.openBy(oOpener, false, Popup.Dock.EndCenter);
 	};
 
 	NavigationList.prototype._createOverflowMenu = function (opener) {
 		const oMenu = new Menu({
-			items: this._createNavigationMenuItems(),
-			itemSelected: (oEvent) => {
-				const oMenuItem = oEvent.getParameter("item");
-				const oNavigationItem = oMenuItem._navItem;
-
-				oNavigationItem._firePress({
-					item: oNavigationItem
-				});
-
-				if (oNavigationItem.getSelectable()) {
-					this._selectItem({
-						item: oNavigationItem
-					});
-
-					const oSelectedItemDomRef = this.getDomRef().querySelector(".sapTntNLISelected [tabindex]");
-					oSelectedItemDomRef?.focus();
-				}
-
-				if (oNavigationItem.getSelectable() || !oMenuItem.getItems().length) {
-					oMenu.close();
-					oMenu.destroy();
-				}
-			},
 			closed: function () {
 				opener.getDomRef().querySelector(".sapTntNLI").classList.remove("sapTntNLIActive");
 			}
 		});
 
+		oMenu.applySettings({
+			items: this._createNavigationMenuItems(oMenu)
+		});
+
 		oMenu.addStyleClass("sapTntNLMenu");
-
-		// override this method, so we can have a selection
-		// on a menu item with subitems
-		oMenu._handleMenuItemSelect = function (oEvent) {
-			const oUnfdItem = oEvent.getParameter("item");
-			if (!oUnfdItem) {
-				return;
-			}
-
-			const oMenuItem = this._findMenuItemByUnfdMenuItem(oUnfdItem);
-			if (oMenuItem) {
-				this.fireItemSelected({ item: oMenuItem });
-			}
-		}.bind(oMenu);
-
-		oMenu._createVisualMenuItemFromItem = function(oItem) {
-			var sUfMenuItemId = this._generateUnifiedMenuItemId(oItem.getId()),
-				oUfMenuItem = Element.getElementById(sUfMenuItemId),
-				aCustomData = oItem.getCustomData(), i;
-
-			if (oUfMenuItem) {
-				return oUfMenuItem;
-			}
-
-			oUfMenuItem = new NavigationListMenuItem({
-				id: sUfMenuItemId,
-				icon: oItem.getIcon(),
-				text: oItem.getText(),
-				startsSection: oItem.getStartsSection(),
-				tooltip: oItem.getTooltip(),
-				visible: oItem.getVisible(),
-				enabled: oItem.getEnabled(),
-				href: oItem._navItem.getHref(),
-				target: oItem._navItem.getTarget()
-			});
-
-			for (i = 0; i < aCustomData.length; i++) {
-				oItem._addCustomData(oUfMenuItem, aCustomData[i]);
-			}
-
-			oItem.aDelegates.forEach(function(oDelegateObject) {
-				oUfMenuItem.addEventDelegate(oDelegateObject.oDelegate, oDelegateObject.vThis);
-			});
-
-			return oUfMenuItem;
-		}.bind(oMenu);
-
 		this.addDependent(oMenu);
-
 		return oMenu;
 	};
 
-	NavigationList.prototype._createNavigationMenuItems = function () {
+	NavigationList.prototype._createNavigationMenuItems = function (oMenu) {
 		var items = [],
 			menuItems = [];
 
@@ -400,22 +397,30 @@ sap.ui.define([
 				return;
 			}
 
-			var menuItem = new MenuItem({
+			var menuItem = new NavigationListMenuItem({
 				icon: item.getIcon(),
 				text: item.getText(),
 				tooltip: item.getTooltip_AsString() || item.getText(),
-				enabled: item.getEnabled()
+				visible: item.getVisible(),
+				enabled: item.getEnabled(),
+				href: item.getHref(),
+				target: item.getTarget()
 			});
 			menuItem._navItem = item;
+			menuItem._oMenu = oMenu;
 
 			item.getItems().forEach(function (subItem) {
-				var subMenuItem = new MenuItem({
+				var subMenuItem = new NavigationListMenuItem({
 					icon: subItem.getIcon(),
 					text: subItem.getText(),
 					tooltip: subItem.getTooltip_AsString() || subItem.getText(),
-					enabled: subItem.getEnabled()
+					visible: subItem.getVisible(),
+					enabled: subItem.getEnabled(),
+					href: subItem.getHref(),
+					target: subItem.getTarget()
 				});
 				subMenuItem._navItem = subItem;
+				subMenuItem._oMenu = oMenu;
 
 				menuItem.addItem(subMenuItem);
 			});
@@ -566,6 +571,10 @@ sap.ui.define([
 			oSelectedItem = null;
 		}
 
+		if (this._oPopover) {
+			this._oPopover.destroy();
+		}
+
 		this._oPopover = new Popover({
 			showHeader: false,
 			horizontalScrolling: false,
@@ -582,6 +591,7 @@ sap.ui.define([
 			ariaLabelledBy: InvisibleText.getStaticId("sap.tnt", "NAVIGATION_LIST_DIALOG_TITLE")
 		}).addStyleClass("sapContrast sapContrastPlus sapTntNLPopover");
 
+		this.addDependent(this._oPopover);
 		this._oPopover._adaptPositionParams = this._adaptPopoverPositionParams;
 		this._oPopover.openBy(oOpener.getDomRef("a"));
 	};

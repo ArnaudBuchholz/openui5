@@ -423,11 +423,17 @@ sap.ui.define([
 	QUnit.test("setAggregation: pending changes", function (assert) {
 		var oBinding = this.bindList("/EMPLOYEES");
 
+		this.mock(oBinding).expects("checkTransient").withExactArgs();
+		this.mock(oBinding).expects("isUnchangedParameter")
+			.withExactArgs("$$aggregation", "~oAggregation~").returns(false);
+		this.mock(oBinding).expects("hasFilterNone").withExactArgs().returns(false);
 		this.mock(oBinding).expects("hasPendingChanges").withExactArgs().returns(true);
+		this.mock(oBinding).expects("getKeepAlivePredicates").never();
+		this.mock(oBinding).expects("applyParameters").never();
 
 		assert.throws(function () {
 			// code under test
-			oBinding.setAggregation({});
+			oBinding.setAggregation("~oAggregation~");
 		}, new Error("Cannot set $$aggregation due to pending changes"));
 	});
 
@@ -436,15 +442,42 @@ sap.ui.define([
 		const oBinding = this.bindList("/EMPLOYEES", undefined, undefined, Filter.NONE,
 			{$$operationMode : OperationMode.Server});
 
+		this.mock(oBinding).expects("isUnchangedParameter")
+			.withExactArgs("$$aggregation", "~oAggregation~").returns(false);
+		this.mock(oBinding).expects("hasFilterNone").withExactArgs().returns(true);
+		this.mock(oBinding).expects("hasPendingChanges").never();
+		this.mock(oBinding).expects("getKeepAlivePredicates").never();
+		this.mock(oBinding).expects("applyParameters").never();
+
 		assert.throws(function () {
 			// code under test
-			oBinding.setAggregation({});
+			oBinding.setAggregation("~oAggregation~");
 		}, new Error("Cannot combine Filter.NONE with $$aggregation"));
+	});
+
+	//*********************************************************************************************
+	QUnit.test("setAggregation: unchanged aggregation", function () {
+		const oBinding = this.bindList("/EMPLOYEES");
+
+		this.mock(oBinding).expects("checkTransient").withExactArgs();
+		this.mock(oBinding).expects("isUnchangedParameter")
+			.withExactArgs("$$aggregation", "~oAggregation~").returns(true);
+		this.mock(oBinding).expects("hasFilterNone").never();
+		this.mock(oBinding).expects("hasPendingChanges").never();
+		this.mock(oBinding).expects("getKeepAlivePredicates").never();
+		this.mock(oBinding).expects("applyParameters").never();
+
+		// code under test
+		oBinding.setAggregation("~oAggregation~");
 	});
 
 	//*********************************************************************************************
 [0, 1, 2].forEach(function (i) {
 	[0, 1, 2].forEach(function (j) {
+		if (!i && !j) {
+			return; // tested separately, see "unchanged aggregation"
+		}
+
 	QUnit.test("setAggregation: " + i + " <-> " + j, function (assert) {
 		var oBinding = this.bindList("/EMPLOYEES"),
 			mExpectedNewParameters = {
@@ -477,6 +510,8 @@ sap.ui.define([
 			mExpectedNewParameters.$$aggregation = "~oNewAggregation~cloned~";
 		}
 		this.mock(oBinding).expects("checkTransient").withExactArgs();
+		this.mock(oBinding).expects("isUnchangedParameter")
+			.withExactArgs("$$aggregation", sinon.match.same(oNewAggregation)).returns(false);
 		this.mock(oBinding).expects("hasPendingChanges").withExactArgs().returns(false);
 		this.mock(oBinding).expects("getKeepAlivePredicates").exactly(i === j ? 0 : 1)
 			.withExactArgs().returns(["('0')"]);
@@ -506,6 +541,8 @@ sap.ui.define([
 	QUnit.test("setAggregation: null", function () {
 		var oBinding = this.bindList("/EMPLOYEES");
 
+		this.mock(oBinding).expects("isUnchangedParameter").withExactArgs("$$aggregation", null)
+			.returns(false);
 		// Note: this is an artefact due to undefined !== null
 		this.mock(oBinding).expects("getKeepAlivePredicates").withExactArgs().returns([]);
 		this.mock(oBinding).expects("resetKeepAlive").never();
@@ -539,6 +576,8 @@ sap.ui.define([
 		if (oAggregation) {
 			mExpectedParameters.$$aggregation = "~oAggregation~cloned~";
 		}
+		this.mock(oBinding).expects("isUnchangedParameter")
+			.withExactArgs("$$aggregation", sinon.match.same(oAggregation)).returns(false);
 		this.mock(oBinding).expects("getKeepAlivePredicates").exactly(oAggregation ? 0 : 1)
 			.withExactArgs().returns([]);
 		this.mock(oBinding).expects("resetKeepAlive").never();
@@ -6701,10 +6740,16 @@ sap.ui.define([
 	});
 
 	//*********************************************************************************************
-	[FilterOperator.All, FilterOperator.Any].forEach(function (sFilterOperator) {
+	[FilterOperator.All, FilterOperator.Any, FilterOperator.NotAll, FilterOperator.NotAny]
+			.forEach(function (sFilterOperator) {
+		function getFilterString(sBasePath, sCondition) {
+			return sFilterOperator.startsWith("Not")
+				? "not " + sBasePath + "/" + sFilterOperator.toLowerCase().substring(3) + sCondition
+				: sBasePath + "/" + sFilterOperator.toLowerCase() + sCondition;
+		}
 		[{
 			description : "no nesting",
-			expectedResult : "p0/" + sFilterOperator.toLowerCase() + "(v0:v0/p1 eq 'value1')",
+			expectedResult : getFilterString("p0", "(v0:v0/p1 eq 'value1')"),
 			fetchObjects : {
 				p0 : "Type0",
 				"p0/p1" : "Edm.String"
@@ -6717,8 +6762,8 @@ sap.ui.define([
 			})
 		}, {
 			description : "nested any/all filters",
-			expectedResult : "p0/" + sFilterOperator.toLowerCase() + "(v0:"
-				+ "v0/p1/" + sFilterOperator.toLowerCase() + "(v1:v1/p2 eq 'value2'))",
+			expectedResult : getFilterString("p0",
+				"(v0:" + getFilterString("v0/p1", "(v1:v1/p2 eq 'value2')") + ")"),
 			fetchObjects : {
 				p0 : "Type0",
 				"p0/p1" : "Type1",
@@ -6737,8 +6782,7 @@ sap.ui.define([
 			})
 		}, {
 			description : "nested multi-filter",
-			expectedResult : "p0/" + sFilterOperator.toLowerCase()
-				+ "(v0:v0/p1 eq 'value1' and v0/p2 eq 'value2')",
+			expectedResult : getFilterString("p0", "(v0:v0/p1 eq 'value1' and v0/p2 eq 'value2')"),
 			fetchObjects : {
 				p0 : "Type0",
 				"p0/p1" : "Edm.String",
@@ -6758,8 +6802,8 @@ sap.ui.define([
 			})
 		}, {
 			description : "nested multi-filter containing an 'any' filter",
-			expectedResult : "p0/" + sFilterOperator.toLowerCase()
-			+ "(v0:v0/p1/any(v1:v1/p2 lt 'value1') or v0/p3 eq 'value2')",
+			expectedResult : getFilterString("p0",
+				"(v0:v0/p1/any(v1:v1/p2 lt 'value1') or v0/p3 eq 'value2')"),
 			fetchObjects : {
 				p0 : "Type0",
 				"p0/p1" : "Type1",
@@ -6784,8 +6828,8 @@ sap.ui.define([
 			})
 		}, {
 			description : "multi filters using same lambda variable",
-			expectedResult : "p0/" + sFilterOperator.toLowerCase()
-				+ "(v0:v0/p1/any(v1:v1/p3 lt 'value1') or v0/p2/any(v1:v1/p4 gt \'value2\'))",
+			expectedResult : getFilterString("p0",
+				"(v0:v0/p1/any(v1:v1/p3 lt 'value1') or v0/p2/any(v1:v1/p4 gt \'value2\'))"),
 			fetchObjects : {
 				p0 : "Type0",
 				"p0/p1" : "Type1",
@@ -6816,8 +6860,8 @@ sap.ui.define([
 			})
 		}, {
 			description : "nested filter overwrites outer lambda variable",
-			expectedResult : "p0/" + sFilterOperator.toLowerCase()
-				+ "(v0:v0/p1/" + sFilterOperator.toLowerCase() + "(v0:v0/p2 lt 'value1'))",
+			expectedResult : getFilterString("p0",
+				"(v0:" + getFilterString("v0/p1", "(v0:v0/p2 lt 'value1')") + ")"),
 			fetchObjects : {
 				p0 : "Type0",
 				"p0/p1" : "Type1",
@@ -6835,8 +6879,8 @@ sap.ui.define([
 				variable : "v0"
 			})
 		}].forEach(function (oFixture) {
-			QUnit.test("fetchFilter: " + sFilterOperator + " - " + oFixture.description,
-					function (assert) {
+			const sTitle = "fetchFilter: " + sFilterOperator + " - " + oFixture.description;
+			QUnit.test(sTitle, function (assert) {
 				var oBinding = this.bindList("/Set"),
 					aFetchObjectKeys = Object.keys(oFixture.fetchObjects);
 
@@ -6866,12 +6910,13 @@ sap.ui.define([
 	});
 
 	//*********************************************************************************************
-	QUnit.test("fetchFilter: any - without predicate", function (assert) {
-		var oBinding = this.bindList("/Set"),
-			oFilter = new Filter({
-				operator : FilterOperator.Any,
-				path : "p0"
-			});
+[FilterOperator.Any, FilterOperator.NotAny].forEach(function (sOperator) {
+	QUnit.test("fetchFilter: " + sOperator + " - without predicate", function (assert) {
+		const oBinding = this.bindList("/Set");
+		const oFilter = new Filter({
+			operator : sOperator,
+			path : "p0"
+		});
 
 		oBinding.aApplicationFilters = [oFilter];
 		this.oMetaModelMock.expects("getMetaContext").withExactArgs(oBinding.sPath).returns("~");
@@ -6883,9 +6928,11 @@ sap.ui.define([
 
 		// code under test
 		return oBinding.fetchFilter().then(function (aFilterValues) {
-			assert.deepEqual(aFilterValues, ["p0/any()", undefined, undefined]);
+			const sFilter = (sOperator === FilterOperator.NotAny ? "not " : "") + "p0/any()";
+			assert.deepEqual(aFilterValues, [sFilter, undefined, undefined]);
 		});
 	});
+});
 
 	//*********************************************************************************************
 	QUnit.test("fetchFilter: application and control filter", function (assert) {
@@ -10607,6 +10654,71 @@ sap.ui.define([
 		// code under test
 		assert.strictEqual(oBinding.isUnchangedParameter("$$aggregation", "~vOtherValue~"),
 			"~result3~");
+
+		// code under test
+		assert.strictEqual(oBinding.isUnchangedParameter("$$aggregation", undefined), false);
+	});
+
+	//*********************************************************************************************
+	QUnit.test("isUnchangedParameter: $$aggregation === undefined", function (assert) {
+		const oBinding = this.bindList("/EMPLOYEES");
+
+		this.mock(_Helper).expects("clone").never();
+		this.mock(_AggregationHelper).expects("buildApply").never();
+		this.mock(_Helper).expects("cloneNo$").never();
+		this.mock(_Helper).expects("deepEqual").never();
+
+		// code under test
+		assert.strictEqual(oBinding.isUnchangedParameter("$$aggregation", undefined), true);
+
+		// code under test
+		assert.strictEqual(oBinding.isUnchangedParameter("$$aggregation", null), false,
+			"let's be strict here, although '<code>null</code> is not supported.'");
+	});
+
+	//*********************************************************************************************
+	QUnit.test("isUnchangedParameter: buildApply normalizes expandTo", function (assert) {
+		const oBinding = this.bindList("/EMPLOYEES");
+		// Note: autoExpandSelect at model would be required for hierarchyQualifier, but that leads
+		// too far :-(
+		oBinding.mParameters = {
+			$$aggregation : {
+				expandTo : Number.MAX_SAFE_INTEGER,
+				hierarchyQualifier : "X"
+			}
+		};
+
+		assert.strictEqual(
+			// code under test
+			oBinding.isUnchangedParameter("$$aggregation",
+				{expandTo : Number.MAX_SAFE_INTEGER - 1, hierarchyQualifier : "X"}),
+			false);
+
+		assert.strictEqual(
+			// code under test
+			oBinding.isUnchangedParameter("$$aggregation",
+				{expandTo : Number.MAX_SAFE_INTEGER, hierarchyQualifier : "X"}),
+			true);
+
+		assert.strictEqual(
+			// code under test
+			oBinding.isUnchangedParameter("$$aggregation",
+				{expandTo : Number.MAX_SAFE_INTEGER + 1, hierarchyQualifier : "X"}),
+			true);
+
+		assert.strictEqual(
+			// code under test
+			oBinding.isUnchangedParameter("$$aggregation",
+				{expandTo : 1E16, hierarchyQualifier : "X"}),
+			true);
+
+		oBinding.mParameters.$$aggregation.expandTo = 1;
+
+		assert.strictEqual(
+			// code under test
+			oBinding.isUnchangedParameter("$$aggregation", {hierarchyQualifier : "X"}),
+			true,
+			"1 is the default");
 	});
 
 	//*********************************************************************************************
@@ -12893,16 +13005,16 @@ sap.ui.define([
 			.returns("~aMessages~");
 		this.mock(oBinding.oModel).expects("reportTransitionMessages")
 			.withExactArgs("~aMessages~", "~resourcePath~", true)
-			.returns(["~errorMessage~"]);
+			.returns(["~errorMessage~", "~anotherMessage~"]);
 		this.mock(oBinding).expects("fireEvent").withExactArgs("separateReceived", {
 				property : "~sProperty~",
 				start : 42,
 				length : 23,
-				errorMessage : "~errorMessage~"
+				messagesOnError : ["~errorMessage~", "~anotherMessage~"]
 			}, true)
 			.returns(bDefaultAction);
 		this.mock(Messaging).expects("updateMessages").exactly(bDefaultAction ? 1 : 0)
-			.withExactArgs(undefined, ["~errorMessage~"]);
+			.withExactArgs(undefined, ["~errorMessage~", "~anotherMessage~"]);
 
 		// code under test
 		oBinding.fireSeparateReceived("~sProperty~", 42, 42 + 23, oError);

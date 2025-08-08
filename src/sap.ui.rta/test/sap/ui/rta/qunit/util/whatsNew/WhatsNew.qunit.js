@@ -8,7 +8,6 @@ sap.ui.define([
 	"sap/ui/qunit/utils/nextUIUpdate",
 	"sap/ui/rta/util/whatsNew/WhatsNew",
 	"sap/ui/rta/util/whatsNew/WhatsNewUtils",
-	"sap/ui/rta/util/ReloadManager",
 	"sap/ui/thirdparty/sinon-4"
 ], function(
 	mLibrary,
@@ -18,7 +17,6 @@ sap.ui.define([
 	nextUIUpdate,
 	WhatsNew,
 	WhatsNewUtils,
-	ReloadManager,
 	sinon
 ) {
 	"use strict";
@@ -41,6 +39,7 @@ sap.ui.define([
 		{
 			featureId: "onlyImage",
 			title: "Shows Only Image",
+			documentationUrls: null,
 			information: [{
 				text: null,
 				image: "/resources/sap/ui/rta/util/whatsNew/whatsNewContent/whatsNewImages/WhatsNewFeatureImg.png"
@@ -49,6 +48,11 @@ sap.ui.define([
 		{
 			featureId: "text&Image",
 			title: "Shows Text and Image",
+			documentationUrls: {
+				btpUrl: "btpUrlTestString",
+				s4HanaCloudUrl: "s4HanaCloudUrlTestString",
+				s4HanaOnPremUrl: "s4HanaOnPremUrlTestString"
+			},
 			information: [
 				{
 					text: "Image and Text",
@@ -59,6 +63,7 @@ sap.ui.define([
 		{
 			featureId: "twoText1Img",
 			title: "Two text 1 img",
+			documentationUrls: null,
 			information: [
 				{
 					text: "Two text 1 img",
@@ -69,6 +74,15 @@ sap.ui.define([
 					image: "/resources/sap/ui/rta/util/whatsNew/whatsNewContent/whatsNewImages/WhatsNewFeatureImg.png"
 				}
 			]
+		},
+		{
+			featureId: "excludedFeature",
+			title: "Excluded Feature",
+			documentationUrls: false,
+			information: [{
+				text: "this feature should not be displayed",
+				image: null
+			}]
 		}
 	];
 
@@ -91,7 +105,7 @@ sap.ui.define([
 		},
 		async beforeEach() {
 			this.oFeaturesStub = sandbox.stub(WhatsNewUtils, "getFilteredFeatures").returns(aFeatureCollection);
-			await this.oWhatsNew.initializeWhatsNewDialog();
+			await this.oWhatsNew.initializeWhatsNewDialog([], ["excludedFeature"]);
 			this.oWhatsNewDialog = Element.getElementById("sapUiRtaWhatsNewDialog");
 			await nextUIUpdate();
 			[this.oCarousel] = this.oWhatsNewDialog.getContent();
@@ -107,15 +121,11 @@ sap.ui.define([
 	}, function() {
 		QUnit.test("When the Dialog is opened", function(assert) {
 			assert.ok(this.oWhatsNewDialog.isOpen(), "then the dialog is opened");
-			assert.ok(
-				ReloadManager.getDontShowWhatsNewAfterReload(),
-				"then the reload flag is set and the dialog won't be shown during the session again"
-			);
 			const oModel = this.oWhatsNewDialog.getModel("whatsNewModel");
 			const aFeatures = oModel.getProperty("/featureCollection");
 			const oDontShowAgainCheckbox = Element.getElementById("whatsNewDialog_DontShowAgain");
 			assert.notOk(oDontShowAgainCheckbox.getSelected(), "the checkbox is not selected");
-			assert.strictEqual(aFeatures.length, 4, "all features with the overview are loaded");
+			assert.strictEqual(aFeatures.length, 4, "all non-excluded features with the overview are loaded");
 			assert.strictEqual(this.oCarousel.getPages().length, 4, "all pages are created in the carousel");
 		});
 
@@ -124,10 +134,12 @@ sap.ui.define([
 			assert.strictEqual(this.oCarousel.getActivePage(), oFirstPage.getId(), "first page is shown");
 			const oPageTitle = getPageTitle.call(this);
 			const [oPageText, oPageImage, oPageGrid] = getPageContentContainer.call(this).getItems();
+			const oLearnMoreButton = Element.getElementById("sapUiRtaWhatsNewDialog_LearnMore");
 			assert.strictEqual(oPageTitle.getText(), aFeatureCollection[0].title, "the title is set correctly");
 			assert.strictEqual(oPageText.getHtmlText(), aFeatureCollection[0].information[0].text, "the text is visible");
 			assert.notOk(oPageImage.getVisible(), "the image is not visible");
 			assert.notOk(oPageGrid.getVisible(), "the grid is not visible");
+			assert.ok(oLearnMoreButton.getEnabled(), "Learn More button is enabled for feature with documentationUrls");
 		});
 
 		QUnit.test("When only a image should be visible", function(assert) {
@@ -136,10 +148,12 @@ sap.ui.define([
 			assert.strictEqual(this.oCarousel.getActivePage(), oSecondPage.getId(), "next page is shown");
 			const oPageTitle = getPageTitle.call(this);
 			const [oPageText, oPageImage, oPageGrid] = getPageContentContainer.call(this).getItems();
+			const oLearnMoreButton = Element.getElementById("sapUiRtaWhatsNewDialog_LearnMore");
 			assert.strictEqual(oPageTitle.getText(), aFeatureCollection[1].title, "the title is set correctly");
 			assert.notOk(oPageText.getVisible(), "the text element is not visible");
 			assert.ok(oPageImage.getVisible(), "the image is visible");
 			assert.notOk(oPageGrid.getVisible(), "the grid is not visible");
+			assert.notOk(oLearnMoreButton.getEnabled(), "Learn More button is disabled for feature without documentationUrls");
 		});
 
 		QUnit.test("When the text & image should be visible", function(assert) {
@@ -148,10 +162,12 @@ sap.ui.define([
 			assert.strictEqual(this.oCarousel.getActivePage(), oThirdPage.getId(), "next page is shown");
 			const oPageTitle = getPageTitle.call(this);
 			const [oPageText, oPageImage, oPageGrid] = getPageContentContainer.call(this).getItems();
+			const oLearnMoreButton = Element.getElementById("sapUiRtaWhatsNewDialog_LearnMore");
 			assert.strictEqual(oPageTitle.getText(), aFeatureCollection[2].title, "the correct title is set correctly");
 			assert.notOk(oPageText.getVisible(), "the title is set correctly");
 			assert.notOk(oPageImage.getVisible(), "the image is visible");
 			assert.ok(oPageGrid.getVisible(), "the grid is visible");
+			assert.ok(oLearnMoreButton.getEnabled(), "Learn More button is enabled for feature with documentationUrls");
 		});
 
 		QUnit.test("When multiple elements should be displayed on the page", function(assert) {
@@ -161,6 +177,7 @@ sap.ui.define([
 			const oPageTitle = getPageTitle.call(this);
 			const [oPageText, oPageImage, oPageGrid] = getPageContentContainer.call(this).getItems();
 			const [oPageText2, oPageImage2, oPageGrid2] = getPageContentContainer.call(this, 1).getItems();
+			const oLearnMoreButton = Element.getElementById("sapUiRtaWhatsNewDialog_LearnMore");
 			assert.strictEqual(oPageTitle.getText(), aFeatureCollection[3].title, "the title is set correctly");
 			assert.ok(oPageText.getVisible(), "the title is set correctly");
 			assert.notOk(oPageImage.getVisible(), "the image element is not visible");
@@ -168,6 +185,7 @@ sap.ui.define([
 			assert.notOk(oPageText2.getVisible(), "the title is set correctly");
 			assert.notOk(oPageImage2.getVisible(), "the image is visible");
 			assert.ok(oPageGrid2.getVisible(), "the grid is visible");
+			assert.notOk(oLearnMoreButton.getEnabled(), "Learn More button is disabled for feature without documentationUrls");
 		});
 
 		QUnit.test("Open S4Hana Learn more Link", async function(assert) {
@@ -232,7 +250,7 @@ sap.ui.define([
 	}, function() {
 		QUnit.test("When the Dialog is opened with the wrong layer", async function(assert) {
 			this.oWhatsNew = new WhatsNew({ layer: "DEVELOPER" });
-			await this.oWhatsNew.initializeWhatsNewDialog();
+			await this.oWhatsNew.initializeWhatsNewDialog([]);
 			this.oWhatsNewDialog = Element.getElementById("sapUiRtaWhatsNewDialog");
 			await nextUIUpdate();
 			assert.notOk(this.oWhatsNewDialog, "then the dialog is not opened");
@@ -242,9 +260,8 @@ sap.ui.define([
 			const aFilteredFeatures = await WhatsNewUtils.getFilteredFeatures([]);
 			const aFeatureIdList = aFilteredFeatures.map((oFeature) => oFeature.featureId);
 
-			sandbox.stub(FeaturesAPI, "getSeenFeatureIds").resolves(aFeatureIdList);
 			this.oWhatsNew = new WhatsNew({ layer: "CUSTOMER" });
-			await this.oWhatsNew.initializeWhatsNewDialog();
+			await this.oWhatsNew.initializeWhatsNewDialog(aFeatureIdList);
 			this.oWhatsNewDialog = Element.getElementById("sapUiRtaWhatsNewDialog");
 			await nextUIUpdate();
 			assert.notOk(this.oWhatsNewDialog, "then the dialog is not opened");
@@ -254,7 +271,7 @@ sap.ui.define([
 			const sLayer = "CUSTOMER";
 			const oSetSeenFeatureIdsSpy = sandbox.spy(FeaturesAPI, "setSeenFeatureIds");
 			this.oWhatsNew = new WhatsNew({ layer: sLayer });
-			await this.oWhatsNew.initializeWhatsNewDialog();
+			await this.oWhatsNew.initializeWhatsNewDialog([]);
 			const aFilteredFeatures = await WhatsNewUtils.getFilteredFeatures([]);
 			const aFeatureIdList = aFilteredFeatures.map((oFeature) => oFeature.featureId);
 			this.oWhatsNewDialog = Element.getElementById("sapUiRtaWhatsNewDialog");

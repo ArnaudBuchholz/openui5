@@ -135,7 +135,7 @@ sap.ui.define([
 
 			noDataTitle: MDCRb.getText("chart.NO_DRILLABLE_DIMENSION"),
 			noDataDescription: MDCRb.getText("chart.NO_DRILLABLE_DIMENSION_DESC"),
-			noDataType: IllustratedMessageType.NoDimensionsSet,
+			noDataType: IllustratedMessageType.NoChartData,
 			searchPlaceholder: MDCRb.getText("chart.CHART_DRILLDOWN_SEARCH"),
 			searchEnabled: true,
 			sortEnabled: false,
@@ -168,7 +168,10 @@ sap.ui.define([
 		mSettings = merge({
 			icon: "sap-icon://zoom-in",
 			tooltip: MDCRb.getText("chart.TOOLBAR_ZOOM_IN"),
-			text: MDCRb.getText("chart.TOOLBAR_ZOOM_IN")
+			text: MDCRb.getText("chart.TOOLBAR_ZOOM_IN"),
+			layoutData: new OverflowToolbarLayoutData({
+				closeOverflowOnInteraction: false
+			})
 		}, mSettings);
 
 		const oZoomInButton = new OverflowButton(sId + "btnZoomIn", mSettings);
@@ -179,7 +182,10 @@ sap.ui.define([
 		mSettings = merge({
 			icon: "sap-icon://zoom-out",
 			tooltip: MDCRb.getText("chart.TOOLBAR_ZOOM_OUT"),
-			text: MDCRb.getText("chart.TOOLBAR_ZOOM_OUT")
+			text: MDCRb.getText("chart.TOOLBAR_ZOOM_OUT"),
+			layoutData: new OverflowToolbarLayoutData({
+				closeOverflowOnInteraction: false
+			})
 		}, mSettings);
 
 		const oZoomOutButton = new OverflowButton(sId + "btnZoomOut", mSettings);

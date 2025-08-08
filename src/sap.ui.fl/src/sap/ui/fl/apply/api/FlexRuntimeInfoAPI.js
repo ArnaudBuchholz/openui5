@@ -8,11 +8,11 @@ sap.ui.define([
 	"sap/ui/fl/apply/_internal/controlVariants/Utils",
 	"sap/ui/fl/apply/_internal/flexState/FlexObjectState",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
 	"sap/ui/fl/initial/_internal/FlexConfiguration",
 	"sap/ui/fl/initial/_internal/FlexInfoSession",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
+	"sap/ui/fl/initial/_internal/Settings",
 	"sap/ui/fl/initial/api/InitialFlexAPI",
-	"sap/ui/fl/registry/Settings",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils",
 	"sap/ui/VersionInfo"
@@ -22,11 +22,11 @@ sap.ui.define([
 	VariantUtils,
 	FlexObjectState,
 	FlexState,
-	ManifestUtils,
 	FlexConfiguration,
 	FlexInfoSession,
-	InitialFlexAPI,
+	ManifestUtils,
 	Settings,
+	InitialFlexAPI,
 	Layer,
 	Utils,
 	VersionInfo
@@ -249,6 +249,11 @@ sap.ui.define([
 			};
 		},
 
+		// Used for stubbing in tests
+		_getHostname() {
+			return document.location.hostname;
+		},
+
 		/**
 		 * Checks if the Settings are available and if so returns if the system is a customer system
 		 *
@@ -257,7 +262,21 @@ sap.ui.define([
 		 * @ui5-restricted sap.ui.rta
 		 */
 		isCustomerSystem() {
-			return Settings.getInstanceOrUndef()?.isCustomerSystem();
+			const oSettings = Settings.getInstanceOrUndef();
+			const sSystemType = oSettings?.getSystemType();
+			const bIsCustomerSystem = {
+				CUSTOMER: true,
+				SAP: false
+			}[sSystemType];
+			const sHostname = this._getHostname();
+
+			return bIsCustomerSystem !== undefined
+				? bIsCustomerSystem
+				// Fallback if back end has no info, guess based on hostname
+				: !(
+					sHostname === "localhost"
+					|| sHostname === "127.0.0.1"
+				);
 		},
 
 		/**
@@ -268,7 +287,7 @@ sap.ui.define([
 		 * @ui5-restricted sap.ui.rta
 		 */
 		isAtoEnabled() {
-			return Settings.getInstanceOrUndef()?.isAtoEnabled();
+			return Settings.getInstanceOrUndef()?.getIsAtoEnabled();
 		},
 
 		/**
@@ -280,6 +299,17 @@ sap.ui.define([
 		 */
 		getSystem() {
 			return Settings.getInstanceOrUndef()?.getSystem();
+		},
+
+		/**
+		 * Returns the user id of the current user.
+		 *
+		 * @returns {string} returns the user id
+		 * @private
+		 * @ui5-restricted sap.ui.rta
+		 */
+		getUserId() {
+			return Settings.getInstanceOrUndef()?.getUserId();
 		}
 	};
 

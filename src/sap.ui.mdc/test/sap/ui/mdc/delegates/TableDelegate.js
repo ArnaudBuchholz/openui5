@@ -5,11 +5,13 @@
 sap.ui.define([
 	"./TableDelegateUtils",
 	"sap/ui/mdc/TableDelegate",
-	"sap/ui/mdc/FilterField"
+	"sap/ui/mdc/FilterField",
+	"sap/ui/mdc/enums/FilterBarValidationStatus"
 ], function(
 	TableDelegateUtils,
 	TableDelegate,
-	FilterField
+	FilterField,
+	FilterBarValidationStatus
 ) {
 	"use strict";
 
@@ -29,16 +31,9 @@ sap.ui.define([
 		return TableDelegateUtils.createColumn(oTable, sPropertyKey);
 	};
 
-	TestTableDelegate.updateBindingInfo = function(oMDCTable, oBindingInfo) {
+	TestTableDelegate.updateBindingInfo = function(oTable, oBindingInfo) {
 		TableDelegate.updateBindingInfo.apply(this, arguments);
-		var oMetadataInfo = oMDCTable.getPayload();
-		oBindingInfo.path = oBindingInfo.path || oMetadataInfo.collectionPath || "/" + oMetadataInfo.collectionName;
-		oBindingInfo.model = oBindingInfo.model || oMetadataInfo.model;
-
-		var oDataStateIndicator = oMDCTable.getDataStateIndicator();
-		if (!oDataStateIndicator || !oDataStateIndicator.isFiltering()) {
-			oBindingInfo.filters = this.getFilters(oMDCTable);
-		}
+		TableDelegateUtils.updateBindingInfo(oTable, oBindingInfo);
 	};
 
 	TestTableDelegate.getFilterDelegate = function() {
@@ -55,7 +50,10 @@ sap.ui.define([
 						propertyKey: oProperty.key
 					});
 				});
-			}.bind(this)
+			}.bind(this),
+			determineValidationState: function(oControl) {
+				return FilterBarValidationStatus.NoError;
+			}
 		};
 	};
 

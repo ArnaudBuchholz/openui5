@@ -811,8 +811,12 @@ sap.ui.define([
 			this.command = new BaseCommand();
 			this.command2 = new BaseCommand();
 			this.command3 = new BaseCommand();
-			this.command4 = new FlexCommand();
-			this.command5 = new FlexCommand();
+			this.command4 = new FlexCommand({
+				selector: { id: "mySelectorId" }
+			});
+			this.command5 = new FlexCommand({
+				selector: { id: "mySelectorId" }
+			});
 			this.compositeCommand = new CompositeCommand();
 			sandbox.stub(MessageBox, "error");
 		},
@@ -974,7 +978,6 @@ sap.ui.define([
 		});
 
 		QUnit.test("When executing a failing command", function(assert) {
-			var oCommandExecutedSpy = sinon.spy(this.stack, "fireCommandExecuted");
 			sinon.stub(this.command, "execute").returns(Promise.reject());
 
 			this.stack.push(this.command);
@@ -982,12 +985,10 @@ sap.ui.define([
 
 			.catch(function() {
 				assert.ok(true, "then the command returns a failing promise");
-				assert.equal(oCommandExecutedSpy.callCount, 0, "and no command got executed");
 			});
 		});
 
 		QUnit.test("When executing a composite Command with the second command (of four) inside failing", function(assert) {
-			var oStackCommandExecutedSpy = sinon.spy(this.stack, "fireCommandExecuted");
 			var oCommand1ExecuteSpy = sinon.spy(this.command, "execute");
 			var oCommand1UndoSpy = sinon.spy(this.command, "undo");
 			var oCommand3ExecuteSpy = sinon.spy(this.command3, "execute");
@@ -1005,7 +1006,6 @@ sap.ui.define([
 
 			.catch(function() {
 				assert.ok(true, "then the command returns a failing promise");
-				assert.ok(oStackCommandExecutedSpy.notCalled, "and the commandExecuted event didn't get thrown");
 				assert.ok(oCommand1ExecuteSpy.calledOnce, "and the first command got executed");
 				assert.ok(oCommand1UndoSpy.calledOnce, "and undone");
 				assert.ok(oCommand3ExecuteSpy.notCalled, "and the third command didn't get executed");

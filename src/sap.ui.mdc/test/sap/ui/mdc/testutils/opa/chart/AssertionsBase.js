@@ -107,6 +107,20 @@ sap.ui.define([
 				errorMessage: "No Dialogs found"
 			});
 		},
+		/**
+		 * Assertion that checks for the existence of an overflow popover.
+		 * @param {string} sChartId The ID of the <code>sap.ui.mdc.Chart</code>
+		 * @returns {Promise} OPA waitFor
+		 */
+		iShouldSeeAnOverflowPopover: function(sChartId) {
+			return this.waitFor({
+				id: sChartId + "--toolbar-popover",
+				success: function(oPopover) {
+					Opa5.assert.ok(oPopover, "Overflow popover is opened");
+				},
+				errorMessage: "No overflow popovers found"
+			});
+		},
 		iShouldSeeVisibleDimensionsInOrder: function(aOrderedDimensionNames, sId) {
 
 		},

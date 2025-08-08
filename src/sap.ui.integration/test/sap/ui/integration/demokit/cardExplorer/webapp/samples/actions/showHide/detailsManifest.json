@@ -28,11 +28,6 @@
 	"sap.card": {
 		"type": "Object",
 		"configuration": {
-			"destinations": {
-				"myDestination": {
-					"name": "Northwind_V4"
-				}
-			},
 			"parameters": {
 				"orderId": {
 					"value": ""
@@ -47,7 +42,7 @@
 				"path": "orderData>/"
 			},
 			"title": "Order for {orderData>ShipName}",
-			"subTitle": "ID {parameters>/orderId/value}"
+			"subtitle": "ID {parameters>/orderId/value}"
 		},
 		"content": {
 			"data": {

@@ -4,6 +4,7 @@
 sap.ui.define([
 	"sap/ui/integration/library",
 	"sap/base/Log",
+	"sap/ui/base/BindingInfo",
 	"sap/ui/base/ManagedObject",
 	"sap/ui/integration/cards/actions/CustomAction",
 	"sap/ui/integration/cards/actions/DateChangeAction",
@@ -19,6 +20,7 @@ sap.ui.define([
 ], function (
 	library,
 	Log,
+	BindingInfo,
 	ManagedObject,
 	CustomAction,
 	DateChangeAction,
@@ -33,6 +35,17 @@ sap.ui.define([
 	HideCardAction
 ) {
 	"use strict";
+
+	function detectTextSelection(oDomRef) {
+		if (!oDomRef || typeof window === "undefined" || typeof window.getSelection !== "function") {
+			return false;
+		}
+
+		const oSelection = window.getSelection();
+		const sTextSelection = oSelection.toString().replace("\n", "");
+
+		return sTextSelection && (oDomRef !== oSelection.focusNode && oDomRef.contains(oSelection.focusNode));
+	}
 
 	function _getServiceName(vService) {
 		if (vService && typeof vService === "object") {
@@ -177,7 +190,7 @@ sap.ui.define([
 			sEnabledPropertyName = oConfig.enabledPropertyName,
 			vEnabled = oConfig.enabledPropertyValue,
 			vDisabled = oConfig.disabledPropertyValue,
-			oBindingInfo = ManagedObject.bindingParser("{path:''}");
+			oBindingInfo = BindingInfo.parse("{path:''}");
 
 		// Async formatter to set oActionControl's property depending
 		// if the list item context is a correct navigation target (decided by the navigation service).
@@ -348,9 +361,15 @@ sap.ui.define([
 		oConfig.actionControl["attach" + capitalize(oConfig.eventName)](function (oEvent) {
 			const oSource = oEvent.getSource();
 			const oOriginalEvent = oEvent.getParameter("originalEvent");
+			const oDomRef = oConfig.actionControl.getDomRef();
 
 			if (oOriginalEvent) {
 				oOriginalEvent.stopPropagation();
+
+				if (detectTextSelection(oDomRef)) {
+					oOriginalEvent.preventDefault();
+					return;
+				}
 
 				if (oConfig.actionControl.getFocusDomRef()?.matches(":has(:focus-within)")) {
 					return;

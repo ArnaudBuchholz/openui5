@@ -1,25 +1,31 @@
 /*global QUnit*/
 sap.ui.define([
 	"sap/m/library",
+	"sap/tnt/library",
 	"sap/ui/core/Lib",
 	"sap/ui/thirdparty/jquery",
 	"sap/m/IllustratedMessage",
+	"sap/m/IllustratedMessageType",
 	"sap/m/Button",
 	"sap/ui/core/Core",
 	'sap/ui/core/library',
 	"sap/ui/core/InvisibleText",
-	"sap/ui/dom/getScrollbarSize"
+	"sap/ui/dom/getScrollbarSize",
+	"sap/ui/qunit/utils/nextUIUpdate"
 ],
 function(
 	library,
+	tntLibrary,
 	Library,
 	jQuery,
 	IllustratedMessage,
+	IllustratedMessageType,
 	Button,
 	Core,
 	coreLibrary,
 	InvisibleText,
-	getScrollbarSize
+	getScrollbarSize,
+	nextUIUpdate
 ) {
 	"use strict";
 
@@ -28,6 +34,9 @@ function(
 
 	// shortcut for sap.m.IllustratedMessageType
 	var IllustratedMessageType = library.IllustratedMessageType;
+
+	// shortcut for sap.tnt.IllustratedMessageType
+	var IllustratedMessageTypeTNT = tntLibrary.IllustratedMessageType;
 
 	// shortcut for sap.ui.core.TitleLevel
 	var TitleLevel = coreLibrary.TitleLevel;
@@ -413,7 +422,7 @@ function(
 		var fnUpdateMediaSpy = this.spy(this.oIllustratedMessage, "_updateMedia"),
 			fnUpdateSymbolSpy = this.spy(this.oIllustratedMessage, "_updateSymbol"),
 			fnUpdateMediaStyleSpy = this.spy(this.oIllustratedMessage, "_updateMediaStyle"),
-			sNewSize = IllustratedMessageSize.Dialog;
+			sNewSize = IllustratedMessageSize.Medium;
 
 		// Act
 		this.oIllustratedMessage._updateDomSize();
@@ -434,11 +443,11 @@ function(
 		// Assert
 		assert.ok(fnUpdateMediaStyleSpy.calledOnce,
 			"_updateMediaStyle is called once inside the _updateDomSize call when illustrationSize is different from IllustratedMessageSize.Auto");
-		assert.ok(fnUpdateMediaStyleSpy.calledWithExactly(IllustratedMessage.MEDIA[sNewSize.toUpperCase()]),
+		assert.ok(fnUpdateMediaStyleSpy.calledWithExactly(IllustratedMessage.MEDIA_SIZE[sNewSize.toUpperCase()]),
 			"_updateMediaStyle called width the IllustratedMessage's media with new illustrationSize to upper case as key");
 		assert.ok(fnUpdateSymbolSpy.calledOnce,
 			"_updateSymbol is called once inside the _updateDomSize call when illustrationSize is different from IllustratedMessageSize.Auto");
-		assert.ok(fnUpdateSymbolSpy.calledWithExactly(IllustratedMessage.MEDIA[sNewSize.toUpperCase()]),
+		assert.ok(fnUpdateSymbolSpy.calledWithExactly(IllustratedMessage.MEDIA_SIZE[sNewSize.toUpperCase()]),
 			"_updateSymbol called width the IllustratedMessage's media with new illustrationSize to upper case as key");
 		assert.strictEqual(fnUpdateMediaSpy.callCount, 0, "_updateMedia is not called when illustrationSize is different from IllustratedMessageSize.Auto");
 	});
@@ -483,7 +492,7 @@ function(
 		// Act
 		fnRegisterResizeSpy.resetHistory();
 		this.oIllustratedMessage[sResizeHandlerId] = null;
-		this.oIllustratedMessage.setIllustrationSize(IllustratedMessageSize.Spot);
+		this.oIllustratedMessage.setIllustrationSize(IllustratedMessageSize.Small);
 
 		// Assert
 		assert.strictEqual(fnRegisterResizeSpy.callCount, 0,
@@ -815,6 +824,19 @@ function(
 		assert.strictEqual(oAccInfo.children.length, 1, "Message has button as child");
 	});
 
+	QUnit.test("Tests the accessibility attributes with decorative property", async function (assert) {
+		var $illustration = this.oIllustratedMessage._getIllustration().$();
+
+		assert.notOk($illustration.attr("role"), "The SVG element does not have role=presentation when it is with decorative default value false");
+		assert.notOk($illustration.attr("aria-hidden"), "The SVG element does not have aria-hidden=true when it is with decorative default value false");
+
+		this.oIllustratedMessage.setDecorative(true);
+		await nextUIUpdate();
+
+		assert.strictEqual($illustration.attr("role"), "presentation", "The SVG element has role=presentation when decorative is true");
+		assert.strictEqual($illustration.attr("aria-hidden"), "true", "The SVG element has aria-hidden=true when decorative is true");
+	});
+
 	/* --------------------------- IllustratedMessage Default Text Fallback -------------------------------------- */
 	QUnit.module("IllustratedMessage - Default Text Fallback logic ", {
 		beforeEach: function () {
@@ -833,10 +855,10 @@ function(
 	QUnit.test("Testing version fallback functionality", function (assert) {
 
 		// Arrange
-		var sOriginalType = "NoTasks",
+		var sOriginalType = IllustratedMessage.ORIGINAL_TEXTS.NoSearchResults,
 			sOriginalDefaultDescrText = this.oIllustratedMessage._getResourceBundle().getText(IllustratedMessage.PREPENDS.DESCRIPTION + sOriginalType, undefined, true),
 			sOriginalDefaultTitleText = this.oIllustratedMessage._getResourceBundle().getText(IllustratedMessage.PREPENDS.TITLE + sOriginalType, undefined, true),
-			sVersionType = IllustratedMessageType.NoTasksV1;
+			sVersionType = IllustratedMessageType.NoSearchResults;
 
 		// Act
 		this.oIllustratedMessage.setIllustrationType(sVersionType);
@@ -855,20 +877,17 @@ function(
 		var sOriginalType = IllustratedMessage.ORIGINAL_TEXTS.UnableToLoad,
 			sOriginalDefaultDescrText = this.oIllustratedMessage._getResourceBundle().getText(IllustratedMessage.PREPENDS.DESCRIPTION + sOriginalType, undefined, true),
 			sOriginalDefaultTitleText = this.oIllustratedMessage._getResourceBundle().getText(IllustratedMessage.PREPENDS.TITLE + sOriginalType, undefined, true),
-			sNewType = IllustratedMessageType.ReloadScreen;
+			sNewType = IllustratedMessageType.UnableToLoad;
 
 		// Act
 		this.oIllustratedMessage.setIllustrationType(sNewType);
 
 		// Assert
-		assert.strictEqual(IllustratedMessage.ORIGINAL_TEXTS.UnableToLoad,
-			IllustratedMessage.FALLBACK_TEXTS.ReloadScreen, "ReloadScreen bundle key is UnableToLoad.");
-
 		assert.strictEqual(this.oIllustratedMessage._getDescription().getText(),
-			sOriginalDefaultDescrText, "ReloadScreen Description text fallbacks to the original one (UnableToLoad).");
+			sOriginalDefaultDescrText, "UnableToLoad Description text is correct.");
 
 		assert.strictEqual(this.oIllustratedMessage._getTitle().getText(),
-			sOriginalDefaultTitleText, "ReloadScreen Title text fallbacks to the original one (UnableToLoad).");
+			sOriginalDefaultTitleText, "UnableToLoad Title text is correct.");
 	});
 
 	/* --------------------------- IllustratedMessage Associations -------------------------------------- */
@@ -960,5 +979,96 @@ function(
 		assert.equal($illustration.attr("aria-describedby"), 'illustration_label3');
 	});
 
+	QUnit.test("Should clear aria associations when decorative=true", async function (assert) {
+		// Arrange
+		new InvisibleText("illustration_label4", {text: "My label"}).toStatic();
+		this.oIllustratedMessage.setDecorative(true);
+		this.oIllustratedMessage.addIllustrationAriaLabelledBy("illustration_label4");
+		await nextUIUpdate();
 
+		// Assert
+		var $illustration = this.oIllustratedMessage._getIllustration().$();
+		assert.notOk($illustration.attr("aria-labelledby"), "Clears aria-labelledby when decorative");
+	});
+
+	QUnit.module("Assets ", {
+
+	});
+
+	QUnit.test("All SVG assets should not include style tag or attribute (full async coverage)", async function(assert) {
+		const baseConfigs = [
+			{
+				baseUrl: "sap/m/themes/base/illustrations/",
+				symbolTypes: Object.values(IllustratedMessageType),
+				prefix: "sapIllus-"
+			},
+			{
+				baseUrl: "sap/tnt/themes/base/illustrations/",
+				symbolTypes: Object.values(IllustratedMessageTypeTNT),
+				prefix: "tnt-"
+			}
+		];
+		const sizes = ["Dot", "Spot", "Dialog", "Scene"];
+		const requested = new Set();
+		const fetchPromises = [];
+
+		function resolveSymbolName(pathConfig, pathKey, symbol, size) {
+			const symbolKey = symbol.split("-")[1] || symbol;
+			const symbolMap = pathConfig[pathKey] || {};
+			let symbolName = symbolKey;
+			let finalSize = size;
+			if (typeof symbolMap[symbolKey] === "string") {
+				symbolName = symbolMap[symbolKey];
+			} else {
+				finalSize = (symbolMap[symbolKey] && symbolMap[symbolKey].sizeReplacement && symbolMap[symbolKey].sizeReplacement[finalSize]) || finalSize;
+			}
+			return { symbolName, finalSize };
+		}
+
+		for (const config of baseConfigs) {
+			const metadataUrl = sap.ui.require.toUrl(config.baseUrl + "metadata.json");
+			// eslint-disable-next-line no-await-in-loop
+			const metadata = await fetch(metadataUrl).then((r) => r.json());
+			const pathConfig = metadata.pathSymbolsConfig;
+			const pathKeys = Object.keys(pathConfig);
+
+			for (const pathKey of pathKeys) {
+				for (const symbol of config.symbolTypes) {
+					const symbolKey = symbol.split("-")[1] || symbol;
+					const symbolEntry = pathConfig[pathKey] && pathConfig[pathKey][symbolKey];
+					// Only fetch for this pathKey if symbol is present in the mapping (as string or object), or always for root
+					// For each pathKey, if the symbol is present in the mapping for that key, fetch the SVG for that pathKey using the correct mapped value and sizeReplacement logic.
+					if (pathKey === "root" || (symbolEntry !== undefined)) {
+						for (const size of sizes) {
+							const { symbolName, finalSize } = resolveSymbolName(pathConfig, pathKey, symbol, size);
+							const prefix = config.prefix;
+							const pathSegment = pathKey === "root" ? "" : pathKey;
+							const resourcePath = config.baseUrl + pathSegment + prefix + finalSize + "-" + symbolName + ".svg";
+							const url = sap.ui.require.toUrl(resourcePath);
+							if (!requested.has(url)) {
+								requested.add(url);
+								fetchPromises.push(
+									fetch(url)
+										.then((response) => {
+											if (!response.ok) { throw new Error(`Failed: ${url}`); }
+											return response.text();
+										})
+										.then((textResponse) => {
+											assert.strictEqual(textResponse.match(/style/gi), null, url + " does not include style tag or attr");
+										})
+										.catch((error) => {
+											assert.ok(false, url + " fetch failed: " + error.message);
+										})
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		assert.expect(requested.size);
+		const done = assert.async();
+		Promise.all(fetchPromises).then(() => done());
+	});
 });

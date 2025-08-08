@@ -7,6 +7,7 @@ sap.ui.define([
 	"sap/ui/dt/OverlayRegistry",
 	"sap/ui/dt/Util",
 	"sap/ui/fl/Layer",
+	"sap/ui/fl/Utils",
 	"sap/ui/qunit/utils/nextUIUpdate",
 	"sap/ui/rta/command/CommandFactory",
 	"sap/ui/rta/command/ExtendControllerCommand",
@@ -20,6 +21,7 @@ sap.ui.define([
 	OverlayRegistry,
 	Util,
 	Layer,
+	Utils,
 	nextUIUpdate,
 	CommandFactory,
 	ExtendControllerCommand,
@@ -29,6 +31,7 @@ sap.ui.define([
 	"use strict";
 
 	const sandbox = sinon.createSandbox();
+	const oResourceBundle = Lib.getResourceBundleFor("sap.ui.rta");
 
 	const sXmlString =
 	'<mvc:View xmlns:mvc="sap.ui.core.mvc"  xmlns:core="sap.ui.core" xmlns="sap.m">' +
@@ -111,6 +114,21 @@ sap.ui.define([
 			});
 		});
 
+		QUnit.test("Menu Item, positive case", async function(assert) {
+			const aMenuItems = await this.oExtendControllerPlugin.getMenuItems([this.oPanelOverlay]);
+			assert.strictEqual(aMenuItems[0].icon, "sap-icon://create-form", "then the icon is set correctly");
+			assert.strictEqual(
+				aMenuItems[0].text,
+				oResourceBundle.getText("CTX_EXTEND_CONTROLLER"),
+				"then the text is set correctly"
+			);
+			assert.strictEqual(
+				aMenuItems[0].additionalInfo,
+				oResourceBundle.getText("EXTEND_CONTROLLER_RTA_CONTEXT_MENU_INFO"),
+				"then the additional info is set correctly"
+			);
+		});
+
 		QUnit.test("When the Action is not defined in the designtimeMetadata", function(assert) {
 			sandbox.stub(this.oExtendControllerPlugin, "getAction").returns(undefined);
 			return this.oExtendControllerPlugin._isEditable(this.oPanelOverlay).then(function(bEditable) {
@@ -123,9 +141,25 @@ sap.ui.define([
 
 			assert.notOk(this.oExtendControllerPlugin.isEnabled([this.oPanelOverlay]), "then the action is not enabled");
 			const aMenuItems = await this.oExtendControllerPlugin.getMenuItems([this.oPanelOverlay]);
+			const sFoundText = oResourceBundle.getText("CTX_DISABLED_REUSE");
+			assert.notStrictEqual(sFoundText, "CTX_DISABLED_REUSE", "then the text is found in the resource bundle");
 			assert.strictEqual(
 				aMenuItems[0].text,
-				`${Lib.getResourceBundleFor("sap.ui.rta").getText("CTX_EXTEND_CONTROLLER")} (${Lib.getResourceBundleFor("sap.ui.rta").getText("CTX_DISABLED_REUSE")})`,
+				`${oResourceBundle.getText("CTX_EXTEND_CONTROLLER")} (${sFoundText})`,
+				"then the menu item has the correct text"
+			);
+		});
+
+		QUnit.test("When the control is not in an async view", async function(assert) {
+			sandbox.stub(Utils, "getViewForControl").returns({});
+
+			assert.notOk(this.oExtendControllerPlugin.isEnabled([this.oPanelOverlay]), "then the action is not enabled");
+			const aMenuItems = await this.oExtendControllerPlugin.getMenuItems([this.oPanelOverlay]);
+			const sFoundText = oResourceBundle.getText("CTX_DISABLED_NOT_ASYNC");
+			assert.notStrictEqual(sFoundText, "CTX_DISABLED_NOT_ASYNC", "then the text is found in the resource bundle");
+			assert.strictEqual(
+				aMenuItems[0].text,
+				`${oResourceBundle.getText("CTX_EXTEND_CONTROLLER")} (${sFoundText})`,
 				"then the menu item has the correct text"
 			);
 		});
@@ -134,6 +168,7 @@ sap.ui.define([
 			const oExtendControllerPlugin = new ExtendControllerPlugin();
 
 			sandbox.stub(this.oExtendControllerPlugin, "isInReuseComponentOnS4HanaCloud").returns(false);
+			sandbox.stub(Utils, "getViewForControl").returns({ oAsyncState: { promise: Promise.resolve() } });
 
 			// Test with one overlay
 			const aElementOverlays = [{ getElement: () => {} }];

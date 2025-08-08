@@ -37,6 +37,31 @@
 		description : "{product>Description}",
 		info : "{product>Price} {product>CurrencyCode}",
 		type : "Navigation",
+		navigated: {
+			path: "product>Price",
+			formatter: function(value) {
+				return (value === "956.0");
+			}
+		},
+		highlight: {
+			path: "product>Price",
+			formatter: function(value) {
+				value = parseFloat(value);
+				if (value < 50) {
+					return "Error";
+				}
+				if (value < 1000) {
+					return "Warning";
+				}
+				if (value <= 10000) {
+					return "Indication04";
+				}
+				if (value > 10000 && value < 50000) {
+					return "Success";
+				}
+				return "None";
+			}
+		},
 		counter: {
 			path : "product>Price",
 			formatter : function(value) {
@@ -54,7 +79,19 @@
 			formatter : function(value) {
 				return value > 300 ? "Warning" : "Success";
 			}
-		}
+		},
+		actions: [
+			new sap.m.ListItemAction({
+				text: "Accept",
+				icon: "sap-icon://accept"
+			}),
+			new sap.m.ListItemAction({
+				type: "Edit"
+			}),
+			new sap.m.ListItemAction({
+				type: "Delete"
+			})
+		]
 	});
 
 	var oList = new sap.m.List({
@@ -68,7 +105,15 @@
 		},
 		growingScrollToLoad : "{growing>/scrollToLoad}",
 		mode: sap.m.ListMode.MultiSelect,
-		showNoData: true
+		showNoData: true,
+		itemActionCount: 2,
+		itemActionPress: function(oEvent) {
+			const oItem = oEvent.getParameter("listItem");
+			const oAction = oEvent.getParameter("action");
+			const iItemIndex = oItem.getParent().indexOfItem(oItem);
+			const sAction = oAction.getText() || oAction.getType();
+			sap.m.MessageToast.show(`${sAction} action of item ${iItemIndex} is pressed`);
+		}
 	});
 
 	var oPage = new sap.m.Page({

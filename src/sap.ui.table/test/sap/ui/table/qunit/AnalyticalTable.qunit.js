@@ -503,7 +503,7 @@ sap.ui.define([
 				oTable.bindRows(mTestSettings.bindingInfo);
 			}
 
-			return TableUtils.Binding.metadataLoaded(oTable).then(function() {
+			return oTable._metadataLoaded().then(function() {
 				mTestSettings.metadataLoaded(oUpdateColumnsSpy, oInvalidateSpy, mTestSettings.renderTable);
 				oTable.destroy();
 			}).catch(function() {
@@ -582,7 +582,7 @@ sap.ui.define([
 				oTable.bindRows(mTestSettings.bindingInfo);
 			}
 
-			return TableUtils.Binding.metadataLoaded(oTable).then(function() {
+			return oTable._metadataLoaded().then(function() {
 				mTestSettings.metadataLoaded(oUpdateColumnsSpy, oInvalidateSpy, mTestSettings.renderTable);
 				oTable.destroy();
 			}).catch(function() {
@@ -655,6 +655,32 @@ sap.ui.define([
 		assert.ok(oDataRequestedSpy.calledOnce, "The original dataRequested event listener was called once");
 		assert.ok(oDataReceivedSpy.calledOnce, "The original dataReceived event listener was called once");
 		assert.ok(oSelectionChangedSpy.calledOnce, "The original selectionChanged event listener was called once");
+	});
+
+	QUnit.test("_metadataLoaded", function(assert) {
+		const oModel = this.oTable.getModel();
+
+		assert.expect(3);
+		this.oTable.setModel(null);
+
+		return this.oTable._metadataLoaded()
+			.catch(() => {
+				assert.ok(true, "No binding, no model: Promise rejected");
+			})
+			.then(() => {
+				this.oTable.bindRows("/ActualPlannedCosts(P_ControllingArea='US01',P_CostCenter='100-1000',P_CostCenterTo='999-9999')/Results");
+				return this.oTable._metadataLoaded();
+			})
+			.catch(() => {
+				assert.ok(true, "No model: Promise rejected");
+			})
+			.then(() => {
+				this.oTable.setModel(oModel);
+				return this.oTable._metadataLoaded();
+			})
+			.then(() => {
+				assert.ok(true, "Binding, model and metadata available: Promise resolved");
+			});
 	});
 
 	QUnit.module("Context menu", {
@@ -1713,8 +1739,8 @@ sap.ui.define([
 	});
 
 	QUnit.module("TreeBindingProxy", {
-		beforeEach: async function() {
-			this.oTable = await TableQUnitUtils.createTable(AnalyticalTable, {
+		beforeEach: function() {
+			this.oTable = TableQUnitUtils.createTable(AnalyticalTable, {
 				models: new ODataModelV2(sServiceURI),
 				columns: [
 					createColumn({grouped: true, name: "CostCenter"})
@@ -1754,62 +1780,35 @@ sap.ui.define([
 	});
 
 	QUnit.test("Correct Proxy Calls", function(assert) {
-		// Initialise spies
-		const fnGetContextsSpy = sinon.spy(this.oProxy, "getContexts");
-		const fnExpandSpy = sinon.spy(this.oProxy, "expand");
-		const fnCollapseSpy = sinon.spy(this.oProxy, "collapse");
-		const fnExpandToLevelSpy = sinon.spy(this.oProxy, "expandToLevel");
-		const fnCollapseAllSpy = sinon.spy(this.oProxy, "collapseAll");
-		const fnIsExpandedSpy = sinon.spy(this.oProxy, "isExpanded");
-		const fnGetContextByIndexSpy = sinon.spy(this.oProxy, "getContextByIndex");
-		const fnGetNodeByIndexSpy = sinon.spy(this.oProxy, "getNodeByIndex");
-
-		// _getContexts
-		assert.equal(this.oTable._getContexts(0).length, 0, "TreeTable has no contexts");
-		assert.notOk(fnGetContextsSpy.called, "proxy#getContexts was not called");
-
-		// expand
+		this.spy(this.oProxy, "expand");
 		this.oTable.expand(0);
-		assert.ok(fnExpandSpy.called, "proxy#expand was called");
+		assert.ok(this.oProxy.expand.calledOnceWithExactly(0), "proxy#expand call");
 
-		// collapse
+		this.spy(this.oProxy, "collapse");
 		this.oTable.collapse(0);
-		assert.ok(fnCollapseSpy.called, "proxy#collapse was called");
+		assert.ok(this.oProxy.collapse.calledOnceWithExactly(0), "proxy#collapse call");
 
-		// getContextByIndex
-		this.oTable.getContextByIndex(0);
-		assert.ok(fnGetContextByIndexSpy.called, "proxy#getContextByIndex was called");
+		this.spy(this.oProxy, "expandToLevel");
+		this.oTable._aGroupedColumns = Array(3);
+		this.oTable.expandAll();
+		assert.ok(this.oProxy.expandToLevel.calledOnceWithExactly(3), "proxy#expandToLevel call");
 
-		// getContextInfoByIndex
-		this.oTable.getContextInfoByIndex(0);
-		assert.ok(fnGetNodeByIndexSpy.called, "proxy#getNodeByIndex was called");
-
-		// expandToLevel
-		this.oTable.expandAll(0);
-		assert.ok(fnExpandToLevelSpy.called, "proxy#expandToLevel was called");
-
-		// collapseAll
+		this.spy(this.oProxy, "collapseAll");
 		this.oTable.collapseAll();
-		assert.ok(fnCollapseAllSpy.called, "proxy#collapseAll was called");
+		assert.ok(this.oProxy.collapseAll.calledOnceWithExactly(), "proxy#collapseAll call");
 
-		// isExpanded
+		this.spy(this.oProxy, "isExpanded");
 		this.oTable.isExpanded(0);
-		assert.ok(fnIsExpandedSpy.called, "proxy#isExpanded was called");
+		assert.ok(this.oProxy.isExpanded.calledOnceWithExactly(0), "proxy#isExpanded call");
 
-		// Restore spies and stubs
-		fnGetContextsSpy.restore();
-		fnExpandSpy.restore();
-		fnCollapseSpy.restore();
-		fnExpandToLevelSpy.restore();
-		fnCollapseAllSpy.restore();
-		fnIsExpandedSpy.restore();
-		fnGetContextByIndexSpy.restore();
-		fnGetNodeByIndexSpy.restore();
+		this.spy(this.oProxy, "getNodeByIndex");
+		this.oTable.getContextInfoByIndex(0);
+		assert.ok(this.oProxy.getNodeByIndex.calledOnceWithExactly(0), "proxy#getNodeByIndex call");
 	});
 
 	QUnit.module("Hide/Show table and suspend/resume binding with ODataV2", {
-		beforeEach: async function() {
-			this.oTable = await TableQUnitUtils.createTable(AnalyticalTable, {
+		beforeEach: function() {
+			this.oTable = TableQUnitUtils.createTable(AnalyticalTable, {
 				models: new ODataModelV2(sServiceURI),
 				columns: [
 					createColumn({grouped: true, name: "CostCenter"}),
@@ -1874,14 +1873,31 @@ sap.ui.define([
 		assert.notOk(this.oTable.getRows()[0].getBindingContext(), "Table has no rows with bindingContext");
 	});
 
-	QUnit.test("#_getContexts", async function(assert) {
+	QUnit.test("#_getContexts", function(assert) {
+		const oBinding = this.oTable.getBinding();
+
+		this.fnBindingNodesSpy.resetHistory();
 		this.oTable.setVisible(false);
-		this.oTable.getBinding().suspend();
-		await TableQUnitUtils.wait(100);
+		oBinding.suspend();
+		assert.deepEqual(this.oTable._getContexts(), [], "Called on invisible table and suspended binding: Return value");
+		assert.ok(this.fnBindingNodesSpy.notCalled, "Called on invisible table and suspended binding: Binding#getNodes not called");
 
-		assert.deepEqual(this.oTable._getContexts(), [], "Called without arguments on invisible and suspended table: []");
-		assert.equal(this.fnBindingNodesSpy.callCount, 0, "Called without arguments: Binding#getNodes not called");
+		this.fnBindingNodesSpy.resetHistory();
+		oBinding.resume();
+		this.oTable._getContexts(1, 2, 3);
+		assert.ok(this.fnBindingNodesSpy.calledOnceWithExactly(1, 2, 3),
+			"Called on invisible table and not suspended binding: Binding#getNodes call");
 
-		this.fnBindingNodesSpy.restore();
+		this.fnBindingNodesSpy.resetHistory();
+		this.oTable.setVisible(true);
+		oBinding.suspend();
+		this.oTable._getContexts(1, 2, 3);
+		assert.ok(this.fnBindingNodesSpy.calledOnceWithExactly(1, 2, 3),
+			"Called on visible table and suspended binding: Binding#getNodes call");
+
+		this.fnBindingNodesSpy.resetHistory();
+		this.oTable.unbindRows();
+		assert.deepEqual(this.oTable._getContexts(1, 2, 3), [], "Called without binding: Return value");
+		assert.ok(this.fnBindingNodesSpy.notCalled, "Called without binding: Binding#getNodes not called");
 	});
 });

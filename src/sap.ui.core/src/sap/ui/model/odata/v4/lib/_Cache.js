@@ -1311,13 +1311,29 @@ sap.ui.define([
 	/**
 	 * Returns this cache's query options.
 	 *
-	 * @returns {object|undefined} The query options, if any
+	 * @returns {object|undefined} The query options, if any (requires "copy on write"!)
 	 *
 	 * @public
 	 * @see #setQueryOptions
 	 */
 	_Cache.prototype.getQueryOptions = function () {
 		return this.mQueryOptions;
+	};
+
+	/**
+	 * Returns this cache's query options corresponding to the given path (already cloned!) as
+	 * suitable for a single-entity GET request.
+	 *
+	 * @param {string} sPath
+	 *   The entity collection's path within this cache, may be <code>""</code>
+	 * @returns {object|undefined} The query options as a clone, if any
+	 *
+	 * @protected
+	 * @see #getQueryOptions
+	 * @see #refreshSingle
+	 */
+	_Cache.prototype.getQueryOptions4Single = function (sPath) {
+		return _Helper.clone(_Helper.getQueryOptionsForPath(this.mQueryOptions, sPath));
 	};
 
 	/**
@@ -1483,8 +1499,7 @@ sap.ui.define([
 					&& that.oRequestor.getModelInterface().fetchMetadata(
 						that.sMetaPath + "/@com.sap.vocabularies.Common.v1.Messages/$Path"
 					).getResult(),
-				mQueryOptions = _Helper.clone(
-					_Helper.getQueryOptionsForPath(that.mQueryOptions, sPath)),
+				mQueryOptions = that.getQueryOptions4Single(sPath),
 				sReadUrl;
 
 			if (iIndex >= 0) {
@@ -1818,7 +1833,7 @@ sap.ui.define([
 	 * @param {boolean} [bKeepReportedMessagesPath]
 	 *   Whether <code>this.sReportedMessagesPath</code> should be kept unchanged
 	 *
-	 * @private
+	 * @protected
 	 */
 	_Cache.prototype.replaceElement = function (aElements, iIndex, sPredicate, oElement,
 			mTypeForMetaPath, sPath, bKeepReportedMessagesPath) {
@@ -1836,6 +1851,9 @@ sap.ui.define([
 			aElements[iIndex] = aElements.$byPredicate[sPredicate] = oElement;
 			sTransientPredicate = _Helper.getPrivateAnnotation(oOldElement, "transientPredicate");
 			if (sTransientPredicate) {
+				if ("@$ui5.context.isInactive" in oOldElement) {
+					oElement["@$ui5.context.isInactive"] = false;
+				}
 				oElement["@$ui5.context.isTransient"] = false;
 				aElements.$byPredicate[sTransientPredicate] = oElement;
 				_Helper.setPrivateAnnotation(oElement, "transientPredicate", sTransientPredicate);
@@ -2079,7 +2097,7 @@ sap.ui.define([
 	 * Updates this cache's query options if it has not yet sent a request.
 	 *
 	 * @param {object} [mQueryOptions={}]
-	 *   The new query options
+	 *   The new query options (requires "copy on write"!)
 	 * @param {boolean} [bForce]
 	 *   Forces an update even if a request has been already sent
 	 * @throws {Error}
@@ -2095,7 +2113,7 @@ sap.ui.define([
 			throw new Error("Cannot set query options: Cache has already sent a request");
 		}
 
-		this.mQueryOptions = mQueryOptions;
+		this.mQueryOptions = mQueryOptions; // Note: requires "copy on write"!
 		this.sQueryString = this.oRequestor.buildQueryString(this.sMetaPath, mQueryOptions, false,
 			this.bSortExpandSelect);
 	};
@@ -2670,7 +2688,7 @@ sap.ui.define([
 	 * @param {string} sResourcePath
 	 *   A resource path relative to the service URL
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!)
 	 * @param {boolean} [bSortExpandSelect]
 	 *   Whether the paths in $expand and $select shall be sorted in the cache's query string
 	 * @param {string} [sDeepResourcePath=sResourcePath]
@@ -3206,6 +3224,8 @@ sap.ui.define([
 						const sNewPredicate = this.fixDuplicatePredicate(oElement, sPredicate);
 						if (sNewPredicate) {
 							sPredicate = sNewPredicate;
+							oKeptElement = oElement; // leads to no-op for _Helper.updateNonExisting
+						} else if (iIndex < iStart || iIndex >= iStart + iResultLength) {
 							oKeptElement = oElement; // leads to no-op for _Helper.updateNonExisting
 						} else {
 							throw new Error("Duplicate key predicate: " + sPredicate);
@@ -3803,8 +3823,9 @@ sap.ui.define([
 				end : iEnd,
 				promise : new SyncPromise(function (resolve, reject) {
 					fnResolve = resolve;
-					fnReject = function () {
-						const oError = new Error("$$separate: canceled " + sProperty);
+					fnReject = function (oError0) {
+						const oError = new Error("$$separate: canceled " + sProperty,
+							{cause : oError0});
 						oError.canceled = true;
 						reject(oError);
 					};
@@ -3817,9 +3838,9 @@ sap.ui.define([
 				const oResult = await this.oRequestor.request("GET", sReadUrl,
 					this.oRequestor.lockGroup("$single", this));
 
-				let bMainFailed;
-				await oMainPromise.catch(() => { /* handled by caller */
-					bMainFailed = true;
+				let oMainError;
+				await oMainPromise.catch((oError) => { /* handled by caller */
+					oMainError = oError;
 				});
 
 				const iIndex = this.mSeparateProperty2ReadRequests[sProperty].indexOf(oReadRange);
@@ -3829,8 +3850,8 @@ sap.ui.define([
 				}
 
 				this.mSeparateProperty2ReadRequests[sProperty].splice(iIndex, 1);
-				if (bMainFailed) {
-					fnReject();
+				if (oMainError) {
+					fnReject(oMainError);
 					return;
 				}
 
@@ -3840,6 +3861,10 @@ sap.ui.define([
 					const oElement = this.aElements.$byPredicate[sPredicate];
 					if (oElement) {
 						if (oElement["@odata.etag"] === oSeparateData["@odata.etag"]) {
+							if (oElement[sProperty]?.["@odata.etag"]
+									!== oSeparateData[sProperty]?.["@odata.etag"]) {
+								delete oElement[sProperty];
+							}
 							_Helper.updateSelected(this.mChangeListeners, sPredicate, oElement,
 								oSeparateData, [sProperty]);
 						} else {
@@ -3851,7 +3876,7 @@ sap.ui.define([
 				fnResolve();
 				fnSeparateReceived(sProperty, iStart, iEnd);
 			} catch (oError) {
-				fnReject();
+				fnReject(oError);
 				// do not clean up mSeparateProperty2ReadRequests to avoid late property requests
 				fnSeparateReceived(sProperty, iStart, iEnd, oError);
 			}
@@ -3993,7 +4018,7 @@ sap.ui.define([
 	 *   rows and transient elements with a different batch group shall be kept in place and a
 	 *   backup shall be remembered for a later {@link #restore}
 	 * @param {object} [mQueryOptions]
-	 *   The new query options
+	 *   The new query options (requires "copy on write"!)
 	 * @param {object} [_oAggregation]
 	 *   An object holding the information needed for data aggregation; see also "OData Extension
 	 *   for Data Aggregation Version 4.0"; must already be normalized by
@@ -4195,7 +4220,7 @@ sap.ui.define([
 	 * @param {string} sResourcePath
 	 *   A resource path relative to the service URL
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!)
 	 *
 	 * @alias sap.ui.model.odata.v4.lib._PropertyCache
 	 * @constructor
@@ -4305,7 +4330,7 @@ sap.ui.define([
 	 * @param {string} sResourcePath
 	 *   A resource path relative to the service URL
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!)
 	 * @param {boolean} [bSortExpandSelect]
 	 *   Whether the paths in $expand and $select shall be sorted in the cache's query string
 	 * @param {boolean} [bSharedRequest]
@@ -4535,7 +4560,8 @@ sap.ui.define([
 
 						if (bConfirm) {
 							delete mHeaders["Prefer"];
-							return post(oGroupLock0.getUnlockedCopy());
+							// decomposed error indicates request inside change set (but not alone)
+							return post(oGroupLock0.getUnlockedCopy(!oError.decomposed));
 						}
 
 						oCanceledError = Error("Action canceled due to strict handling");
@@ -4572,7 +4598,9 @@ sap.ui.define([
 			}
 		}
 
-		if (oEntity && !("@odata.etag" in oEntity)) {
+		// Note: ODLB#getKeepAliveContext creates an empty initial object w/ private annotations
+		if (bIgnoreETag && oEntity && !("@odata.etag" in oEntity)
+				&& !_Helper.isEmptyObject(_Helper.publicClone(oEntity))) {
 			bIgnoreETag = false;
 		}
 		if (bIgnoreETag || oEntity) {
@@ -4726,7 +4754,7 @@ sap.ui.define([
 	 * @param {string} sResourcePath
 	 *   A resource path relative to the service URL
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!)
 	 * @private
 	 */
 	function _SingletonPropertyCache(oRequestor, sResourcePath, mQueryOptions) {
@@ -4822,9 +4850,9 @@ sap.ui.define([
 	 *   <br>
 	 *   Example: Products
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string, the value in this pair has to
-	 *   be a string or an array of strings; if it is an array, the resulting query string
-	 *   repeats the key for each array value.
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!), the
+	 *   value in this pair has to be a string or an array of strings; if it is an array, the
+	 *   resulting query string repeats the key for each array value.
 	 *   Examples:
 	 *   {foo : "bar", "bar" : "baz"} results in the query string "foo=bar&bar=baz"
 	 *   {foo : ["bar", "baz"]} results in the query string "foo=bar&foo=baz"
@@ -4892,9 +4920,9 @@ sap.ui.define([
 	 *   <br>
 	 *   Example: Products
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string, the value in this pair has to
-	 *   be a string or an array of strings; if it is an array, the resulting query string
-	 *   repeats the key for each array value.
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!), the
+	 *   value in this pair has to be a string or an array of strings; if it is an array, the
+	 *   resulting query string repeats the key for each array value.
 	 *   Examples:
 	 *   {foo : "bar", "bar" : "baz"} results in the query string "foo=bar&bar=baz"
 	 *   {foo : ["bar", "baz"]} results in the query string "foo=bar&foo=baz"
@@ -4920,9 +4948,9 @@ sap.ui.define([
 	 *   <br>
 	 *   Example: Products
 	 * @param {object} [mQueryOptions]
-	 *   A map of key-value pairs representing the query string, the value in this pair has to
-	 *   be a string or an array of strings; if it is an array, the resulting query string
-	 *   repeats the key for each array value.
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!), the
+	 *   value in this pair has to be a string or an array of strings; if it is an array, the
+	 *   resulting query string repeats the key for each array value.
 	 *   Examples:
 	 *   {foo : "bar", "bar" : "baz"} results in the query string "foo=bar&bar=baz"
 	 *   {foo : ["bar", "baz"]} results in the query string "foo=bar&foo=baz"

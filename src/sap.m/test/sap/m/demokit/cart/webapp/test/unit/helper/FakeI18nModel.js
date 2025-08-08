@@ -1,27 +1,19 @@
 sap.ui.define([
 	"sap/ui/model/Model",
 	"sap/base/strings/formatMessage"
-], function (
-	Model,
-	formatMessage) {
+], (Model, formatMessage) => {
 	"use strict";
 
-
 	return Model.extend("test.unit.helper.FakeI18nModel", {
-
-		constructor : function (mTexts) {
+		constructor: function (mTexts) {
 			Model.call(this);
 			this.mTexts = mTexts || {};
 		},
 
-		getResourceBundle : function () {
+		getResourceBundle() {
 			return {
-				getText : function (sTextName) {
-					return formatMessage.call(this, this.mTexts[sTextName], [].slice.call(arguments, 1));
-				}.bind(this)
+				getText: (sTextName, aArgs) => formatMessage(this.mTexts[sTextName], aArgs)
 			};
 		}
-
 	});
-
 });

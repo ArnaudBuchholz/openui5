@@ -139,6 +139,14 @@ sap.ui.define([
 				target: { type: "string" }
 			},
 			aggregations: {
+
+				/**
+				 * Info sections to be displayed in the header.
+				 * @experimental Since 1.136
+				 * @since 1.136
+				 */
+				infoSection: {type: "sap.ui.core.Control", multiple: true, singularName: "infoSection"},
+
 				/**
 				 * Holds the internal data timestamp text aggregation.
 				 */
@@ -187,8 +195,7 @@ sap.ui.define([
 
 		this._oToolbarDelegate = {
 			onfocusin: this._onToolbarFocusin,
-			onfocusout: this._onToolbarFocusout,
-			onAfterRendering: this._addMarginToHeaderText
+			onfocusout: this._onToolbarFocusout
 		};
 	};
 
@@ -228,8 +235,6 @@ sap.ui.define([
 			oToolbar.addEventDelegate(this._oToolbarDelegate, this);
 		}
 
-		this._addMarginToHeaderText();
-
 		this.getBannerLines()?.forEach((oText) => {
 			this._enhanceText(oText);
 		});
@@ -254,6 +259,14 @@ sap.ui.define([
 	 */
 	BaseHeader.prototype.isLink = function () {
 		return !!this.getHref();
+	};
+
+	/**
+	 * If the header must have tile accessibility.
+	 * @returns {boolean} True if card related attributes should not be rendered.
+	 */
+	BaseHeader.prototype.isTile = function () {
+		return !!this.getProperty("useTileLayout");
 	};
 
 	BaseHeader.prototype.onkeydown = function (oEvent) {
@@ -290,7 +303,7 @@ sap.ui.define([
 
 	BaseHeader.prototype.ontap = function (oEvent) {
 		if (this.isLink() && oEvent.ctrlKey) {
-			// ctrl + click should open the link in a new tab
+			//Ctrl + click opens the link in a new tab.
 			return;
 		}
 
@@ -325,23 +338,6 @@ sap.ui.define([
 	 */
 	BaseHeader.prototype._onToolbarFocusout = function () {
 		this.removeStyleClass("sapFCardHeaderToolbarFocused");
-	};
-
-	/**
-	 * Adds margin to the header text, which ensures the text will be visible under the toolbar.
-	 * @private
-	 */
-	BaseHeader.prototype._addMarginToHeaderText = function () {
-		const oToolbar = this.getToolbar();
-		const oHeaderText = this.getDomRef().getElementsByClassName("sapFCardHeaderText")[0];
-
-		if (oHeaderText && oToolbar) {
-			if (oToolbar.getVisible()) {
-				oHeaderText.style.marginInlineEnd = oToolbar.getDomRef().offsetWidth + "px";
-			} else {
-				oHeaderText.style.marginInlineEnd = 0;
-			}
-		}
 	};
 
 	/*
@@ -499,6 +495,11 @@ sap.ui.define([
 	 * @ui5-restricted
 	 */
 	BaseHeader.prototype.getAriaRoleDescription = function () {
+		if (this.isTile()) {
+
+			return null;
+		}
+
 		return this.hasListeners("press") ? this._oRb.getText("ARIA_ROLEDESCRIPTION_INTERACTIVE_CARD_HEADER") : this._oRb.getText("ARIA_ROLEDESCRIPTION_CARD_HEADER");
 	};
 

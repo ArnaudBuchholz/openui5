@@ -6,39 +6,47 @@ sap.ui.define([
 	"sap/base/util/restricted/_omit",
 	"sap/ui/core/util/reflection/JsControlTreeModifier",
 	"sap/ui/fl/apply/_internal/changes/Reverter",
+	"sap/ui/fl/apply/_internal/flexObjects/CompVariant",
 	"sap/ui/fl/apply/_internal/flexObjects/FlexObjectFactory",
 	"sap/ui/fl/apply/_internal/flexObjects/States",
 	"sap/ui/fl/apply/_internal/flexState/changes/DependencyHandler",
 	"sap/ui/fl/apply/_internal/flexState/changes/UIChangesState",
-	"sap/ui/fl/apply/_internal/flexState/compVariants/CompVariantMerger",
 	"sap/ui/fl/apply/_internal/flexState/controlVariants/VariantManagementState",
 	"sap/ui/fl/apply/_internal/flexState/FlexObjectState",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
-	"sap/ui/fl/write/_internal/flexState/compVariants/CompVariantState",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
+	"sap/ui/fl/initial/_internal/Settings",
+	"sap/ui/fl/initial/api/Version",
+	"sap/ui/fl/write/_internal/condenser/Condenser",
+	"sap/ui/fl/apply/_internal/flexState/compVariants/CompVariantManagementState",
+	"sap/ui/fl/write/_internal/flexState/compVariants/CompVariantManager",
 	"sap/ui/fl/write/_internal/Storage",
 	"sap/ui/fl/write/_internal/Versions",
+	"sap/ui/fl/Layer",
 	"sap/ui/fl/LayerUtils",
-	"sap/ui/fl/requireAsync",
 	"sap/ui/fl/Utils"
 ], function(
 	_omit,
 	JsControlTreeModifier,
 	Reverter,
+	CompVariant,
 	FlexObjectFactory,
 	States,
 	DependencyHandler,
 	UIChangesState,
-	CompVariantMerger,
 	VariantManagementState,
 	FlexObjectState,
 	FlexState,
 	ManifestUtils,
-	CompVariantState,
+	Settings,
+	Version,
+	Condenser,
+	CompVariantManagementState,
+	CompVariantManager,
 	Storage,
 	Versions,
+	Layer,
 	LayerUtils,
-	requireAsync,
 	Utils
 ) {
 	"use strict";
@@ -55,62 +63,11 @@ sap.ui.define([
 	 */
 	const FlexObjectManager = {};
 
-	function getCompVariantEntities(mPropertyBag) {
-		const aEntities = [];
-		const mCompEntities = FlexState.getCompVariantsMap(mPropertyBag.reference);
-		for (const sPersistencyKey in mCompEntities) {
-			const mCompVariantsOfPersistencyKey = mCompEntities[sPersistencyKey];
-			for (const sId in mCompVariantsOfPersistencyKey.byId) {
-				aEntities.push(mCompVariantsOfPersistencyKey.byId[sId]);
-			}
-		}
-		return LayerUtils.filterChangeOrChangeDefinitionsByCurrentLayer(aEntities, mPropertyBag.currentLayer);
-	}
-
-	// Enhance CompVariantsMap with external data and standard variant after FlexState was cleared and reinitialized
-	function updateCompEntities(mPropertyBag) {
-		const mCompEntities = FlexState.getCompVariantsMap(mPropertyBag.reference);
-		const oDataToRestore = FlexState.getInitialNonFlCompVariantData(mPropertyBag.reference);
-		if (oDataToRestore) {
-			Object.keys(oDataToRestore).forEach(function(sPersistencyKey) {
-				mCompEntities._initialize(
-					sPersistencyKey,
-					oDataToRestore[sPersistencyKey].variants,
-					oDataToRestore[sPersistencyKey].controlId
-				);
-				CompVariantMerger.merge(
-					sPersistencyKey,
-					mCompEntities[sPersistencyKey],
-					oDataToRestore[sPersistencyKey].standardVariant
-				);
-			});
-		}
-	}
-
-	function saveCompEntities(mPropertyBag) {
-		var sReference = ManifestUtils.getFlexReferenceForControl(mPropertyBag.selector);
-		return CompVariantState.persistAll(sReference);
-	}
-
 	function removeFlexObjectFromDependencyHandler(sReference, oFlexObject) {
 		if (oFlexObject.isValidForDependencyMap()) {
 			DependencyHandler.removeChangeFromMap(FlexObjectState.getLiveDependencyMap(sReference), oFlexObject.getId());
 			DependencyHandler.removeChangeFromDependencies(FlexObjectState.getLiveDependencyMap(sReference), oFlexObject.getId());
 		}
-	}
-
-	async function saveChangePersistenceEntities(mPropertyBag, oAppComponent) {
-		const FlexControllerFactory = await requireAsync("sap/ui/fl/FlexControllerFactory");
-		var oFlexController = FlexControllerFactory.createForSelector(mPropertyBag.selector);
-
-		return oFlexController.saveAll(
-			oAppComponent,
-			mPropertyBag.skipUpdateCache,
-			mPropertyBag.draft,
-			mPropertyBag.layer,
-			mPropertyBag.removeOtherLayerChanges,
-			mPropertyBag.condenseAnyLayer
-		);
 	}
 
 	function getOrCreateFlexObject(vFlexObject) {
@@ -122,6 +79,246 @@ sap.ui.define([
 			: FlexObjectFactory.createFromFileContent(vFlexObject);
 	}
 
+	async function removeOtherLayerChanges(oAppComponent, sLayer, sReference) {
+		const aLayersToReset = Object.values(Layer).filter((sLayerToCheck) => sLayerToCheck !== sLayer);
+		const aRemovedChanges = FlexObjectManager.removeDirtyFlexObjects({
+			reference: sReference,
+			layers: aLayersToReset,
+			component: oAppComponent
+		});
+		if (aRemovedChanges.length) {
+			await Reverter.revertMultipleChanges(
+				// Always revert changes in reverse order
+				[...aRemovedChanges].reverse(),
+				{
+					appComponent: oAppComponent,
+					modifier: JsControlTreeModifier,
+					reference: sReference
+				}
+			);
+		}
+	}
+
+	function checkIfOnlyOne(aChanges, sFunctionName) {
+		return aChanges
+		.map((oChange) => oChange[sFunctionName]())
+		.filter((vValue, iIndex, aArray) => aArray.indexOf(vValue) === iIndex).length === 1;
+	}
+
+	function canGivenChangesBeCondensed(oAppComponent, aChanges, bCondenseAnyLayer) {
+		if (!oAppComponent || !checkIfOnlyOne(aChanges, "getLayer")) {
+			return false;
+		}
+
+		const oUriParameters = new URLSearchParams(window.location.search);
+		if (oUriParameters.has("sap-ui-xx-condense-changes")) {
+			return oUriParameters.get("sap-ui-xx-condense-changes") === "true";
+		}
+
+		return bCondenseAnyLayer || [Layer.CUSTOMER, Layer.PUBLIC, Layer.USER].includes(aChanges[0].getLayer());
+	}
+
+	function updateCacheAndDeleteUnsavedChanges(aAllChanges, aCondensedChanges, bSkipUpdateCache, bAlreadyDeletedViaCondense, sReference) {
+		aCondensedChanges.forEach((oDirtyChange) => {
+			updateCacheAndDirtyState(oDirtyChange, bSkipUpdateCache, sReference);
+		});
+		FlexState.getFlexObjectsDataSelector().checkUpdate({reference: sReference});
+
+		aAllChanges.filter((oChange) => {
+			return !aCondensedChanges.some((oCondensedChange) => oChange.getId() === oCondensedChange.getId());
+		}).forEach((oChange) => {
+			if (bAlreadyDeletedViaCondense) {
+				FlexState.removeDirtyFlexObjects(sReference, [oChange]);
+				removeFlexObjectFromDependencyHandler(sReference, oChange);
+
+				// Remove also from Cache if the persisted change is still there (e.g. navigate away and back to the app)
+				FlexState.updateStorageResponse(sReference, [{flexObject: oChange.convertToFileContent(), type: "delete"}]);
+			} else {
+				FlexObjectManager.deleteFlexObjects({
+					reference: sReference,
+					flexObjects: [oChange]
+				});
+			}
+		});
+	}
+
+	function getAllRelevantChangesForCondensing(aDirtyChanges, aDraftFilenames, bCondenseAnyLayer, sLayer, sReference) {
+		if (!aDirtyChanges.length && !bCondenseAnyLayer) {
+			return [];
+		}
+
+		// Only consider changes that are persisted, on the same layer, part of the current draft (if applicable)
+		// and have the same reference (relevant for app variants)
+		const aRelevantChanges = FlexState.getFlexObjectsDataSelector().get({reference: sReference})
+		.filter((oChange) => {
+			if (sLayer === Layer.CUSTOMER && aDraftFilenames) {
+				return oChange.getState() === States.LifecycleState.PERSISTED && aDraftFilenames.includes(oChange.getId());
+			}
+			return oChange.getState() === States.LifecycleState.PERSISTED
+				&& LayerUtils.compareAgainstCurrentLayer(oChange.getLayer(), sLayer) === 0;
+		});
+		return aRelevantChanges.concat(aDirtyChanges);
+	}
+
+	async function saveSequenceOfDirtyChanges(aDirtyChanges, bSkipUpdateCache, sParentVersion, sReference) {
+		let oFirstNewChange;
+		if (sParentVersion) {
+			// in case of changes saved for a draft only the first writing operation must have the parentVersion targeting the basis
+			// followup changes must point the existing draft created with the first request
+			[oFirstNewChange] = aDirtyChanges.filter((oChange) => oChange.getState() === States.LifecycleState.NEW);
+		}
+
+		const oCollectedResponse = {
+			response: []
+		};
+
+		for (const oDirtyChange of aDirtyChanges) {
+			const oPropertyBag = {
+				layer: oDirtyChange.getLayer(),
+				transport: oDirtyChange.getRequest(),
+				parentVersion: sParentVersion
+			};
+			let oStorageResponse;
+			if (oDirtyChange.getState() === States.LifecycleState.NEW) {
+				if (oPropertyBag.parentVersion !== undefined) {
+					oPropertyBag.parentVersion = oDirtyChange === oFirstNewChange ? oPropertyBag.parentVersion : Version.Number.Draft;
+				}
+				oPropertyBag.flexObjects = [oDirtyChange.convertToFileContent()];
+				oStorageResponse = await Storage.write(oPropertyBag);
+			} else if (oDirtyChange.getState() === States.LifecycleState.DELETED) {
+				oPropertyBag.flexObject = oDirtyChange.convertToFileContent();
+				oStorageResponse = await Storage.remove(oPropertyBag);
+			}
+			updateCacheAndDirtyState(oDirtyChange, bSkipUpdateCache, sReference);
+
+			if (oStorageResponse?.response) {
+				oCollectedResponse.response.push(...oStorageResponse.response);
+			}
+		}
+		FlexState.getFlexObjectsDataSelector().checkUpdate({reference: sReference});
+		return oCollectedResponse;
+	}
+
+	function updateCacheAndDirtyState(oDirtyChange, bSkipUpdateCache, sReference) {
+		if (!bSkipUpdateCache) {
+			switch (oDirtyChange.getState()) {
+				case States.LifecycleState.NEW:
+					FlexState.updateStorageResponse(sReference, [{
+						type: "add",
+						flexObject: oDirtyChange.convertToFileContent()
+					}]);
+					break;
+				case States.LifecycleState.DELETED:
+					FlexState.updateStorageResponse(sReference, [{
+						type: "delete",
+						flexObject: oDirtyChange.convertToFileContent()
+					}]);
+					break;
+				case States.LifecycleState.UPDATED:
+					FlexState.updateStorageResponse(sReference, [{
+						type: "update",
+						flexObject: oDirtyChange.convertToFileContent()
+					}]);
+					break;
+				default:
+			}
+			oDirtyChange.setState(States.LifecycleState.PERSISTED);
+		}
+	}
+
+	/**
+	 * Saves the passed or all dirty changes by calling the appropriate back-end method
+	 * (create for new changes, deleteChange for deleted changes);
+	 * to ensure the correct order, the methods are called sequentially;
+	 * after a change was saved successfully, it is removed from the dirty changes and the cache is updated.
+	 * If all changes are new they are condensed before they are passed to the Storage. For this the App Component is necessary.
+	 * Condensing is enabled by default for CUSTOMER and USER layers,
+	 * but can be overruled with the URL Parameter 'sap-ui-xx-condense-changes'
+	 *
+	 * @param {object} mPropertyBag - Object with parameters as properties
+	 * @param {string} mPropertyBag.reference - Flex reference of the application
+	 * @param {sap.ui.fl.apply._internal.flexObjects.FlexObject[]} mPropertyBag.dirtyFlexObjects - If passed only those changes are saved
+	 * @param {string} mPropertyBag.layer - Layer for which the changes should be saved
+	 * @param {sap.ui.core.UIComponent} mPropertyBag.appComponent - AppComponent instance
+	 * @param {boolean} [mPropertyBag.skipUpdateCache] - If true, the cache update of the current app is skipped
+	 * @param {string} mPropertyBag.parentVersion - Parent version
+	 * @param {string[]} [mPropertyBag.draftFilenames] - Filenames from persisted changes draft version
+	 * @param {boolean} [mPropertyBag.condenseAnyLayer] - This will enable condensing regardless of the current layer
+	 * @returns {Promise<object>} Resolving with the storage response after all changes have been saved
+	 */
+	async function triggerSaveRequest(mPropertyBag) {
+		const aRelevantChangesForCondensing = getAllRelevantChangesForCondensing(
+			mPropertyBag.dirtyFlexObjects,
+			mPropertyBag.draftFilenames,
+			mPropertyBag.condenseAnyLayer,
+			mPropertyBag.layer,
+			mPropertyBag.reference
+		);
+		const bIsCondensingEnabled = (
+			Settings.getInstanceOrUndef()?.getIsCondensingEnabled()
+			&& canGivenChangesBeCondensed(mPropertyBag.appComponent, aRelevantChangesForCondensing, mPropertyBag.condenseAnyLayer)
+		);
+		const aAllFlexObjects = bIsCondensingEnabled ? aRelevantChangesForCondensing : mPropertyBag.dirtyFlexObjects;
+		const aChangesClone = aAllFlexObjects.slice(0);
+
+		// if there are multiple backends or transport requests, all changes must be saved separately
+		if (
+			checkIfOnlyOne(mPropertyBag.dirtyFlexObjects, "getRequest")
+			&& (Settings.getInstanceOrUndef()?.getHasPersoConnector() ? checkIfOnlyOne(mPropertyBag.dirtyFlexObjects, "getLayer") : true)
+		) {
+			const aCondensedChanges = canGivenChangesBeCondensed(mPropertyBag.appComponent, aChangesClone, mPropertyBag.condenseAnyLayer) ?
+				await Condenser.condense(mPropertyBag.appComponent, aChangesClone) : aChangesClone;
+
+			let oResponse;
+			const sRequest = aChangesClone[0].getRequest();
+			if (bIsCondensingEnabled) {
+				oResponse = await Storage.condense({
+					allChanges: aAllFlexObjects,
+					condensedChanges: aCondensedChanges,
+					layer: mPropertyBag.layer,
+					transport: sRequest,
+					isLegacyVariant: false,
+					parentVersion: mPropertyBag.parentVersion
+				});
+			} else {
+				const aDeletedChanges = aAllFlexObjects.filter((oChange) => oChange.getState() === States.LifecycleState.DELETED);
+				const aNewChanges = aCondensedChanges.filter((oChange) => (oChange.getState() !== States.LifecycleState.DELETED));
+
+				// "remove" only supports a single change; multiple calls are required
+				if (aDeletedChanges.length) {
+					await saveSequenceOfDirtyChanges(
+						aDeletedChanges, mPropertyBag.skipUpdateCache, mPropertyBag.parentVersion, mPropertyBag.reference
+					);
+				}
+
+				// "write" supports multiple changes at once
+				if (aNewChanges.length) {
+					oResponse = await Storage.write({
+						layer: mPropertyBag.layer,
+						flexObjects: aNewChanges.map((oChange) => oChange.convertToFileContent()),
+						transport: sRequest,
+						isLegacyVariant: false,
+						parentVersion: mPropertyBag.parentVersion
+					});
+				}
+			}
+			updateCacheAndDeleteUnsavedChanges(
+				aAllFlexObjects,
+				aCondensedChanges,
+				mPropertyBag.skipUpdateCache,
+				bIsCondensingEnabled,
+				mPropertyBag.reference
+			);
+			return oResponse || { response: [] };
+		}
+		return saveSequenceOfDirtyChanges(
+			mPropertyBag.dirtyFlexObjects,
+			mPropertyBag.skipUpdateCache,
+			mPropertyBag.parentVersion,
+			mPropertyBag.reference
+		);
+	}
+
 	/**
 	 * Takes an array of FlexObjects and filters out any hidden variant and changes on those hidden variants
 	 *
@@ -131,7 +328,7 @@ sap.ui.define([
 	 */
 	FlexObjectManager.filterHiddenFlexObjects = function(aFlexObjects, sReference) {
 		const aFilteredFlexObjects = VariantManagementState.filterHiddenFlexObjects(aFlexObjects, sReference);
-		return CompVariantState.filterHiddenFlexObjects(aFilteredFlexObjects, sReference);
+		return CompVariantManager.filterHiddenFlexObjects(aFilteredFlexObjects, sReference);
 	};
 
 	/**
@@ -143,18 +340,23 @@ sap.ui.define([
 	 * @param {string} [mPropertyBag.currentLayer] - Specifies a single layer to filtering changes (without filtering ctrl variant changes)
 	 * @param {boolean} [mPropertyBag.invalidateCache] - Flag if the cache should be invalidated
 	 * @param {boolean} [mPropertyBag.includeCtrlVariants] - Flag if all control variant changes should be included - otherwise only initially applied UIChanges are included
+	 * @param {boolean} [mPropertyBag.includeManifestChanges] - Flag if manifest changes should be included
+	 * @param {boolean} [mPropertyBag.includeAnnotationChanges] - Flag if annotation changes should be included
 	 * @param {boolean} [mPropertyBag.onlyCurrentVariants] - Flag if only current variants should be included. Is only considered if includeCtrlVariants is true
+	 * @param {string} [mPropertyBag.adaptationId] - Adaptation to load into Flex State after saving (e.g. undefined when exiting RTA)
 	 * @param {boolean} [mPropertyBag.version] - The version for which the objects are retrieved if the Cache should be invalidated
 	 * @returns {Promise<sap.ui.fl.apply._internal.flexObjects.FlexObject[]>} Flex objects, containing changes, compVariants & changes as well as ctrl_variant and changes
 	 */
 	FlexObjectManager.getFlexObjects = async function(mPropertyBag) {
 		mPropertyBag.reference = ManifestUtils.getFlexReferenceForControl(mPropertyBag.selector);
 		if (mPropertyBag.invalidateCache) {
+			const oAppComponent = Utils.getAppComponentForSelector(mPropertyBag.selector);
+			mPropertyBag.componentId = oAppComponent.getId();
 			await FlexState.update(mPropertyBag);
-			updateCompEntities(mPropertyBag);
 		}
 
-		let aRelevantFlexObjects = UIChangesState.getVariantIndependentUIChanges(mPropertyBag.reference);
+		let aRelevantFlexObjects = UIChangesState.getVariantIndependentUIChanges(mPropertyBag.reference)
+		.concat(CompVariantManagementState.getCompEntities(mPropertyBag));
 
 		// getInitialUIChanges will only add variant related UIChanges from the initial variants,
 		// with includeCtrlVariants set all variant related flex objects are added
@@ -174,13 +376,25 @@ sap.ui.define([
 			);
 		}
 
+		if (mPropertyBag.includeManifestChanges) {
+			aRelevantFlexObjects = aRelevantFlexObjects.concat(
+				FlexState.getAppDescriptorChanges(mPropertyBag.reference)
+			);
+		}
+
+		if (mPropertyBag.includeAnnotationChanges) {
+			aRelevantFlexObjects = aRelevantFlexObjects.concat(
+				FlexState.getAnnotationChanges(mPropertyBag.reference)
+			);
+		}
+
 		if (mPropertyBag.currentLayer) {
 			aRelevantFlexObjects = aRelevantFlexObjects.filter((oFlexObject) => {
 				return oFlexObject.getLayer() === mPropertyBag.currentLayer;
 			});
 		}
 
-		return aRelevantFlexObjects.concat(getCompVariantEntities(mPropertyBag));
+		return aRelevantFlexObjects;
 	};
 
 	/**
@@ -192,8 +406,8 @@ sap.ui.define([
 	 * @returns {boolean} <code>true</code> if dirty flex objects exist
 	 */
 	FlexObjectManager.hasDirtyFlexObjects = function(mPropertyBag) {
-		var sReference = ManifestUtils.getFlexReferenceForSelector(mPropertyBag.selector);
-		return FlexObjectState.getDirtyFlexObjects(sReference).length > 0 || CompVariantState.hasDirtyChanges(sReference);
+		const sReference = ManifestUtils.getFlexReferenceForSelector(mPropertyBag.selector);
+		return FlexObjectState.getDirtyFlexObjects(sReference).length > 0;
 	};
 
 	/**
@@ -251,36 +465,52 @@ sap.ui.define([
 	 * Save Flex objects and reload Flex State
 	 * @param {object} mPropertyBag - Object with parameters as properties
 	 * @param {sap.ui.fl.Selector} mPropertyBag.selector - Selector to retrieve the associated flex persistence
-	 * @param {object} [mPropertyBag.appDescriptor] - Manifest that belongs to the current running component
-	 * @param {string} [mPropertyBag.siteId] - ID of the site belonging to the current running component
-	 * @param {string} [mPropertyBag.layer] - Specifies a single layer for loading and saving changes
-	 * @param {boolean} [mPropertyBag.ignoreMaxLayerParameter] - Indicates that changes are to be loaded without layer filtering
+	 * @param {sap.ui.fl.apply._internal.flexObjects.FlexObject[]} [mPropertyBag.flexObjects] - Dirty flex objects to be saved
+	 * @param {boolean} [mPropertyBag.skipUpdateCache] - Indicates if cache update should be skipped
+	 * @param {string} [mPropertyBag.layer] - Specifies a single layer for saving changes
 	 * @param {boolean} [mPropertyBag.includeCtrlVariants] - Indicates that control variants are to be included
-	 * @param {string} [mPropertyBag.cacheKey] - Key to validate the cache entry stored on client side
-	 * @param {boolean} [mPropertyBag.invalidateCache] - Indicates whether the cache is to be invalidated
 	 * @param {boolean} [mPropertyBag.removeOtherLayerChanges=false] - Whether to remove changes on other layers before saving
-	 * @param {string} [mPropertyBag.version] - Version to load into Flex State after saving (e.g. undefined when exiting RTA)
-	 * @param {string} [mPropertyBag.adaptationId] - Adaptation to load into Flex State after saving (e.g. undefined when exiting RTA)
-	 * @returns {Promise<sap.ui.fl.apply._internal.flexObjects.FlexObject[]>} Flex objects, containing changes, compVariants & changes as well as ctrl_variant and changes
+	 * @param {boolean} [mPropertyBag.condenseAnyLayer] - Can be passed to overrule the layer restriction for condensing changes.
+	 * @returns {Promise<sap.ui.fl.apply._internal.flexObjects.FlexObject[]>} Resolves with the storage response containing the saved flex objects
 	 */
 	FlexObjectManager.saveFlexObjects = async function(mPropertyBag) {
-		var oAppComponent = Utils.getAppComponentForSelector(mPropertyBag.selector);
-		mPropertyBag.reference = ManifestUtils.getFlexReferenceForControl(mPropertyBag.selector);
-		await saveCompEntities(mPropertyBag);
-		await saveChangePersistenceEntities(mPropertyBag, oAppComponent);
+		const oAppComponent = Utils.getAppComponentForSelector(mPropertyBag.selector);
+		const sReference = ManifestUtils.getFlexReferenceForControl(mPropertyBag.selector);
 
-		if (mPropertyBag.version !== undefined && Versions.hasVersionsModel(mPropertyBag)) {
-			var oModel = Versions.getVersionsModel(mPropertyBag);
-			mPropertyBag.version = oModel.getProperty("/displayedVersion");
+		const bConsiderDraftHandling = mPropertyBag.layer === Layer.CUSTOMER;
+		const oVersionModel = bConsiderDraftHandling && Versions.getVersionsModel({
+			reference: sReference,
+			layer: mPropertyBag.layer
+		});
+		const bVersioningEnabled = oVersionModel && oVersionModel.getProperty("/versioningEnabled");
+		if (mPropertyBag.removeOtherLayerChanges && mPropertyBag.layer) {
+			await removeOtherLayerChanges(oAppComponent, mPropertyBag.layer, sReference);
 		}
-		if (mPropertyBag.layer) {
-			// TODO: sync the layer parameter name with new persistence and remove this line
-			mPropertyBag.currentLayer = mPropertyBag.layer;
+
+		const aFlexObjectsToBeSaved = mPropertyBag.flexObjects || FlexObjectState.getDirtyFlexObjects(sReference);
+		if (!aFlexObjectsToBeSaved.length) {
+			return { response: [] };
 		}
-		// with invalidation more parameters are required to make a new storage request
-		mPropertyBag.componentId = oAppComponent.getId();
-		mPropertyBag.invalidateCache = true;
-		return FlexObjectManager.getFlexObjects(_omit(mPropertyBag, "skipUpdateCache"));
+
+		const oResult = await triggerSaveRequest({
+			reference: sReference,
+			layer: mPropertyBag.layer || aFlexObjectsToBeSaved[0].getLayer(),
+			dirtyFlexObjects: aFlexObjectsToBeSaved,
+			skipUpdateCache: mPropertyBag.skipUpdateCache,
+			condenseAnyLayer: mPropertyBag.condenseAnyLayer,
+			appComponent: oAppComponent,
+			parentVersion: bVersioningEnabled ? oVersionModel.getProperty("/persistedVersion") : undefined,
+			draftFilenames: bVersioningEnabled ? oVersionModel.getProperty("/draftFilenames") : undefined
+		});
+
+		if (bConsiderDraftHandling && bVersioningEnabled) {
+			Versions.updateAfterSave({
+				reference: sReference,
+				layer: mPropertyBag.layer,
+				backendResponse: oResult
+			});
+		}
+		return oResult;
 	};
 
 	/**
@@ -297,7 +527,7 @@ sap.ui.define([
 
 		const aToBeDeletedFlexObjects = [];
 		const aToBeRemovedDirtyFlexObjects = [];
-		mPropertyBag.flexObjects.forEach(function(oFlexObject) {
+		mPropertyBag.flexObjects.forEach((oFlexObject) => {
 			if (aDirtyFlexObjects.indexOf(oFlexObject) > -1 && oFlexObject.getState() === States.LifecycleState.NEW) {
 				aToBeRemovedDirtyFlexObjects.push(oFlexObject);
 			} else {
@@ -382,11 +612,11 @@ sap.ui.define([
 		if (mPropertyBag.selectorIds || mPropertyBag.changeTypes || mPropertyBag.generator) {
 			const aFileNames = [];
 			if (oResponse?.response?.length > 0) {
-				oResponse.response.forEach(function(oChangeContent) {
+				oResponse.response.forEach((oChangeContent) => {
 					aFileNames.push(oChangeContent.fileName);
 				});
 			}
-			const aChangesToRevert = aFlexObjects.filter(function(oChange) {
+			const aChangesToRevert = aFlexObjects.filter((oChange) => {
 				return aFileNames.indexOf(oChange.getId()) !== -1;
 			});
 			FlexState.updateStorageResponse(sReference, aChangesToRevert.map((oFlexObject) => {

@@ -51,6 +51,11 @@ sap.ui.define([
 				emptyIndicatorMode: EmptyIndicatorMode.Auto
 			}
 		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			}
+		],
 		events: [
 			{
 				press: {ctrlKey: false, metaKey: false}
@@ -92,12 +97,28 @@ sap.ui.define([
 				emptyIndicatorMode: EmptyIndicatorMode.Auto
 			}
 		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			}
+		],
 		events: [
 			{
 				press: {ctrlKey: false, metaKey: false}
 			}
 		],
 		detailTests: _checkLink
+	};
+
+	ContentBasicTest.controlMap.EditSelect = {
+		getPathsFunction: "getEditSelect",
+		paths: [null],
+		modules: [],
+		instances: [],
+		createFunction: "createEditSelect",
+		noFormatting: false,
+		editMode: FieldEditMode.Editable,
+		throwsError: true
 	};
 
 	const fnEnhanceField = (oFakeField) => {

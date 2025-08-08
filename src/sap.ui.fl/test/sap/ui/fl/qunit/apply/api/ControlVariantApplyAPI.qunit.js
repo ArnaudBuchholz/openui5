@@ -6,7 +6,7 @@ sap.ui.define([
 	"sap/ui/core/UIComponent",
 	"sap/ui/fl/apply/_internal/controlVariants/URLHandler",
 	"sap/ui/fl/apply/_internal/flexState/controlVariants/VariantManagementState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/apply/api/ControlVariantApplyAPI",
 	"sap/ui/fl/variants/VariantManagement",
 	"sap/ui/fl/variants/VariantModel",
@@ -116,7 +116,6 @@ sap.ui.define([
 			this.oAppComponent = new Component("AppComponent");
 			sandbox.stub(ManifestUtils, "getFlexReferenceForControl").returns("myReference");
 			this.oModel = new VariantModel(this.oData, {
-				flexController: {},
 				appComponent: this.oAppComponent
 			});
 			return this.oModel.initialize()
@@ -393,9 +392,9 @@ sap.ui.define([
 			var fnDone = assert.async();
 			var oModelDetachStub = sandbox.stub(this.oModel, "detachVariantApplied").callsFake(function() {
 				var aArguments = oModelDetachStub.lastCall.args;
-				assert.equal(oModelDetachStub.callCount, 1, "the model was called");
-				assert.equal(aArguments[0], "vmcontrolId", "the function is called with the correct properties");
-				assert.equal(aArguments[1], this.oAppComponent.getId(), "the function is called with the correct properties");
+				assert.strictEqual(oModelDetachStub.callCount, 1, "the model was called");
+				assert.strictEqual(aArguments[0], "vmcontrolId", "the function is called with the correct properties");
+				assert.strictEqual(aArguments[1], this.oAppComponent, "the function is called with the correct properties");
 				fnDone();
 			});
 			ControlVariantApplyAPI.detachVariantApplied({
@@ -409,9 +408,9 @@ sap.ui.define([
 			this.oAppComponent.setModel(undefined, ControlVariantApplyAPI.getVariantModelName());
 			var oModelDetachStub = sandbox.stub(this.oModel, "detachVariantApplied").callsFake(function() {
 				var aArguments = oModelDetachStub.lastCall.args;
-				assert.equal(oModelDetachStub.callCount, 1, "the model was called");
-				assert.equal(aArguments[0], "vmcontrolId", "the function is called with the correct properties");
-				assert.equal(aArguments[1], this.oAppComponent.getId(), "the function is called with the correct properties");
+				assert.strictEqual(oModelDetachStub.callCount, 1, "the model was called");
+				assert.strictEqual(aArguments[0], "vmcontrolId", "the function is called with the correct properties");
+				assert.strictEqual(aArguments[1], this.oAppComponent, "the function is called with the correct properties");
 				fnDone();
 			});
 			ControlVariantApplyAPI.detachVariantApplied({

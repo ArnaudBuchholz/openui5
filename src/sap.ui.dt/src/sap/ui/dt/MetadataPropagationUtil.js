@@ -79,14 +79,16 @@ sap.ui.define([
 
 	MetadataPropagationUtil._getPropagatedActions = function(oElementDesignTimeMetadata, mMetadata, oElement) {
 		const aPropagatedActions = [];
+		// If the name is not maintained in the DT metadata, we get the last part of the element metadata
+		const sPropagatingControlName = oElementDesignTimeMetadata.getName(oElement)?.singular
+			|| oElement.getMetadata().getName().split(".").pop();
 		// Get propagated actions from element
 		oElementDesignTimeMetadata.getPropagateActions(oElement).forEach((vAction) => {
 			const sAction = typeof vAction === "string" ? vAction : vAction.action;
 			const oAction = oElementDesignTimeMetadata.getAction(sAction, oElement);
 			if (oAction && !aPropagatedActions.find((oPropagatedAction) => oPropagatedAction.name === sAction)) {
 				const oPropagatedAction = {
-					name: sAction,
-					action: oAction
+					name: sAction
 				};
 				if (vAction.isActive) {
 					oPropagatedAction.isActive = vAction.isActive;
@@ -100,8 +102,7 @@ sap.ui.define([
 			const oAction = mMetadata.actions?.[sAction];
 			if (oAction) {
 				const oPropagatedAction = {
-					name: sAction,
-					action: oAction
+					name: sAction
 				};
 				if (vAction.isActive) {
 					oPropagatedAction.isActive = vAction.isActive;
@@ -110,7 +111,13 @@ sap.ui.define([
 			}
 		});
 		return aPropagatedActions.length
-			? { propagatedActionInfo: { parent: oElement, actions: aPropagatedActions } }
+			? {
+				propagatedActionInfo: {
+					propagatingControl: oElement,
+					propagatingControlName: sPropagatingControlName,
+					actions: aPropagatedActions
+				}
+			}
 			: null;
 	};
 
@@ -218,17 +225,15 @@ sap.ui.define([
 
 		function addPropagatedActions(oMetadata, oPropagatedInfo) {
 			if (oMetadata && oPropagatedInfo.propagatedActionInfo) {
-				const oParent = oPropagatedInfo.propagatedActionInfo.parent;
 				oPropagatedInfo.propagatedActionInfo.actions.forEach(function(oPropagatedAction) {
 					if (oPropagatedAction.isActive && !oPropagatedAction.isActive(oElement)) {
 						return;
 					}
-					const sActionName = oPropagatedAction.name;
 					oMetadata.propagatedActions ||= [];
 					oMetadata.propagatedActions.push({
-						name: sActionName,
-						action: oPropagatedAction.action,
-						propagatingControl: oParent
+						name: oPropagatedAction.name,
+						propagatingControl: oPropagatedInfo.propagatedActionInfo.propagatingControl,
+						propagatingControlName: oPropagatedInfo.propagatedActionInfo.propagatingControlName
 					});
 				});
 			}

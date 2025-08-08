@@ -14,9 +14,6 @@ sap.ui.define([
 	"sap/m/ToolbarSpacer",
 	"sap/m/Button",
 	"sap/ui/model/json/JSONModel",
-	"sap/ui/table/Table",
-	"sap/ui/table/Column",
-	"sap/ui/table/rowmodes/Fixed",
 	"sap/m/Label",
 	"sap/ui/model/Filter",
 	"sap/ui/model/FilterOperator",
@@ -40,7 +37,8 @@ sap.ui.define([
 	"sap/m/HBox",
 	"sap/ui/core/CustomData",
 	"sap/ui/integration/editor/fields/viz/IconSelect",
-	"sap/m/Image"
+	"sap/m/Image",
+	"sap/ui/core/Lib"
 ], function (
 	BaseField,
 	Text,
@@ -53,9 +51,6 @@ sap.ui.define([
 	ToolbarSpacer,
 	Button,
 	JSONModel,
-	Table,
-	Column,
-	FixedRowMode,
 	Label,
 	Filter,
 	FilterOperator,
@@ -79,9 +74,13 @@ sap.ui.define([
 	HBox,
 	CustomData,
 	IconSelect,
-	Image
+	Image,
+	Library
 ) {
 	"use strict";
+
+	let Table, Column, FixedRowMode;
+
 	var REGEXP_TRANSLATABLE = /\{\{(?!parameters.)(?!destinations.)([^\}\}]+)\}\}/g;
 
 	/**
@@ -114,6 +113,24 @@ sap.ui.define([
 		},
 		renderer: BaseField.getMetadata().getRenderer()
 	});
+
+	ObjectField.loadDependencies = function () {
+		return Library.load("sap.ui.table")
+			.then(() => {
+				return new Promise((resolve, reject) => {
+					sap.ui.require([
+						"sap/ui/table/Table",
+						"sap/ui/table/Column",
+						"sap/ui/table/rowmodes/Fixed"
+					], (_Table, _Column, _FixedRowMode) => {
+						Table = _Table;
+						Column = _Column;
+						FixedRowMode = _FixedRowMode;
+						resolve();
+					}, reject);
+				});
+			});
+	};
 
 	ObjectField.prototype.initVisualization = function (oConfig) {
 		var that = this;
@@ -246,7 +263,7 @@ sap.ui.define([
 			oValue = deepClone(oValue, 500);
 			this.setValue(oValue);
 		}.bind(that);
-		var aObjectPropertyFormContents = that.createFormContents(fnChange, "/value/", false, that.openTranslationPopup);
+		var aObjectPropertyFormContents = that.createFormContents(fnChange, "/value/", false, that.openTranslationListPopup);
 		var oEditModeButton = new Button(sParameterId + "_control_form_editmode_btn", {
 			icon: {
 				path: '/editMode',
@@ -750,8 +767,13 @@ sap.ui.define([
 				press: that.addNewObject.bind(that)
 			}),
 			new Button(sParameterId + "_control_table_edit_btn", {
-				icon: "sap-icon://edit",
-				tooltip: oResourceBundle.getText("EDITOR_FIELD_OBJECT_TABLE_BUTTON_EDIT_TOOLTIP"),
+				icon: "{= ${/_hasNotEditableItemSelected} ===  true ? 'sap-icon://display' : 'sap-icon://edit' }",
+				tooltip: {
+					path: "/_hasNotEditableItemSelected",
+					formatter: function(hasNotEditableItemSelected) {
+						return hasNotEditableItemSelected === true ? oResourceBundle.getText('EDITOR_FIELD_OBJECT_TABLE_BUTTON_DISPLAY_TOOLTIP') : oResourceBundle.getText('EDITOR_FIELD_OBJECT_TABLE_BUTTON_EDIT_TOOLTIP');
+					}
+				},
 				enabled: "{= !!${/_hasTableSelected}}",
 				visible: that.getAllowPopover(),
 				press: that.onEditOrViewDetail.bind(that)
@@ -828,6 +850,14 @@ sap.ui.define([
 		var oRowContexts = oTable.getBinding("rows").getContexts();
 		var oItem = oRowContexts[iSelectIndex].getObject();
 		var iFirstIndex = oTable.getFirstVisibleRow();
+		// if the 1st selected row is hidden, scroll to it
+		if (iSelectIndex < iFirstIndex) {
+			oTable.setFirstVisibleRow(iSelectIndex);
+			iFirstIndex = iSelectIndex;
+		} else if (iSelectIndex >= iFirstIndex + 5) {
+			oTable.setFirstVisibleRow(iSelectIndex - 5 + 1);
+			iFirstIndex = iSelectIndex - 5 + 1;
+		}
 		var oRow = oTable.getRows()[iSelectIndex - iFirstIndex];
 		var oCell1 = oRow.getCells()[0];
 		that.openObjectDetailsPopover(oItem, oCell1, !oItem._dt || oItem._dt._editable !== false ? "update" : "view");
@@ -907,6 +937,7 @@ sap.ui.define([
 		var oTable = that.getAggregation("_field");
 		var oModel = oTable.getModel();
 		var aSelectedIndices = oTable.getSelectedIndices();
+		var aRowContexts = oTable.getBinding("rows").getContexts();
 		if (aSelectedIndices.length > 0) {
 			oModel.setProperty("/_hasTableSelected", true);
 			if (aSelectedIndices.length === 1) {
@@ -914,8 +945,15 @@ sap.ui.define([
 			} else {
 				oModel.setProperty("/_hasOnlyOneRowSelected", false);
 			}
+			var oFirstSelectedItem = aRowContexts[aSelectedIndices[0]].getObject();
+			if (oFirstSelectedItem._dt && oFirstSelectedItem._dt._editable === false) {
+				oModel.setProperty("/_hasNotEditableItemSelected", true);
+			} else {
+				oModel.setProperty("/_hasNotEditableItemSelected", false);
+			}
 		} else {
 			oModel.setProperty("/_hasTableSelected", false);
+			oModel.setProperty("/_hasNotEditableItemSelected", false);
 			oModel.setProperty("/_hasOnlyOneRowSelected", false);
 			oModel.setProperty("/_canDelete", false);
 			return;
@@ -926,7 +964,6 @@ sap.ui.define([
 			oModel.setProperty("/_hasTableAllSelected", false);
 		}
 		var aSelectedPaths = [];
-		var aRowContexts = oTable.getBinding("rows").getContexts();
 		aSelectedIndices.forEach(function (iSelectIndex) {
 			var oObject = aRowContexts[iSelectIndex].getObject();
 			if (oObject._dt && oObject._dt._editable !== false) {
@@ -954,6 +991,7 @@ sap.ui.define([
 		var oModel = oTable.getModel();
 		oTable.clearSelection();
 		oModel.setProperty("/_hasTableSelected", false);
+		oModel.setProperty("/_hasNotEditableItemSelected", false);
 		oModel.setProperty("/_hasOnlyOneRowSelected", false);
 		oModel.setProperty("/_canDelete", false);
 		oModel.setProperty("/_hasTableAllSelected", false);
@@ -1682,9 +1720,9 @@ sap.ui.define([
 			};
 			var fnChange = function() {};
 			if (oItem._dt && oItem._dt._editable === false) {
-				aObjectPropertyFormContents = that.createFormContents(fnChange, "/value/", true, that.navToTranslationPage);
+				aObjectPropertyFormContents = that.createFormContents(fnChange, "/value/", true, that.navToTranslationListPage);
 			} else {
-				aObjectPropertyFormContents = that.createFormContents(fnChangeWithDataSave, "/value/", true, that.navToTranslationPage);
+				aObjectPropertyFormContents = that.createFormContents(fnChangeWithDataSave, "/value/", true, that.navToTranslationListPage);
 			}
 			var oForm = new SimpleForm({
 				layout: "ResponsiveGridLayout",
@@ -1907,13 +1945,13 @@ sap.ui.define([
 		});
 	};
 
-	ObjectField.prototype.openTranslationPopup = function (sProperty, oEvent) {
+	ObjectField.prototype.openTranslationListPopup = function (sProperty, oEvent) {
 		var that = this;
 		if (!that._oEditorResourceBundles.isReady()) {
 			// waiting for loading resource bundles
-			setTimeout(function() {
-				that.openTranslationPopup(sProperty, oEvent);
-			}, 100);
+			that._oEditorResourceBundles.attachEventOnce("ready", function() {
+				that.openTranslationListPopup(sProperty, oEvent);
+			});
 			return;
 		}
 		var oControl = oEvent.getSource();
@@ -1964,13 +2002,13 @@ sap.ui.define([
 		that._oTranslationPopover.openBy(oControl._oValueHelpIcon);
 	};
 
-	ObjectField.prototype.navToTranslationPage = function (sProperty, oEvent) {
+	ObjectField.prototype.navToTranslationListPage = function (sProperty, oEvent) {
 		var that = this;
 		if (!that._oEditorResourceBundles.isReady()) {
 			// waiting for loading resource bundles
-			setTimeout(function() {
-				that.navToTranslationPage(sProperty, oEvent);
-			}, 100);
+			that._oEditorResourceBundles.attachEventOnce("ready", function() {
+				that.navToTranslationListPage(oEvent);
+			});
 			return;
 		}
 		var oNewObject = that._oObjectDetailsPopover.getModel().getProperty("/value");
@@ -2011,6 +2049,7 @@ sap.ui.define([
 		oModel.setProperty("/_hasSelected", true);
 		oModel.setProperty("/_hasTableAllSelected", false);
 		oModel.setProperty("/_hasTableSelected", false);
+		oModel.setProperty("/_hasNotEditableItemSelected", false);
 		oModel.setProperty("/_hasOnlyOneRowSelected", false);
 		oModel.checkUpdate();
 		that.refreshValue();

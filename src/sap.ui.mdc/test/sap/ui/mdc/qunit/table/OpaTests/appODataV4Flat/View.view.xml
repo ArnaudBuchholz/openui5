@@ -51,7 +51,7 @@
                 <mdc:type>
                     <template:if test="{= ${data>/tableType} === 'GridTableType'}">
                         <template:then>
-                            <mdcTable:GridTableType/>
+                            <mdcTable:GridTableType enableColumnFreeze="true"/>
                         </template:then>
                         <template:elseif test="{= ${data>/tableType} === 'ResponsiveTableType'}">
                             <mdcTable:ResponsiveTableType detailsButtonSetting="Low,None" showDetailsButton="true"/>
@@ -59,7 +59,7 @@
                     </template:if>
                 </mdc:type>
                 <mdc:columns>
-                    <mdcTable:Column id="mdcTable-CreatedAt" header="Created On" tooltip="Created On" propertyKey="CreatedAt">
+                    <mdcTable:Column id="mdcTable-CreatedAt" header="Created At" tooltip="Created At" propertyKey="CreatedAt">
                         <Text text="{CreatedAt}" />
                         <mdcTable:extendedSettings>
                             <mdcTable:ResponsiveColumnSettings importance="Low"/>

@@ -6,6 +6,7 @@ sap.ui.define([
 	"sap/ui/core/Control",
 	"sap/ui/core/library",
 	"sap/ui/core/mvc/XMLView",
+	"sap/ui/core/ResizeHandler",
 	"sap/ui/events/KeyCodes",
 	"sap/base/Log",
 	"sap/uxap/ObjectPageDynamicHeaderTitle",
@@ -23,7 +24,7 @@ sap.ui.define([
 	"sap/m/Title",
 	"sap/ui/core/HTML"
 ],
-function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log, ObjectPageDynamicHeaderTitle, ObjectPageSection, ObjectPageSectionBase, ObjectPageSubSectionClass, BlockBase, ObjectPageLayout, library, App, Button, Label, Panel, Text, Title, HTML) {
+function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, ResizeHandler, KeyCodes, Log, ObjectPageDynamicHeaderTitle, ObjectPageSection, ObjectPageSectionBase, ObjectPageSubSectionClass, BlockBase, ObjectPageLayout, library, App, Button, Label, Panel, Text, Title, HTML) {
 	"use strict";
 
 	var TitleLevel = coreLibrary.TitleLevel;
@@ -806,9 +807,10 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 			oSection = this.oObjectPage.getSections()[0],
 			oSubSection = oSection.getSubSections()[0],
 			oBlock = oSubSection.getBlocks()[0],
+			oSpy = this.spy(oSubSection, "_executeAfterNextResizeHandlerChecks"),
 			done = assert.async();
 
-		assert.expect(2);
+		assert.expect(3);
 
 		//act
 		oBlock.setHeight("845px");
@@ -817,21 +819,25 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 		}));
 		await nextUIUpdate();
 		oSubSection.addStyleClass(ObjectPageSubSectionClass.FIT_CONTAINER_CLASS);
+		oSpy.resetHistory();
 
 		//setup
 		oPage.attachEventOnce("onAfterRenderingDOMReady", function() {
-			//check
-			var sHeight = oSubSection._height;
-			assert.strictEqual(sHeight, "", "Height is auto when content is bigger than SubSection's height");
+			assert.ok(oSpy.called, 1, "_executeAfterNextResizeHandlerChecks is called");
+			window.requestAnimationFrame(function () {
+				//check
+				var sHeight = oSubSection._height;
+				assert.strictEqual(sHeight, "", "Height is auto when content is bigger than SubSection's height");
 
-			//act
-			oPage.destroyHeaderTitle();
+				//act
+				oPage.destroyHeaderTitle();
 
-			oPage.attachEventOnce("onAfterRenderingDOMReady", function () {
-				var sNewHeight = oSubSection._height;
-				assert.ok(sHeight !== sNewHeight, "Fixed height is changed when headerTitle is added/removed");
+				oPage.attachEventOnce("onAfterRenderingDOMReady", function () {
+					var sNewHeight = oSubSection._height;
+					assert.ok(sHeight !== sNewHeight, "Fixed height is changed when headerTitle is added/removed");
 
-				done();
+					done();
+				});
 			});
 		}, this);
 	});
@@ -956,6 +962,37 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 		oSubSection.removeAllActions();
 		assert.strictEqual(oSubSection.getActions().length, 0, "SubSection has no actions");
 		assert.strictEqual(oSubSection._getHeaderToolbar().getContent().length, 2, "OverflowToolbar has only 2 items - spacer and title");
+
+		oObjectPageLayout.destroy();
+	});
+
+	QUnit.test("Show action after subSection rendering", async function(assert) {
+		var oActionButton = new Button({text: "Button1", visible: false}),
+			oSubSection = new ObjectPageSubSectionClass({
+				title: "SubSection Title",
+				showTitle: false,
+				actions: [oActionButton],
+				blocks: new Label({text: "Block1" })
+			}),
+			oSection = new ObjectPageSection({
+				title:"Personal",
+				subSections: [ oSubSection ]
+			}),
+			oObjectPageLayout = new ObjectPageLayout({
+				sections: [ oSection ]
+			}),
+			fnIsSubSectionHeaderHidden = function() {
+				return oSubSection.$().find(".sapUxAPObjectPageSubSectionHeader").hasClass("sapUiHidden");
+			},
+			fnDone = assert.async();
+
+		oObjectPageLayout.placeAt('qunit-fixture');
+		await nextUIUpdate();
+
+		assert.ok(fnIsSubSectionHeaderHidden(), "SubSection header is hidden");
+		oActionButton.setVisible(true);
+		assert.ok(!fnIsSubSectionHeaderHidden(), "SubSection header is visible");
+		fnDone();
 
 		oObjectPageLayout.destroy();
 	});
@@ -1222,6 +1259,46 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 		assert.equal(oSubSection.getMoreBlocks().length, iBlockCount, "There are: " + iBlockCount + " blocks.");
 
 		oSubSection.destroy();
+	});
+
+	QUnit.test("Show More button not shown when there are no visible moreBlocks", function (assert) {
+		var oLabel1 = new Label({text: "Block1" }),
+			oSubSection = new ObjectPageSubSectionClass({
+				title: "SubSection Title",
+				blocks: new Label({text: "Block1" }),
+				moreBlocks: [oLabel1]
+			}),
+			oSection = new ObjectPageSection({
+				title:"Personal",
+				subSections: [ oSubSection ]
+			}),
+			oObjectPageLayout = new ObjectPageLayout({
+				sections: [ oSection ]
+			}),
+			fnDone = assert.async();
+
+		assert.expect(4);
+		oObjectPageLayout.placeAt('qunit-fixture');
+		oObjectPageLayout.attachEventOnce("onAfterRenderingDOMReady", async function() {
+			//assert
+			assert.ok(oSubSection.$().hasClass("sapUxAPObjectPageSubSectionWithSeeMore"),
+				"SubSection has class sapUxAPObjectPageSubSectionWithSeeMore when there are visible moreBlocks");
+			assert.ok(oSubSection._getSeeMoreButton().$().hasClass("sapUxAPSubSectionSeeMoreButtonVisible"),
+				"Show More button is visible when there are visible moreBlocks");
+
+			// act
+			oLabel1.setVisible(false);
+			await nextUIUpdate();
+
+			// assert
+			assert.notOk(oSubSection.$().hasClass("sapUxAPObjectPageSubSectionWithSeeMore"),
+				"SubSection does not have class sapUxAPObjectPageSubSectionWithSeeMore when there are no visible moreBlocks");
+			assert.notOk(oSubSection._getSeeMoreButton().$().hasClass("sapUxAPSubSectionSeeMoreButtonVisible"),
+				"Show More button is not visible when there are no visible moreBlocks");
+
+			oObjectPageLayout.destroy();
+			fnDone();
+		});
 	});
 
 	QUnit.module("Object Page SubSection - Managing Block Layouts in Standard Mode", {
@@ -1604,6 +1681,17 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 		assert.strictEqual(oSubSectionWithTitle.$().attr("role"), 'region', "Subsections with titles should have role='region");
 	});
 
+	QUnit.test("Test role attribute of promoted subsection", function(assert) {
+		// Arrange
+		var oSingleSubsection = this.ObjectPageSectionView.byId("subsection3");
+
+		assert.expect(1);
+
+		// Assert
+		assert.strictEqual(oSingleSubsection.$().attr("role"), undefined, "Subsections without titles should not have role attribute");
+
+	});
+
 	QUnit.test("sapUxAPObjectPageSubSectionFocusable class is added only to focusable subsections", async function(assert) {
 		// Arrange
 		var oSubSectionWithoutTitle = this.ObjectPageSectionView.byId("subsection6"),
@@ -1681,6 +1769,13 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 		// Assert
 		assert.strictEqual(oSubSection._getTitleDomId(), "TestSubSection-headerTitle",
 			"The internal SubSection title DOM ID should be returned");
+
+		// Act - set internal title visible false
+		oSubSection._setInternalTitleVisible(false);
+
+		// Assert
+		assert.strictEqual(oSubSection._getTitleDomId(), false,
+			"If only internal title set to visible false method should return false");
 	});
 
 	QUnit.module("Content fit container", {
@@ -2058,7 +2153,8 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 			oQunitFixtureElement = document.getElementById("qunit-fixture"),
 			sPageHeight = "200px",
 			sPageContentHeight = "300px",
-			done = assert.async();
+			done = assert.async(),
+			oSpy;
 
 		// Setup: content height is bigger than page height
 		oSubSection.removeAllBlocks();
@@ -2067,14 +2163,40 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 
 		//act
 		oSubSection.addStyleClass(ObjectPageSubSectionClass.FIT_CONTAINER_CLASS);
+		oSpy = this.spy(oSubSection, "_executeAfterNextResizeHandlerChecks");
 
 		//setup
 		oPage.attachEventOnce("onAfterRenderingDOMReady", function() {
 			//check
-			assert.strictEqual(oSubSection.getDomRef().style.height, "", "the height of the section is not restricted");
-			oQunitFixtureElement.style.height = ""; // clean up
-			done();
+			assert.ok(oSpy.called, 1, "_executeAfterNextResizeHandlerChecks is called");
+			window.requestAnimationFrame(function() {
+				assert.strictEqual(oSubSection.getDomRef().style.height, "", "the height of the section is not restricted");
+				oQunitFixtureElement.style.height = ""; // clean up
+				done();
+			});
 		}, this);
+	});
+
+	QUnit.test("callback to _executeAfterNextResizeHandlerChecks executes after the ResizeHandler listeners", async function (assert) {
+		var oSubSection = this.oObjectPage.getSections()[0].getSubSections()[0],
+			oSubSectionContent = new HTML({content: '<div style="height:300px"></div>'}),
+			done = assert.async(),
+			fnOnSubSectionContentResize = this.spy();
+
+		oSubSection.addBlock(oSubSectionContent);
+		await nextUIUpdate();
+
+		// setup: listen for resize event
+		ResizeHandler.register(oSubSectionContent.getDomRef(), fnOnSubSectionContentResize);
+		fnOnSubSectionContentResize.resetHistory();
+
+		//act: resize the content
+		oSubSectionContent.getDomRef().style.height = "100px";
+		oSubSection._executeAfterNextResizeHandlerChecks(function() {
+			// check: the callback is executed after the ResizeHandler listeners
+			assert.ok(fnOnSubSectionContentResize.called, "_checkSizes is called");
+			done();
+		});
 	});
 
 	QUnit.module("Invalidation", {
@@ -2416,4 +2538,111 @@ function(Element, nextUIUpdate, $, Control, coreLibrary, XMLView, KeyCodes, Log,
 		});
 		assert.equal(oSpy.callCount, 2, "parent section is invalidated");
 	});
+
+	QUnit.module("ObjectPageSubSection - focus");
+
+	QUnit.test("Focus span is rendered", async function (assert) {
+		// Arrange
+		var oSubSection = new ObjectPageSubSectionClass({
+			title: "Title",
+			blocks: [new Text({text: "Test"})]
+		});
+
+		// Act
+		oSubSection.placeAt('qunit-fixture');
+		await nextUIUpdate();
+
+		// Assert
+		assert.strictEqual(oSubSection.$().find(".sapUxAPObjectPageSubSectionFocusSpan").length, 1, "Focus span is rendered");
+
+		// Clean up
+		oSubSection.destroy();
+	});
+
+	QUnit.module("ObjectPageSubSection - special cases");
+
+	QUnit.test("ObjectPageSubSection destroyed and recreated with same ID does not throw an error", function (assert) {
+		// Arrange
+		var oObjectPageLayout = new ObjectPageLayout("page", {
+				enableLazyLoading: true,
+				sections: new ObjectPageSection({
+					subSections: [
+						new ObjectPageSubSectionClass("subsection1", {
+							title: "Title",
+							blocks: [new Text({text: "Test"})]
+						}),
+						new ObjectPageSubSectionClass("subsection2", {
+							title: "Title",
+							blocks: [new Text({text: "Test"})]
+						})
+					]
+				})
+			}),
+			oObjectPageSection = oObjectPageLayout.getSections()[0],
+			oObjectPageSubSection = oObjectPageSection.getSubSections()[1],
+			fnDone = assert.async(),
+			fnOnSubSectionEnteredViewPort = function() {
+				oObjectPageLayout.detachEvent("subSectionEnteredViewPort", fnOnSubSectionEnteredViewPort);
+				// Act - when the destroyed SubSection entered the viewport, simulate app working with the "actions" aggregation
+				// -> this will create a new toolbar on the already destroyed ObjectPageSubSection
+				oObjectPageSubSection.getActions();
+				// Act - creating ObjectPageSubSection with same ID
+				// -> this will create a new toolbar on the newly created ObjectPageSubSection and error for duplicate ID would be thrown, if not handled correctly
+				oObjectPageSubSection = new ObjectPageSubSectionClass("subsection2", {
+					title: "Title",
+					blocks: [new Text({text: "Test"})]
+				});
+				oObjectPageSection.addSubSection(oObjectPageSubSection);
+
+				// Assert
+				assert.ok(true, "No error is thrown when creating ObjectPageSubSection with same ID");
+
+				// Cleanup
+				oObjectPageLayout.destroy();
+				fnDone();
+			};
+
+		oObjectPageLayout.setSelectedSection(oObjectPageSection.getId());
+		oObjectPageSection.setSelectedSubSection(oObjectPageSubSection.getId());
+		oObjectPageLayout.placeAt('qunit-fixture');
+
+		oObjectPageLayout.attachEventOnce("onAfterRenderingDOMReady", function() {
+			oObjectPageLayout.attachEvent("subSectionEnteredViewPort", fnOnSubSectionEnteredViewPort);
+			// Act - destroying the ObjectPageSubSection
+			oObjectPageSubSection.destroy();
+			// Act - calling _triggerVisibleSubSectionsEvents
+			oObjectPageLayout._triggerVisibleSubSectionsEvents();
+		});
+	});
+
+	QUnit.test("ObjectPageSubSection cloned returns correct actions", async function (assert) {
+		// Arrange
+		var oSubSection = new ObjectPageSubSectionClass("subsection1", {
+				title: "Title",
+				blocks: [new Text({text: "Test"})],
+				actions: [new Button({text: "Action1"}), new Button({text: "Action2"})]
+			}),
+			oClone,
+			oCloneAction1,
+			oCloneAction2;
+
+		// Act
+		oClone = oSubSection.clone();
+		oClone.placeAt('qunit-fixture');
+		await nextUIUpdate();
+
+		oCloneAction1 = oClone.getActions()[0];
+		oCloneAction2 = oClone.getActions()[1];
+
+		// Assert
+		assert.strictEqual(oClone.getActions().length, 2, "Cloned ObjectPageSubSection has correct number of actions");
+		assert.strictEqual(oCloneAction1.getText(), "Action1", "Cloned ObjectPageSubSection has correct first action");
+		assert.strictEqual(oCloneAction2.getText(), "Action2", "Cloned ObjectPageSubSection has correct second action");
+		assert.ok(oCloneAction1.getDomRef() !== null, "Cloned ObjectPageSubSection first action is rendered");
+		assert.ok(oCloneAction2.getDomRef() !== null, "Cloned ObjectPageSubSection second action is rendered");
+
+		// Cleanup
+		oSubSection.destroy();
+	});
+
 });

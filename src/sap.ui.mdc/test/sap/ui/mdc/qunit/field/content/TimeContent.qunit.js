@@ -67,6 +67,11 @@ sap.ui.define([
 				valueFormat: "HH:mm:ss"
 			}
 		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			}
+		],
 		events:[
 			{
 				change: {value: "X"},
@@ -76,6 +81,17 @@ sap.ui.define([
 		detailTests: _checkTimePicker
 	};
 	ContentBasicTest.controlMapKeys.push("EditOperatorEQ");
+
+	ContentBasicTest.controlMap.EditSelect = {
+		getPathsFunction: "getEditSelect",
+		paths: [null],
+		modules: [],
+		instances: [],
+		createFunction: "createEditSelect",
+		noFormatting: false,
+		editMode: FieldEditMode.Editable,
+		throwsError: true
+	};
 
 	const oDefaultValueHelp = {name: "defineConditions", oneOperatorSingle: false, oneOperatorMulti: true, single: false, multi: true};
 	ContentBasicTest.test(QUnit, TimeContent, "TimeContent", "sap.ui.model.type.Time", {style: "long", calendarType: "Gregorian", secondaryCalendarType: "Islamic", UTC: true}, undefined, BaseType.Time, oDefaultValueHelp, true);

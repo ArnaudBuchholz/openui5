@@ -1,0 +1,27 @@
+{
+  "1.137.0": {
+    "date": "May 2025",
+    "notes": [
+      {
+        "id": "b87468fa879e4521da120f5f9f969380c4a922ee",
+        "type": "FIX",
+        "text": " core/Element: use getter from prototype for 'nodeName'"
+      },
+      {
+        "id": "68e35fe662cfb58ed2db56e2f10e25fa31ab979d",
+        "type": "FEATURE",
+        "text": " sap.m.Menu: Implemented now as a standalone control"
+      },
+      {
+        "id": "40c989d1821f07e61f4288b6011037a7d33ac02d",
+        "type": "FIX",
+        "text": " Fix further ControllerExtensionProvider qunit tests"
+      },
+      {
+        "id": "4c85be5fd2632174841709fd4dab8ab7732cf31e",
+        "type": "FIX",
+        "text": " Add registerExtensionProvider call to QUnit again"
+      }
+    ]
+  }
+}

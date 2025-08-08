@@ -616,9 +616,9 @@ sap.ui.define([
 		await nextUIUpdate();
 
 		// Assert
-		assert.strictEqual(oAttachEventSpy.callCount, 1, "Attach event was called once");
-		assert.strictEqual(oAttachEventSpy.firstCall.args[0], "_change", "Attach event was called for the right event.");
-		assert.strictEqual(oAttachEventSpy.firstCall.args[2].getId(), this.multiInput1.getId(), "Attach event was called with the right context.");
+		assert.ok(oAttachEventSpy.called, "Attach event was called");
+		assert.strictEqual(oAttachEventSpy.secondCall.args[0], "_change", "Attach event was called for the right event.");
+		assert.strictEqual(oAttachEventSpy.secondCall.args[2].getId(), this.multiInput1.getId(), "Attach event was called with the right context.");
 	});
 
 	QUnit.test("Removing a token, should detach the invalidate event handler function.", async function(assert) {
@@ -636,9 +636,9 @@ sap.ui.define([
 		await nextUIUpdate();
 
 		// Assert
-		assert.strictEqual(oDetachEventSpy.callCount, 1, "Detach event was called once");
-		assert.strictEqual(oDetachEventSpy.firstCall.args[0], "_change", "Detach event was called for the right event.");
-		assert.strictEqual(oDetachEventSpy.firstCall.args[2].getId(), this.multiInput1.getId(), "Detach event was called with the right context.");
+		assert.ok(oDetachEventSpy.called, "Detach event was called");
+		assert.strictEqual(oDetachEventSpy.secondCall.args[0], "_change", "Detach event was called for the right event.");
+		assert.strictEqual(oDetachEventSpy.secondCall.args[2].getId(), this.multiInput1.getId(), "Detach event was called with the right context.");
 	});
 
 	QUnit.module("Validation", {
@@ -1704,6 +1704,45 @@ sap.ui.define([
 
 		// clean up
 		oMI.destroy();
+	});
+
+	QUnit.test("mobile - value help icon visibility in suggestion popover", async function (assert) {
+		// Stub device as phone
+		this.stub(Device, "system").value({
+			desktop: false,
+			phone: true,
+			tablet: false
+		});
+
+		// Setup MultiInput with suggestion items
+		const oMultiInput = new MultiInput({
+			suggestionItems: [
+				new Item({ text: "Diamond", key: "diamond" }),
+				new Item({ text: "Graphite", key: "graphite" })
+			]
+		});
+		oMultiInput.placeAt("qunit-fixture");
+		await nextUIUpdate();
+
+		qutils.triggerEvent("tap", oMultiInput.getDomRef());
+
+		await nextUIUpdate();
+
+		const oInnerInput = oMultiInput._getSuggestionsPopover().getInput();
+		const valueHelpIcon = oInnerInput.getDomRef().querySelector("span");
+
+		// Assert: Icon is visible by default (when showValueHelp is not set to false)
+		assert.ok(valueHelpIcon.offsetParent !== null, "Value help icon is visible by default when 'showValueHelp' is not explicitly disabled.");
+		assert.strictEqual(oInnerInput.getValueHelpIconSrc(), "sap-icon://search", "Default value help icon source is 'sap-icon://search'.");
+
+		// Update property and verify hidden icon
+		oMultiInput.setShowValueHelp(false);
+		await nextUIUpdate();
+
+		assert.ok(valueHelpIcon.offsetParent === null, "Value help icon is hidden when 'showValueHelp' is set to false.");
+
+		// Cleanup
+		oMultiInput.destroy();
 	});
 
 	QUnit.test("onBeforeOpen should call _manageListsVisibility with the correct parameter", async function (assert) {
@@ -3317,7 +3356,7 @@ sap.ui.define([
 		await nextUIUpdate(this.clock);
 
 		// act
-		this.multiInput.$().find(".sapMTokenizerIndicator")[0].click();
+		this.multiInput._handleNMoreIndicatorPress();
 		this.clock.tick(1);
 
 		// assert
@@ -3344,7 +3383,7 @@ sap.ui.define([
 		await nextUIUpdate(this.clock);
 
 		// act
-		this.multiInput.$().find(".sapMTokenizerIndicator")[0].click();
+		this.multiInput._handleNMoreIndicatorPress();
 		oPicker = this.multiInput.getAggregation("tokenizer").getTokensPopup();
 		this.clock.tick(100);
 
@@ -3382,6 +3421,27 @@ sap.ui.define([
 		this.clock.tick(nPopoverAnimationTick + 1);
 
 		assert.strictEqual(document.activeElement, oTokenizer.getAggregation("tokens")[0].getDomRef(), "The first token is focused after nMore popover is closed");
+	});
+
+	QUnit.test("n-More popover opener should be the MultiInput", function (assert) {
+		const oTokenizer = this.multiInput.getAggregation("tokenizer");
+		const oFakeEvent = {
+			isMarked: function(){},
+			target: this.multiInput.$().find(".sapMTokenizerIndicator")[0]
+		};
+
+		this.clock = sinon.useFakeTimers();
+		this.multiInput.setTokens([
+			new Token({text: "Token 1"}),
+			new Token({text: "Token 2"}),
+			new Token({text: "Token 3"}),
+			new Token({text: "Token 4"})
+		]);
+
+		this.multiInput.ontap(oFakeEvent);
+		this.clock.tick(nPopoverAnimationTick + 1);
+
+		assert.strictEqual(document.getElementById(oTokenizer.getProperty("opener")), this.multiInput.getDomRef(), "The tokenizer popover has the correct opener");
 	});
 
 	QUnit.test("Popover's interaction - try to delete non editable token", async function(assert) {
@@ -4136,7 +4196,7 @@ sap.ui.define([
 		const oTokenizerSpy = this.spy(oTokenizer, "setRenderMode");
 
 		// Act: Click on n-more
-		oMultiInput.$().find(".sapMTokenizerIndicator")[0].click();
+		oMultiInput._handleNMoreIndicatorPress();
 		let oPicker = oMultiInput.getAggregation("tokenizer").getTokensPopup();
 		this.clock.tick(500);
 

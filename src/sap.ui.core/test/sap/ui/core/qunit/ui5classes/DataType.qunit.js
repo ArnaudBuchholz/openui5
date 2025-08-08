@@ -408,6 +408,9 @@ sap.ui.define([
 		assert.ok(DataType.getType("sap.test.RegisteredColor") === type, "multiple calls should return same type object");
 	});
 
+	/**
+	 * @deprecated As of version 1.136, together with the proxy solution
+	 */
 	QUnit.test("Auto-registered (top-level) Enum via Lib Proxy", async function (assert) {
 		sap.ui.define("sap/test/enumlib/library", [
 			"sap/ui/core/Lib"
@@ -445,6 +448,9 @@ sap.ui.define([
 		assert.ok(DataType.getType("sap.test.enumlib.LibColor") === type, "multiple calls should return same type object");
 	});
 
+	/**
+	 * @deprecated As of version 1.136, together with the proxy solution
+	 */
 	QUnit.test("Auto-registered (deeply nested) Enum via Lib Proxy", async function (assert) {
 		sap.ui.define("sap/test/otherlib/library", [
 			"sap/ui/core/Lib"
@@ -526,11 +532,29 @@ sap.ui.define([
 		var vGlobalProperty = ObjectPath.get("sap.ui.base.Object");
 		assert.ok(vGlobalProperty && !isPlainObject(vGlobalProperty), "[precondition] Object with name sap.ui.base.Object exists and is not a plain object");
 
-
 		assert.strictEqual(DataType.getType("sap.ui.base.Object"), DataType.getType("any"), "access to an invalid type should fallback to type 'any'");
 		assert.ok(oWarningSpy.calledWith(sinon.match(/not a valid data type/)), "access to an invalid type should produce a warning message in the log");
 		assert.ok(oErrorSpy.called, "deprecation error should be logged");
-		assert.ok(oErrorSpy.calledWith(sinon.match(/Defining types via globals is deprecated/)), "deprecation error should be logged");
+		assert.ok(oErrorSpy.calledWith(sinon.match(/Defining types via globals is deprecated/)), "deprecation error message contains neccessary information");
+
+		oErrorSpy.resetHistory();
+		const oPropertyMock = {
+			_oParent: {
+				getName() {
+					return "sap.ui.test.MyClass";
+				}
+			},
+			name: "propertyA"
+		};
+
+		assert.strictEqual(DataType.getType("sap.ui.base.Object", oPropertyMock), DataType.getType("any"), "access to an invalid type should fallback to type 'any'");
+		assert.ok(oErrorSpy.called, "deprecation error should be logged");
+		assert.ok(oErrorSpy.calledWith(sinon.match(/Defining types via globals is deprecated/)), "deprecation error message contains neccessary information");
+		assert.ok(oErrorSpy.calledWith(sinon.match(/Property "propertyA" of "sap.ui.test.MyClass"/)), "deprecation error message contains class and property information");
+
+		oErrorSpy.resetHistory();
+		assert.strictEqual(DataType.getType("sap.ui.base.Object", oPropertyMock), DataType.getType("any"), "access to an invalid type should fallback to type 'any'");
+		assert.ok(oErrorSpy.notCalled, "deprecation error for the same property should NOT be logged again");
 	});
 
 

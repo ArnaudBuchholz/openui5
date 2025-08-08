@@ -5,6 +5,14 @@
 	},
 	"sap.card": {
 		"type": "Object",
+		"actions": [
+			{
+				"type": "Navigation",
+				"parameters": {
+					"url": "https://www.sap.com"
+				}
+			}
+		],
 		"configuration": {
 			"parameters": {
 				"firstName": {
@@ -17,7 +25,7 @@
 				"src": "sap-icon://business-objects-experience"
 			},
 			"title": "Object Card",
-			"subTitle": "With Image Only and Action on the Content",
+			"subtitle": "With Image Only and Action on the Content",
 			"visible": false
 		},
 		"content": {
@@ -32,19 +40,11 @@
 							"overlay": {
 								"supertitle": "Sun, May 28",
 								"title": "Hello, {parameters>/firstName/value}",
-								"subTitle": "Today will be a good day!",
+								"subtitle": "Today will be a good day!",
 								"textColor": "#fff"
 							}
 						}
 					]
-				}
-			],
-			"actions": [
-				{
-					"type": "Navigation",
-					"parameters": {
-						"url": "https://www.sap.com"
-					}
 				}
 			]
 		}

@@ -1,0 +1,38 @@
+/* =========================== */
+/* CSS for control sap.m/Menu  */
+/* Quartz theme                */
+/* =========================== */
+
+.sapMMenu {
+
+	.sapMMenuItem {
+		padding: 0 0.75rem;
+	}
+
+	.sapMMenuItem.sapMMenuItemDisabled .sapMMenuItemIcon {
+		opacity: @sapUiContentDisabledOpacity;
+	}
+
+	.sapMMenuItem.sapMMenuItemSubMenuOpen,
+	.sapMMenuItem.sapMMenuItemSubMenuOpen:hover,
+	.sapMMenuItem.sapMMenuItemSubMenuOpen:focus {
+		background-color: @sapUiListSelectionHoverBackground;
+	}
+
+	.sapMMenuItemIcon {
+		min-width: 1rem;
+		max-width: 1rem;
+		padding-inline-end: 0.5rem;
+
+		&:empty {
+			min-width: 0;
+			max-width: 0;
+			padding-inline-end: 0;
+		}
+	}
+
+	.sapMMenuItemSubMenu > div:after {
+		font-size: 0.75rem;
+	}
+
+}

@@ -13,7 +13,8 @@ sap.ui.define([
 	"sap/ui/model/base/ManagedObjectModel",
 	"sap/ui/model/BindingMode",
 	"sap/ui/core/Control",
-	"sap/ui/mdc/enums/TableType"
+	"sap/ui/mdc/enums/TableType",
+	"sap/m/plugins/PluginBase"
 ], (
 	GridTableType,
 	ResponsiveTableType,
@@ -25,7 +26,8 @@ sap.ui.define([
 	ManagedObjectModel,
 	BindingMode,
 	Control,
-	TableType
+	TableType,
+	PluginBase
 ) => {
 	"use strict";
 
@@ -135,9 +137,10 @@ sap.ui.define([
 				},
 				/**
 				 * Indicates whether the content of the column is required.
-				 * <b>Note:</b> The table only takes care of announcing the state of the column header as defined by the <code>required</code> property.
-				 * The application needs to take care of the screen reader announcement of the state of the table cells,
-				 * for example, by setting the <code>required</code> property to <code>true</code> for <code>sap.m.Input</code>.
+				 *
+				 * <b>Note:</b> The table only takes care of announcing the state of the column header as defined by the <code>required</code>
+				 * property. The application needs to take care of the screen reader announcement of the state of the table cells, for example, by
+				 * setting the <code>required</code> property to <code>true</code> for <code>sap.m.Input</code>.
 				 */
 				required: {
 					type: "boolean",
@@ -207,6 +210,11 @@ sap.ui.define([
 			p13nWidth: null
 		});
 		this._oManagedObjectModel.setDefaultBindingMode(BindingMode.OneWay);
+		this._oInnerColumnReady = Promise.withResolvers();
+	};
+
+	Column.prototype.getColumnAIActionPluginOwner = function() {
+		return this._oInnerColumn || this._oInnerColumnReady.promise;
 	};
 
 	Column.prototype.getInnerColumn = function() {
@@ -225,7 +233,7 @@ sap.ui.define([
 
 		const oWidthBindingInfo = {
 			parts: [
-				{ path: "$this>/width" }, { path: "$columnSettings>/calculatedWidth" }, { path: "$columnSettings>/p13nWidth" }
+				{path: "$this>/width"}, {path: "$columnSettings>/calculatedWidth"}, {path: "$columnSettings>/p13nWidth"}
 			],
 			formatter: function(sWidth, sCalculatedWidth, sP13nWidth) {
 				return sP13nWidth || sCalculatedWidth || sWidth;
@@ -234,10 +242,10 @@ sap.ui.define([
 
 		const oTooltipBindingInfo = {
 			parts: [
-				{ path: "$this>/tooltip" },
-				{ path: "$this>/header" },
-				{ path: "$this>/headerVisible" },
-				{ path: "$sap.ui.mdc.Table>/useColumnLabelsAsTooltips" }
+				{path: "$this>/tooltip"},
+				{path: "$this>/header"},
+				{path: "$this>/headerVisible"},
+				{path: "$sap.ui.mdc.Table>/useColumnLabelsAsTooltips"}
 			],
 			formatter: function(sTooltip, sHeader, bHeaderVisible, bUseColumnLabelsAsTooltips) {
 				if (sTooltip || !bUseColumnLabelsAsTooltips) {
@@ -257,7 +265,7 @@ sap.ui.define([
 				header: this._getColumnHeaderLabel(oTooltipBindingInfo),
 				importance: {
 					parts: [
-						{ path: "$this>/importance" }, { path: "$this>/extendedSettings/importance" }, { path: "$this>/extendedSettings/@className" }
+						{path: "$this>/importance"}, {path: "$this>/extendedSettings/importance"}, {path: "$this>/extendedSettings/@className"}
 					],
 					formatter: function(sLegacyImportance, sImportance, sClassName) {
 						if (sImportance && sClassName === "sap.ui.mdc.table.ResponsiveColumnSettings") {
@@ -270,7 +278,7 @@ sap.ui.define([
 				popinDisplay: "{= ${$this>/headerVisible} ? 'Inline' : 'WithoutHeader' }",
 				mergeDuplicates: {
 					parts: [
-						{ path: "$this>/extendedSettings/mergeFunction" }, { path: "$this>/extendedSettings/@className" }
+						{path: "$this>/extendedSettings/mergeFunction"}, {path: "$this>/extendedSettings/@className"}
 					],
 					formatter: function(sMergeFunction, sClassName) {
 						return sMergeFunction && sClassName === "sap.ui.mdc.table.ResponsiveColumnSettings";
@@ -278,7 +286,7 @@ sap.ui.define([
 				},
 				mergeFunctionName: {
 					parts: [
-						{ path: "$this>/extendedSettings/mergeFunction" }, { path: "$this>/extendedSettings/@className" }
+						{path: "$this>/extendedSettings/mergeFunction"}, {path: "$this>/extendedSettings/@className"}
 					],
 					formatter: function(sMergeFunction, sClassName) {
 						if (sClassName === "sap.ui.mdc.table.ResponsiveColumnSettings") {
@@ -310,6 +318,7 @@ sap.ui.define([
 		oColumn.setModel(this._oSettingsModel, "$columnSettings");
 		oColumn.setHeaderMenu(oTable.getId() + "-columnHeaderMenu");
 
+		this._oInnerColumnReady.resolve();
 		return oColumn;
 	};
 
@@ -320,10 +329,10 @@ sap.ui.define([
 			library: "sap.ui.mdc",
 			"final": true,
 			aggregations: {
-				label: { type: "sap.m.Label", multiple: false }
+				label: {type: "sap.m.Label", multiple: false}
 			},
 			associations: {
-				column: { type: "sap.ui.mdc.table.Column" }
+				column: {type: "sap.ui.mdc.table.Column"}
 			}
 		},
 		renderer: {
@@ -483,6 +492,10 @@ sap.ui.define([
 		this._connectToTable();
 	};
 
+	Column.prototype._getAIAction = function() {
+		return PluginBase.getPlugin(this, "sap.m.plugins.ColumnAIAction");
+	};
+
 	Column.prototype._connectToTable = function() {
 		const oTable = this.getTable();
 
@@ -490,11 +503,13 @@ sap.ui.define([
 			return;
 		}
 
+		this._getAIAction()?.setEnabled(true);
 		this._calculateColumnWidth();
 		this._readP13nValues();
 	};
 
-	Column.prototype._disconnectFromTable = function(oTable = this.getTable()) {
+	Column.prototype._disconnectFromTable = function() {
+		this._getAIAction()?.setEnabled(false);
 		this._oInnerColumn?.destroy();
 		delete this._oInnerColumn;
 	};
@@ -524,7 +539,7 @@ sap.ui.define([
 	Column.prototype._readP13nValues = function() {
 		const oTable = this.getTable();
 		const sPropertyKey = this.getPropertyKey();
-		const oXConfig = oTable.getCurrentState().xConfig;
+		const oXConfig = oTable._getXConfig();
 		const oColumnConfig = oXConfig?.aggregations?.columns?.[sPropertyKey];
 
 		this._oSettingsModel.setProperty("/p13nWidth", oColumnConfig?.width);
@@ -537,7 +552,7 @@ sap.ui.define([
 
 	Column.prototype.exit = function() {
 		this._disconnectFromTable();
-
+		this._oInnerColumnReady = null;
 		[
 			"_oManagedObjectModel",
 			"_oSettingsModel",

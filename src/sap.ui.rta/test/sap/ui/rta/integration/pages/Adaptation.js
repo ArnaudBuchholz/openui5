@@ -1,24 +1,20 @@
 sap.ui.define([
-	"sap/ui/test/Opa5",
-	"sap/ui/test/matchers/PropertyStrictEquals",
-	"sap/ui/test/actions/EnterText",
-	"sap/ui/test/actions/Press",
+	"sap/ui/core/Lib",
 	"sap/ui/test/actions/Drag",
 	"sap/ui/test/actions/Drop",
-	"sap/ui/qunit/QUnitUtils",
-	"sap/ui/events/KeyCodes",
-	"sap/ui/core/Lib",
+	"sap/ui/test/actions/EnterText",
+	"sap/ui/test/actions/Press",
+	"sap/ui/test/matchers/PropertyStrictEquals",
+	"sap/ui/test/Opa5",
 	"test-resources/sap/ui/fl/api/FlexTestAPI"
 ], function(
-	Opa5,
-	PropertyStrictEquals,
-	EnterText,
-	Press,
+	Lib,
 	Drag,
 	Drop,
-	QUnitUtils,
-	KeyCodes,
-	Lib,
+	EnterText,
+	Press,
+	PropertyStrictEquals,
+	Opa5,
 	FlexTestAPI
 ) {
 	"use strict";
@@ -218,18 +214,12 @@ sap.ui.define([
 				},
 				iClickOnAContextMenuEntryWithKey(sKey) {
 					return this.waitFor({
-						controlType: "sap.ui.unified.Menu",
-						matchers(oMenu) {
-							return oMenu.getDomRef().classList.contains("sapUiDtContextMenu");
+						controlType: "sap.m.MenuItem",
+						matchers(oMenuItem) {
+							return oMenuItem.getKey() === sKey;
 						},
-						success(aMenu) {
-							// The key is only available in the parent menu (sap.m.Menu)
-							// This works only because the indices are the same in the parent and the context menu
-							const oParentMenu = aMenu[0].getParent();
-							const aItems = oParentMenu.getItems();
-							// get the index of the item with the key
-							const iIndex = aItems.findIndex((oItem) => oItem.getKey() === sKey);
-							aMenu[0].getItems()[iIndex].getDomRef().click();
+						success(aMenuItem) {
+							aMenuItem[0].getDomRef().click();
 						},
 						errorMessage: "Did not find the Context Menu"
 					});
@@ -237,7 +227,7 @@ sap.ui.define([
 				iClickOnAVariantMenu(sVariantName) {
 					const oResources = Lib.getResourceBundleFor("sap.ui.rta");
 					return this.waitFor({
-						controlType: "sap.ui.unified.MenuItem",
+						controlType: "sap.m.MenuItem",
 						matchers: new PropertyStrictEquals({
 							name: "text",
 							value: oResources.getText(sVariantName)
@@ -248,21 +238,32 @@ sap.ui.define([
 				},
 				iEnterANewName(sNewLabel) {
 					return this.waitFor({
-						controlType: "sap.ui.dt.ElementOverlay",
-						matchers(oOverlay) {
-							if (oOverlay.getDomRef().classList.contains("sapUiDtOverlaySelected")) {
-								const oOverlayDOM = oOverlay.getDomRef().querySelector(".sapUiRtaEditableField");
-								const oEditableFieldDomNode = oOverlayDOM.children[0];
-								return oEditableFieldDomNode;
-							}
-							return undefined;
+						controlType: "sap.m.Dialog",
+						matchers(oRenameDialog) {
+							return oRenameDialog.getId().includes("sapUiRtaRenameDialog");
 						},
-						actions(oEditableFieldDomNode) {
-							oEditableFieldDomNode.innerHTML = sNewLabel;
-							QUnitUtils.triggerEvent("keypress", oEditableFieldDomNode, { which: KeyCodes.ENTER, keyCode: KeyCodes.ENTER });
-							oEditableFieldDomNode.blur();
+						actions(oDialog) {
+							const oInput = oDialog.getContent()[0].getItems()[1];
+							new EnterText({
+								text: sNewLabel
+							}).executeOn(oInput);
+							new Press().executeOn(oDialog.getBeginButton());
 						},
-						errorMessage: "Did not find the Selected Element Overlay"
+						errorMessage: "Did not find the rename dialog"
+					});
+				},
+				iEnterANewAnnotationLabel(sNewLabel) {
+					return this.waitFor({
+						controlType: "sap.m.Dialog",
+						id: "sapUiRtaChangeAnnotationDialog",
+						actions(oDialog) {
+							const oInput = oDialog.getContent()[0].getItems()[3].getFormContainers()[0].getFormElements()[0].getFields()[0];
+							new EnterText({
+								text: sNewLabel
+							}).executeOn(oInput);
+							new Press().executeOn(oDialog.getBeginButton());
+						},
+						errorMessage: "Did not find the change annotation dialog"
 					});
 				},
 				iSelectAFieldByBindingPathInTheAddDialog(sBindingPath) {
@@ -607,28 +608,26 @@ sap.ui.define([
 				},
 				iShouldSeetheContextMenu() {
 					return this.waitFor({
-						controlType: "sap.ui.unified.Menu",
-						matchers(oMenu) {
-							return oMenu.hasStyleClass("sapUiDtContextMenu");
+						controlType: "sap.m.Popover",
+						matchers(oPopover) {
+							return oPopover.hasStyleClass("sapUiDtContextMenu");
 						},
-						success(oMenu) {
-							Opa5.assert.ok(oMenu[0], "The context menu is shown.");
+						success(aPopover) {
+							Opa5.assert.ok(aPopover[0], "The context menu is shown.");
 						},
 						errorMessage: "Did not find the Context Menu"
 					});
 				},
 				iShouldSeetheContextMenuEntriesWithKeys(aContextEntriesKeys) {
 					return this.waitFor({
-						controlType: "sap.ui.unified.Menu",
-						matchers(oMenu) {
-							return oMenu.hasStyleClass("sapUiDtContextMenu");
+						controlType: "sap.m.Popover",
+						matchers(oPopover) {
+							return oPopover.hasStyleClass("sapUiDtContextMenu");
 						},
-						success(aMenu) {
+						success(aPopover) {
 							const aIsContextEntriesKeys = [];
-							// The key is only available in the parent menu (sap.m.Menu)
-							// This works only because the indices are the same in the parent and the context menu
-							const oParentMenu = aMenu[0].getParent();
-							const aItems = oParentMenu.getItems();
+							const oMenu = aPopover[0].getContent()[0];
+							const aItems = oMenu.getItems();
 							aItems.forEach(function(oItem) {
 								aIsContextEntriesKeys.push(oItem.getKey());
 							});
@@ -639,13 +638,14 @@ sap.ui.define([
 				},
 				iShouldSeetheNumberOfContextMenuActions(iActions) {
 					return this.waitFor({
-						controlType: "sap.ui.unified.Menu",
-						matchers(oMenu) {
-							return oMenu.hasStyleClass("sapUiDtContextMenu");
+						controlType: "sap.m.Popover",
+						matchers(oPopover) {
+							return oPopover.hasStyleClass("sapUiDtContextMenu");
 						},
-						success(oMenu) {
+						success(aPopover) {
 							let iItems = 0;
-							oMenu[0].getItems().forEach(function(oItem) {
+							const oMenu = aPopover[0].getContent()[0];
+							oMenu.getItems().forEach(function(oItem) {
 								if (oItem.getVisible()) {
 									iItems++;
 								}
@@ -693,6 +693,16 @@ sap.ui.define([
 							Opa5.assert.ok(true, "The correct MessageStrip exists.");
 						},
 						errorMessage: "Did not find the MessageStrip, the text was wrong or the type was wrong."
+					});
+				},
+				iShouldSeeTheReloadButtonInTheToolbar() {
+					return this.waitFor({
+						id: "sapUIRta_toolbar_fragment--sapUiRta_hardReloadButton",
+						controlType: "sap.m.Button",
+						success() {
+							Opa5.assert.ok(true, "Found the Reload Button in the Toolbar");
+						},
+						errorMessage: "Did not find the Reload Button in the Toolbar"
 					});
 				}
 			}

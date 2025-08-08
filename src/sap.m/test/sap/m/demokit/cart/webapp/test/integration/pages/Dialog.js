@@ -1,56 +1,56 @@
 sap.ui.define([
 	"sap/ui/test/Opa5",
-	"./Common",
-	"sap/ui/test/actions/Press"
-], function (
-	Opa5,
-	Common,
-	Press) {
+	"sap/ui/test/actions/Press",
+	"sap/ui/test/matchers/I18NText"
+], (Opa5, Press, I18NText) => {
 	"use strict";
 
 	Opa5.createPageObjects({
-		onTheDialog : {
-			baseClass: Common,
-			actions : {
-
-				iPressDeleteButtonOnTheConfirmationDialog : function () {
+		onTheDialog: {
+				actions: {
+				iPressDeleteButtonOnTheConfirmationDialog() {
 					return this.waitFor({
-							controlType : "sap.m.Button",
-							matchers: function(oControl){
-								return this.I18NTextExtended(oControl, "MSGBOX_DELETE", "text", "sap.m");
-							}.bind(this),
-							actions : new Press(),
-							errorMessage : "The delete button could not be pressed"
-						}
-					);
+						controlType: "sap.m.Button",
+						matchers: {
+							properties: {
+								text: "Delete"
+							}
+						},
+						actions: new Press(),
+						errorMessage: "The delete button could not be pressed"
+					});
 				},
-				iPressCancelOnTheConfirmationDialog : function () {
+
+				iPressCancelOnTheConfirmationDialog() {
 					return this.waitFor({
-						controlType : "sap.m.Button",
-						matchers: function(oControl){
-							return this.I18NTextExtended(oControl, "MSGBOX_CANCEL", "text", "sap.m");
-						}.bind(this),
-						actions : new Press(),
-						errorMessage : "The cancel button could not be pressed"
+						controlType: "sap.m.Button",
+						matchers: {
+							properties: {
+								text: "Cancel"
+							}
+						},
+						actions: new Press(),
+						errorMessage: "The cancel button could not be pressed"
 					});
 				}
 			},
 
-			assertions : {
-
-				iShouldBeTakenToTheConfirmationDialog : function () {
+			assertions: {
+				iShouldBeTakenToTheConfirmationDialog() {
 					return this.waitFor({
-						controlType : "sap.m.Button",
-						matchers: function(oControl){
-							return this.I18NTextExtended(oControl, "MSGBOX_DELETE", "text", "sap.m");
-						}.bind(this),
-						success : function (aControl) {
+						controlType: "sap.m.Button",
+						matchers: {
+							properties: {
+								text: "Delete"
+							}
+						},
+						success(aControl) {
 							Opa5.assert.ok(
 								aControl,
 								"The delete button was found"
 							);
 						},
-						errorMessage : "The delete button was not found"
+						errorMessage: "The delete button was not found"
 					});
 				}
 			}

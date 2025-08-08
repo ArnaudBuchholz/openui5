@@ -244,12 +244,14 @@ sap.ui.define([
 		if (!this._oUpdateBindingTimer && (oBindingInfo.length || oBindingInfo.startIndex)) {
 			const fnUpdate = () => {
 				let oToken = oBindingInfo.template;
-				if (oBindingInfo.hasOwnProperty("templateShareable") && !oBindingInfo.templateShareable) {
+				let bTemplateShareable = true;
+				if (oBindingInfo.templateShareable !== true) {
 					oToken = oToken.clone();
+					bTemplateShareable = false;
 				}
 
 				this._bUpdateBinding = true;
-				this.bindAggregation("tokens", { path: oBindingInfo.path, model: oBindingInfo.model, template: oToken });
+				this.bindAggregation("tokens", { path: oBindingInfo.path, model: oBindingInfo.model, template: oToken, templateShareable: bTemplateShareable });
 			};
 
 			if (bAsync) {
@@ -285,6 +287,10 @@ sap.ui.define([
 		}
 
 	}
+
+	FieldMultiInput.prototype._onValueHelpRequested = function () {
+		this._bValueHelpOpen = false; // otherwise in non-modal Valuehelp focusout will not show the more-indicator. In Field case, onSapFocusLeave is prevented on opening ValueHelp-Dialog, so the original use-case will not occur
+	};
 
 	return FieldMultiInput;
 

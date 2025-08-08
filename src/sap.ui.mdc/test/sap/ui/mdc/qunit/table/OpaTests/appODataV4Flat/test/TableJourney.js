@@ -82,7 +82,7 @@ sap.ui.define([
 
 		When.onTheAppMDCTable.iPressOnColumnHeader(sTableId, "Category");
 		Then.onTheAppMDCTable.iShouldSeeTheColumnMenu();
-		Then.onTheAppMDCTable.iShouldSeeNumberOfColumnMenuQuickActions(2);
+		Then.onTheAppMDCTable.iShouldSeeNumberOfColumnMenuQuickActions(3);
 		Then.onTheAppMDCTable.iShouldSeeColumnMenuQuickSort({key: "Category", label: "Category", sortOrder: coreLibrary.SortOrder.None});
 		Then.onTheAppMDCTable.iShouldSeeColumnMenuQuickGroup({key: "Category", label: "Category", grouped: false});
 		Then.onTheAppMDCTable.iShouldSeeNumberOfColumnMenuItems(0);
@@ -128,6 +128,7 @@ sap.ui.define([
 		When.onTheAppMDCTable.iPressOnColumnHeader(sTableId, "Category");
 		Then.onTheAppMDCTable.iShouldSeeTheColumnMenu();
 		Then.onTheAppMDCTable.iShouldNotSeeColumnMenuItems();
+		Then.onTheAppMDCTable.iShouldNotSeeColumnMenuSettings();
 		When.onTheAppMDCTable.iCloseTheColumnMenu();
 		Then.onTheAppMDCTable.iShouldNotSeeTheColumnMenu();
 		When.onTheApp.iGetTheTableInstance(sTableId, function(oTable) {

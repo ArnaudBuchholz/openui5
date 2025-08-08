@@ -120,6 +120,11 @@ sap.ui.define([
 				aModules.push("sap/m/ScrollContainer");
 			}
 			return loadModules(aModules).then((aModules) => {
+
+				if (this.isDestroyStarted()) {
+					return null;
+				}
+
 				const DefineConditionPanel = aModules[0];
 				const ManagedObjectModel = aModules[1];
 				//					FilterOperatorUtil = aModules[2];
@@ -187,6 +192,10 @@ sap.ui.define([
 		return this._oDefineConditionPanel.getInitialFocusedControl();
 	};
 
+	Conditions.prototype.getFocusControlAfterTokenRemoval = function() {
+		return this._oDefineConditionPanel.getFocusControlAfterTokenRemoval();
+	};
+
 	Conditions.prototype.getRequiresTokenizer = function() {
 		// when only the conditions content is on the dialog the tokenizer should be shown.
 		return true;
@@ -237,6 +246,11 @@ sap.ui.define([
 				getFooter: function() {
 					return this._retrievePromise("footer", () => {
 						return loadModules(["sap/m/library", "sap/m/Button"]).then((aModules) => {
+
+							if (this.isDestroyStarted()) {
+								return null;
+							}
+
 							const oMLibrary = aModules[0];
 							const { ButtonType } = oMLibrary;
 							const Button = aModules[1];

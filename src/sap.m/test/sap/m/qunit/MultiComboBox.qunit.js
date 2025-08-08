@@ -5095,6 +5095,25 @@ sap.ui.define([
 		oMultiComboBox.destroy();
 	});
 
+	QUnit.test("Should set the MultiComboBox as Tokenizer's opener", async function(assert) {
+		this.clock = sinon.useFakeTimers();
+		var oMultiComboBox = new MultiComboBox({
+		items: [
+			new Item({key: "Item1", text: "Item1"}),
+			new Item({key: "Item2", text: "Item2"})
+		]
+		}).placeAt("MultiComboBoxContent");
+		var oTokenizer = oMultiComboBox.getAggregation("tokenizer");
+
+		await nextUIUpdate(this.clock);
+
+		qutils.triggerKeydown(this.oMultiComboBox, KeyCodes.I, false, false, true);
+
+		assert.strictEqual(document.getElementById(oTokenizer.getProperty("opener")), oMultiComboBox.getDomRef(), "The Tokenizer 'open' property is correct");
+
+		oMultiComboBox.destroy();
+	});
+
 	QUnit.module("Focus handling", {
 		afterEach: function () {
 			runAllTimersAndRestore(this.clock);
@@ -5869,7 +5888,7 @@ sap.ui.define([
 		oMultiComboBox.destroy();
 	});
 
-	QUnit.test("aria-errormessage for value state with links contains announcement for the value state links shortcut", async function (assert) {
+	QUnit.test("aria-errormessage for value state with links not contains announcement for the value state links shortcut", async function (assert) {
 		const oFormattedValueStateText = new FormattedText({
 			htmlText: "Value state message containing %%0 and %%1",
 			controls: [new Link({
@@ -5897,12 +5916,15 @@ sap.ui.define([
 		const oAccDomRef = document.getElementById(oMultiComboBox.getValueStateLinksShortcutsId());
 		const aErrormessage = oMultiComboBox.getFocusDomRef().getAttribute("aria-errormessage").split(" ");
 		const bErrormessageContainsAccForLinks = aErrormessage.some(function (sId) { return sId === oMultiComboBox.getValueStateLinksShortcutsId();});
+		const aAriaDescribedBy = oMultiComboBox.getFocusDomRef().getAttribute("aria-describedby").split(" ");
+		const bAriaDescribedByContainsAccForLinks = aAriaDescribedBy.some(function (sId) { return sId === oMultiComboBox.getValueStateLinksShortcutsId();});
 		const sLinksTextId = Device.os.macintosh ?  "INPUTBASE_VALUE_STATE_LINKS_MAC" : "INPUTBASE_VALUE_STATE_LINKS";
 		const sMultipleLink = Library.getResourceBundleFor("sap.m").getText(sLinksTextId);
 
 		assert.ok(oMultiComboBox.getDomRef().contains(oAccDomRef), "Accessibility DOM for links shortcuts announcement is created");
 		assert.strictEqual(oAccDomRef.innerText, sMultipleLink, "Links shortcuts announcement is as expected" );
-		assert.ok(bErrormessageContainsAccForLinks, "Accessibility DOM for links shortcuts announcement is added to aria-errormessage");
+		assert.notOk(bErrormessageContainsAccForLinks, "Accessibility DOM for links shortcuts announcement is not added to aria-errormessage");
+		assert.ok(bAriaDescribedByContainsAccForLinks, "Accessibility DOM for links shortcuts announcement is added to aria-describedby");
 
 		oFormattedValueStateText.destroy();
 		oMultiComboBox.destroy();
@@ -8344,6 +8366,28 @@ sap.ui.define([
 
 		assert.strictEqual(this.oMultiComboBox.getValueState(), ValueState.Warning, "The value state is reset.");
 	});
+
+		QUnit.test("should the value state to the initial one even if the initial one is an error", async function(assert) {
+		this.clock = sinon.useFakeTimers();
+
+		this.oMultiComboBox.setValueState("Warning");
+		await nextUIUpdate(this.clock);
+
+		this.oMultiComboBox.setValueState("Error");
+		await nextUIUpdate(this.clock);
+
+		qutils.triggerCharacterInput(this.oMultiComboBox.getFocusDomRef(), "j");
+		qutils.triggerKeydown(this.oMultiComboBox.getDomRef(), KeyCodes.ENTER);
+
+		await nextUIUpdate(this.clock);
+
+		// wait for a bit more than 1 second to ensure the error value state is reset
+		// testing _showWrongValueVisualEffect()
+		this.clock.tick(1200);
+
+		assert.strictEqual(this.oMultiComboBox.getValueState(), ValueState.Error, "The value state error is reset.");
+	});
+
 
 	QUnit.test("value state message should be opened if the input field is on focus", async function(assert) {
 		this.clock = sinon.useFakeTimers();

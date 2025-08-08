@@ -290,13 +290,14 @@ sap.ui.define([
 	};
 
 	/**
-	 * Retrieve the propagated action data from the Designtime Metadata
+	 * Retrieve the propagated action info from the Designtime Metadata, like the propagating control
+	 * and its name.
 	 * @param  {sap.ui.dt.ElementOverlay} oOverlay Overlay containing the Designtime Metadata
-	 * @return {object} Returns an object with the action data from the Designtime Metadata
+	 * @return {object} Returns an object with the propagated action info from the Designtime Metadata
 	 */
-	Plugin.prototype.getPropagatedAction = function(oOverlay) {
+	Plugin.prototype.getPropagatedActionInfo = function(oOverlay) {
 		return oOverlay.getDesignTimeMetadata() ?
-			oOverlay.getDesignTimeMetadata().getPropagatedAction(this.getActionName())
+			oOverlay.getDesignTimeMetadata().getPropagatedActionInfo(this.getActionName())
 			: null;
 	};
 
@@ -314,12 +315,11 @@ sap.ui.define([
 	 * @param {sap.ui.dt.ElementOverlay} oOverlay Overlay containing the Designtime Metadata
 	 * @param {object} mAction The action data from the Designtime Metadata
 	 * @param {string} sPluginId The ID of the plugin
-	 * @param {sap.ui.core.Element} [propagatingControl] The control where the action is executed
 	 * @return {string} The text for the menu item
 	 */
-	Plugin.prototype.getActionText = function(oOverlay, mAction, sPluginId, propagatingControl) {
+	Plugin.prototype.getActionText = function(oOverlay, mAction, sPluginId) {
 		const vName = mAction.name;
-		const oElement = propagatingControl || oOverlay.getElement();
+		const oElement = oOverlay.getElement();
 		if (vName) {
 			if (typeof vName === "function") {
 				return vName(oElement);
@@ -380,10 +380,11 @@ sap.ui.define([
 	 * The text for the item can be defined in the control Designtime Metadata;
 	 * otherwise the default text is used.
 	 * @param {sap.ui.dt.ElementOverlay[]} aElementOverlays - Target overlays
-	 * @param {object} mPropertyBag Additional properties for the menu item
-	 * @param {string} mPropertyBag.pluginId The ID of the plugin
-	 * @param {number} mPropertyBag.rank The rank deciding the position of the action in the context menu
-	 * @param {string} mPropertyBag.icon an icon for the Button inside the context menu
+	 * @param {object} mPropertyBag - Additional properties for the menu item
+	 * @param {string} mPropertyBag.pluginId - The ID of the plugin
+	 * @param {number} mPropertyBag.rank - The rank deciding the position of the action in the context menu
+	 * @param {string} mPropertyBag.icon - an icon for the Button inside the context menu
+	 * @param {string} [mPropertyBag.additionalInfoKey] - The key for the additional information defined by the plugin
 	 * @return {object[]} Returns an array with the object containing the required data for a context menu item
 	 */
 	Plugin.prototype._getMenuItems = async function(aElementOverlays, mPropertyBag) {
@@ -410,8 +411,31 @@ sap.ui.define([
 			return [];
 		}
 
+		oMenuItem.additionalInfo = this._getAdditionalInfo(oResponsibleElementOverlay, mAction, mPropertyBag);
 		oMenuItem.text = this.getActionText(oResponsibleElementOverlay, mAction, mPropertyBag.pluginId);
 		return [oMenuItem];
+	};
+
+	/**
+	 * Returns additional information for a menu item, if declared by the action
+	 * @param {sap.ui.dt.ElementOverlay} oElementOverlay - Target overlay
+	 * @param {object} mAction - The action object defined in the designtime
+	 * @param {object} [mAction.additionalInfoKey] - The key for the additional information
+	 * @param {object} [mPropertyBag] - Additional properties for the menu item defined by the plugin
+	 * @param {string} [mPropertyBag.additionalInfoKey] - The key for the additional information defined by the plugin
+	 * @return {string|undefined} The translated additional information string or undefined
+	 */
+	Plugin.prototype._getAdditionalInfo = function(oElementOverlay, mAction, mPropertyBag) {
+		const sAdditionalInfoKeyFromDesigntime = mAction.additionalInfoKey;
+		const sAdditionalInfoKeyFromPlugin = mPropertyBag && mPropertyBag.additionalInfoKey;
+		if (sAdditionalInfoKeyFromDesigntime) {
+			const oDesignTimeMetadata = oElementOverlay.getDesignTimeMetadata();
+			const oElement = oElementOverlay.getElement();
+			return oDesignTimeMetadata.getLibraryText(oElement, sAdditionalInfoKeyFromDesigntime);
+		} else if (sAdditionalInfoKeyFromPlugin) {
+			return Lib.getResourceBundleFor("sap.ui.rta").getText(sAdditionalInfoKeyFromPlugin);
+		}
+		return undefined;
 	};
 
 	/**

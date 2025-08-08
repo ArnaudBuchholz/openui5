@@ -10,11 +10,10 @@ sap.ui.define([
 	"sap/ui/fl/apply/_internal/changes/descriptor/InlineApplier",
 	"sap/ui/fl/apply/_internal/changes/Applier",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
 	"sap/ui/fl/apply/api/ControlVariantApplyAPI",
 	"sap/ui/fl/initial/_internal/changeHandlers/ChangeHandlerRegistration",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/variants/VariantModel",
-	"sap/ui/fl/FlexControllerFactory",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils",
 	"sap/ui/model/json/JSONModel",
@@ -28,11 +27,10 @@ sap.ui.define([
 	InlineApplier,
 	ChangesApplier,
 	FlexState,
-	ManifestUtils,
 	ControlVariantApplyAPI,
 	ChangeHandlerRegistration,
+	ManifestUtils,
 	VariantModel,
-	FlexControllerFactory,
 	Layer,
 	Utils,
 	JSONModel,
@@ -41,6 +39,7 @@ sap.ui.define([
 ) {
 	"use strict";
 
+	// TODO: Move to initial and make dependencies to apply lazy
 	/**
 	 * @namespace sap.ui.fl.apply._internal.preprocessors.ComponentLifecycleHooks
 	 * @since 1.114
@@ -124,7 +123,6 @@ sap.ui.define([
 
 	async function propagateChangesForAppComponent(oAppComponent) {
 		// only manifest with type = "application" will fetch changes
-		var oFlexController = FlexControllerFactory.createForControl(oAppComponent);
 		const sReference = ManifestUtils.getFlexReferenceForControl(oAppComponent);
 		var oVariantModel;
 		var fnPropagationListener = ChangesApplier.applyAllChangesForControl.bind(
@@ -132,9 +130,9 @@ sap.ui.define([
 			oAppComponent,
 			sReference
 		);
-		fnPropagationListener._bIsSapUiFlFlexControllerApplyChangesOnControl = true;
+		fnPropagationListener._bIsFlexApplyChangesFunction = true;
 		oAppComponent.addPropagationListener(fnPropagationListener);
-		oVariantModel = ComponentLifecycleHooks._createVariantModel(oFlexController, oAppComponent);
+		oVariantModel = ComponentLifecycleHooks._createVariantModel(oAppComponent);
 		await oVariantModel.initialize();
 		Measurement.end("flexProcessing");
 		oAppComponent.setModel(oVariantModel, ControlVariantApplyAPI.getVariantModelName());
@@ -202,9 +200,8 @@ sap.ui.define([
 	}
 
 	// the current sinon version used in UI5 does not support stubbing the constructor
-	ComponentLifecycleHooks._createVariantModel = function(oFlexController, oAppComponent) {
+	ComponentLifecycleHooks._createVariantModel = function(oAppComponent) {
 		return new VariantModel({}, {
-			flexController: oFlexController,
 			appComponent: oAppComponent
 		});
 	};
@@ -252,13 +249,13 @@ sap.ui.define([
 			componentData: oComponentData
 		});
 		try {
-			// partialFlexState has to be true as there is no guarantee that the flex bundle is already available at this point
+			// skipLoadBundle has to be true as there is no guarantee that the flex bundle is already available at this point
 			await FlexState.initialize({
 				componentData: oComponentData,
 				asyncHints: oPropertyBag.owner?.config.asyncHints || oPropertyBag.factoryConfig.asyncHints,
 				componentId: sAppComponentId,
 				reference: sReference,
-				partialFlexState: true
+				skipLoadBundle: true
 			});
 			const sServiceUrl = ODataUtils.removeOriginSegmentParameters(oPropertyBag.model.getServiceUrl());
 			const aRelevantAnnotationChanges = FlexState.getAnnotationChanges(sReference)
@@ -270,6 +267,7 @@ sap.ui.define([
 					changeType: oAnnotationChange.getChangeType()
 				});
 				aReturn.push(await oChangeHandler.applyChange(oAnnotationChange));
+				oAnnotationChange._appliedOnModel = true;
 			}
 			return aReturn;
 		} catch (oError) {

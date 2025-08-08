@@ -5,10 +5,6 @@
 		},
 		"samplesRef": [
 			{
-				"namespace": "sap.ui.mdc.sample",
-				"ref": "test-resources/sap/ui/mdc/demokit/internal/sample"
-			},
-			{
 				"namespace": "delegates",
 				"ref": "test-resources/sap/ui/mdc/delegates"
 			},
@@ -114,7 +110,8 @@
 				"samples": [
 					"sap.ui.mdc.demokit.sample.FilterbarTypes",
 					"sap.ui.mdc.demokit.sample.FilterbarCustomContent",
-					"sap.ui.mdc.demokit.sample.FilterbarCustomOperators"
+					"sap.ui.mdc.demokit.sample.FilterbarCustomOperators",
+					"sap.ui.mdc.demokit.sample.FilterbarVisualizeValidationState"
 				]
 			},
 			{
@@ -130,6 +127,15 @@
 					"sap.ui.mdc.demokit.sample.table.TableCopyPaste",
 					"sap.ui.mdc.demokit.sample.table.TreeTable",
 					"sap.ui.mdc.demokit.sample.table.UploadSetwithTablePlugin"
+				]
+			},
+			{
+				"id": "sap.ui.mdc.Chart",
+				"name": "Chart",
+				"category": "Metadata-Driven Controls (sap.ui.mdc)",
+				"since": "1.138",
+				"samples": [
+					"sap.ui.mdc.demokit.sample.Chart.ChartJS"
 				]
 			}
 		],
@@ -208,9 +214,9 @@
 				"name": "4.1 Table",
 				"description": "first Table example"
 			}, {
-				"id": "sap.ui.mdc.sample.Chart",
-				"name": "5.1 Chart",
-				"description": "first Chart example"
+				"id": "sap.ui.mdc.demokit.sample.Chart.ChartJS",
+				"name": "MDC Chart using ChartJS",
+				"description": "Sample showing usage of Mdc chart with ChartJS"
 			}, {
 				"id": "sap.ui.mdc.sample.TableWithFilterBar",
 				"name": "6.1 Table with FilterBar",
@@ -266,6 +272,11 @@
 				"description": "A filter bar with custom operators of type integer and date"
 			},
 			{
+				"id": "sap.ui.mdc.demokit.sample.FilterbarVisualizeValidationState",
+				"name": "FilterBar - with custom validation state visualization",
+				"description": "A filter bar with custom implementation of FilterBarDelegate.visualizeValidationState."
+			},
+			{
 				"id": "sap.ui.mdc.demokit.sample.table.TableJson",
 				"name": "Table - with personalization",
 				"description": "A table with basic configuration and enabled personalization"
@@ -292,7 +303,7 @@
 			},{
 				"id": "sap.ui.mdc.demokit.sample.table.TableCopyPaste",
 				"name": "Table - with copy and paste",
-				"description": "A table using the CopyProvider, paste event and CellSelector for copy and paste capabilities."
+				"description": "A table with copy and paste features using CopyProvider, paste event, CellSelector, and a custom context menu for copying selected rows to the clipboard."
 			},{
 				"id": "sap.ui.mdc.demokit.sample.table.TablePropertyInfos",
 				"name": "Table - with column width calculation and additional property infos",

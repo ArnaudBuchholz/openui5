@@ -6,6 +6,7 @@ sap.ui.define([
 	"sap/ui/core/UIComponent",
 	"sap/ui/core/mvc/View",
 	"sap/ui/core/mvc/ViewType",
+	"sap/ui/core/mvc/_ViewFactory",
 	"sap/ui/core/routing/HashChanger",
 	"sap/ui/core/routing/Router",
 	"sap/ui/core/routing/Views",
@@ -15,7 +16,7 @@ sap.ui.define([
 	"./AsyncViewModuleHook",
 	"sap/ui/core/Component",
 	"sap/ui/core/ComponentContainer"
-], function (future, Log, deepExtend, UIComponent, View, ViewType, HashChanger, Router, Views, App, NavContainer, Panel, ModuleHook, Component, ComponentContainer) {
+], function (future, Log, deepExtend, UIComponent, View, ViewType, _ViewFactory, HashChanger, Router, Views, App, NavContainer, Panel, ModuleHook, Component, ComponentContainer) {
 	"use strict";
 
 	// This global namespace is used for creating custom component classes.
@@ -1291,7 +1292,7 @@ sap.ui.define([
 		]);
 
 		var fnCreateViewSpy = sinon.spy(View, "create");
-		var fnGenericCreateViewSpy = sinon.spy(View, "_create");
+		var fnGenericCreateViewSpy = sinon.spy(_ViewFactory, "create");
 		var oRouteMatchedSpy = sinon.spy(router.getRoute("name"), "_routeMatched");
 
 		router.initialize();
@@ -1305,7 +1306,7 @@ sap.ui.define([
 			//Assert
 			assert.strictEqual(oShell.getContent()[0].getId(), oResult.view.getId(), "View is first content element");
 			assert.strictEqual(fnCreateViewSpy.callCount, 1, "Only one view is created. The 'View.create' factory is called");
-			assert.strictEqual(fnGenericCreateViewSpy.callCount, 0, "The 'View._create' factory is not called");
+			assert.equal(fnGenericCreateViewSpy.getCall(0).args[1].async, true, "The '_ViewFactory.create' factory is called async.");
 
 			//Cleanup
 			fnCreateViewSpy.restore();
@@ -1579,7 +1580,7 @@ sap.ui.define([
 
 			return createXmlView().then(function(oView){
 				this.oView = oView;
-				this.fnLegayCreateViewStub = this.stub(View, "_create").callsFake(function (oViewOptions) {
+				this.fnLegayCreateViewStub = this.stub(_ViewFactory, "create").callsFake(function (oViewOptions) {
 					return oView;
 				});
 
@@ -1664,7 +1665,7 @@ sap.ui.define([
 			});
 
 		return createXmlView().then(function (oView) {
-			this.stub(View, "_create").callsFake(function () {
+			this.stub(_ViewFactory, "create").callsFake(function () {
 				return oView;
 			});
 
@@ -2007,7 +2008,7 @@ sap.ui.define([
 		beforeEach: function () {
 			return createXmlView().then(function (oView) {
 				this.oView = oView;
-				this.fnGenericCreateViewStub = this.stub(View, "_create").callsFake(function () {
+				this.fnGenericCreateViewStub = this.stub(_ViewFactory, "create").callsFake(function () {
 					return oView;
 				});
 			}.bind(this));
@@ -4602,4 +4603,39 @@ sap.ui.define([
 			});
 		});
 	});
+
+	QUnit.module("Target option validation for manifest 2", {
+		beforeEach: function() {
+			hasher.setHash("");
+		}
+	});
+
+	QUnit.test("Deprecated option (viewName) in common config should lead to an error", function(assert) {
+		return Component.create({
+			name: "test.routing.target.manifest2commonconfig",
+			manifest: false
+		}).then((oComponent) => {
+			assert.ok(false, "component should not be created");
+		}, (oError) => {
+			assert.ok(oError, "Error is thrown");
+			assert.ok(oError.message.includes("viewName is deprecated"), "Error message points out the deprecated property name");
+			assert.ok(oError.message.includes("'name' instead"), "Error message points the alternative");
+			assert.ok(oError.message.includes("manifest2commonconfig"), "Error message contains the component information");
+		});
+	});
+
+	QUnit.test("Deprecated option (viewId) target config should lead to an error", function(assert) {
+		return Component.create({
+			name: "test.routing.target.manifest2target",
+			manifest: false
+		}).then((oComponent) => {
+			assert.ok(false, "component should not be created");
+		}, (oError) => {
+			assert.ok(oError, "Error is thrown");
+			assert.ok(oError.message.includes("viewId is deprecated"), "Error message points out the deprecated property name");
+			assert.ok(oError.message.includes("'id' instead"), "Error message points the alternative");
+			assert.ok(oError.message.includes("manifest2target"), "Error message contains the component information");
+		});
+	});
 });
+

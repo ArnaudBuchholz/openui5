@@ -113,6 +113,8 @@ sap.ui.define([
 				}
 			},
 			"CardParameters": {},
+			"integration/bundle/IntegrationBundle": {
+			},
 			"UI5InputText": {
 				coverage: {
 					only: ["sap/ui/integration/cards/adaptivecards/elements/UI5InputText"]
@@ -183,6 +185,7 @@ sap.ui.define([
 			"cardbundle/CardStaticResources": {},
 			"cards/Header": {},
 			"cards/NumericHeader": {},
+			"cards/HeaderInfoSection": {},
 			"cards/BaseContent": {},
 			"cards/AdaptiveCard": {},
 			"cards/AnalyticalCard": {},
@@ -378,6 +381,7 @@ sap.ui.define([
 					]
 				}
 			},
+			"util/subtitleToSubTitle": {},
 			"model/ContextModel": {
 				coverage: {
 					only: [
@@ -396,23 +400,19 @@ sap.ui.define([
 				}
 			},
 			"util/DataProvider": {
+				module: [
+					"./util/DataProvider.qunit",
+					"./util/RequestDataProvider.qunit",
+					"./util/CacheAndRequestDataProvider.qunit"
+				],
 				coverage: {
 					only: [
 						"sap/ui/integration/util/DataProviderFactory",
 						"sap/ui/integration/util/DataProvider",
 						"sap/ui/integration/util/RequestDataProvider",
+						"sap/ui/integration/util/CacheAndRequestDataProvider",
 						"sap/ui/integration/util/ServiceDataProvider"
 					]
-				}
-			},
-			"util/CacheAndRequestDataProvider": {
-				coverage: {
-					only: [
-						"sap/ui/integration/util/CacheAndRequestDataProvider"
-					]
-				},
-				sinon: {
-					useFakeTimers: true
 				}
 			},
 			"util/Destinations": {

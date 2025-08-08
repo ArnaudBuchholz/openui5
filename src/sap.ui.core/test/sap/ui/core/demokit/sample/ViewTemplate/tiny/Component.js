@@ -15,7 +15,7 @@ sap.ui.define([
 	"sap/ui/core/UIComponent",
 	"sap/ui/core/mvc/View",
 	"sap/ui/model/odata/v2/ODataModel"
-], function(MessageBox, Title, VBox, library, UIComponent, View, ODataModel) {
+], function (MessageBox, Title, VBox, library, UIComponent, View, ODataModel) {
 	"use strict";
 
 	var TitleLevel = library.TitleLevel, // shortcut for sap.ui.core.TitleLevel
@@ -30,8 +30,7 @@ sap.ui.define([
 		createContent : function () {
 			var oModel = new ODataModel(
 					"/sap/opu/odata/IWBEP/GWSAMPLE_BASIC/", {
-					annotationURI : "/test-resources/sap/ui/core/demokit/sample/ViewTemplate/tiny"
-						+ "/annotations.xml",
+					annotationURI : "annotations.xml",
 					json : true,
 					loadMetadataAsync : true
 				}),
@@ -39,8 +38,8 @@ sap.ui.define([
 				sPath = "/ProductSet('HT-1021')/ToSupplier",
 				oViewContainer = new VBox({
 					items : [
-						new Title({text : "This is meant to be a pure code sample. "
-							+ "(To run it, you would need a proxy which is configured properly.)",
+						new Title({text : "Run this code sample with UI5 Tooling. "
+							+ "See the example in 'XML Templating' in the Demo Kit.",
 							titleStyle : TitleLevel.H3})
 					]
 				});
@@ -68,7 +67,8 @@ sap.ui.define([
 				}, function (oError) {
 					MessageBox.alert(oError.message, {
 						icon : MessageBox.Icon.ERROR,
-						title : "Missing Proxy?"});
+						title : "Missing Proxy?"
+					});
 				});
 			});
 

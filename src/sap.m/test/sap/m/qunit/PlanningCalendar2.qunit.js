@@ -1047,6 +1047,7 @@ sap.ui.define([
 
 		//with API
 		this._oPC.setMultipleAppointmentsSelection(true);
+		oCore.applyChanges();
 		qutils.triggerEvent("tap", "_oPC-R1A1");
 		qutils.triggerEvent("tap", "_oPC-R1A2");
 		assert.equal(this._oPC.getSelectedAppointments().length, 2, "Two appointments are selected");
@@ -1055,12 +1056,114 @@ sap.ui.define([
 			"When deselecting an appointment while multipleAppointmentsSelection is enabled, only this particular appointment is deselected");
 		qutils.triggerEvent("tap", "_oPC-R1A1");
 		this._oPC.setMultipleAppointmentsSelection(false);
+		oCore.applyChanges();
 		qutils.triggerEvent("tap", "_oPC-R1A2");
 		assert.equal(this._oPC.getSelectedAppointments().length, 0,
 			"When deselecting an appointment while multipleAppointmentsSelection is enabled, all selections are gone");
 
 		// clean
 		oSelectedAppointment = undefined;
+	});
+
+	QUnit.test("Should set correct value to property 'multipleAppointmentsSelection' to inner rows", function (assert) {
+		//arrange
+		this._createCalendar(UI5Date.getInstance(2015, 0, 1));
+		this._oPC.placeAt("smallUiArea");
+
+		//act
+		this._oPC.setMultipleAppointmentsSelection(true);
+		oCore.applyChanges();
+
+		//assert
+		this._oPC.getRows().forEach((oRow) => {
+			assert.equal(_getRowTimeline(oRow).getMultipleAppointmentsSelection(), true, "Inner row should be with correct value set in 'onBeforeRendering'");
+		});
+	});
+
+	QUnit.test("Should set correct value to property 'multipleAppointmentsSelection' to inner rows when property is set in xml view", (assert) => {
+		var oPC,
+			oModel = new JSONModel(),
+			sXMLText =
+				'<mvc:View xmlns="sap.m" xmlns:mvc="sap.ui.core.mvc" xmlns:unified="sap.ui.unified">' +
+				'	<PlanningCalendar id="PC1" multipleAppointmentsSelection="true" rows="{/people}">' +
+				'		<rows id="idRow">' +
+				'			<PlanningCalendarRow title="{name}" text="{role}" appointments="{path : \'appointments\', templateShareable: false}">' +
+				'				<appointments>' +
+				'					<unified:CalendarAppointment startDate="{start}" endDate="{end}" title="{title}" />' +
+				'				</appointments>' +
+				'			</PlanningCalendarRow>' +
+				'		</rows>' +
+				'	</PlanningCalendar>' +
+				'</mvc:View>';
+
+		return XMLView.create({
+			definition: sXMLText
+		}).then(function (oView) {
+			oModel.setData({
+				startDate: new Date("2017", "0", "15", "8", "0"),
+				people: [{
+					name: "John Miller",
+					role: "team member",
+					appointments: [
+						{
+							start: new Date("2017", "0", "15", "08", "30"),
+							end: new Date("2017", "0", "15", "09", "30"),
+							title: "Meet Max Mustermann"
+						},
+						{
+							start: new Date("2017", "0", "15", "10", "30"),
+							end: new Date("2017", "0", "15", "11", "30"),
+							title: "Somethig"
+						},
+						{
+							start: new Date("2017", "0", "15", "08", "30"),
+							end: new Date("2017", "0", "15", "09", "30"),
+							title: "something else"
+						},
+						{
+							start: new Date("2017", "0", "15", "10", "30"),
+							end: new Date("2017", "0", "15", "11", "30"),
+							title: "last thing"
+						}
+					]
+				},
+				{
+					name: "John Miller2",
+					role: "team member",
+					appointments: [
+						{
+							start: new Date("2017", "0", "15", "08", "30"),
+							end: new Date("2017", "0", "15", "09", "30"),
+							title: "Meet Max Mustermann"
+						},
+						{
+							start: new Date("2017", "0", "15", "10", "30"),
+							end: new Date("2017", "0", "15", "11", "30"),
+							title: "Somethig"
+						},
+						{
+							start: new Date("2017", "0", "15", "08", "30"),
+							end: new Date("2017", "0", "15", "09", "30"),
+							title: "something else"
+						},
+						{
+							start: new Date("2017", "0", "15", "10", "30"),
+							end: new Date("2017", "0", "15", "11", "30"),
+							title: "last thing"
+						}
+					]
+				}]
+			});
+			oView.setModel(oModel);
+			oView.placeAt("bigUiArea");
+			oCore.applyChanges();
+			oPC = oView.byId("PC1");
+			oPC.getRows().forEach((oRow) => {
+				assert.equal( _getRowTimeline(oRow).getMultipleAppointmentsSelection(), true, "Inner row should be with correct value for property 'multipleAppointmentsSelection' set in 'onBeforeRendering'");
+			});
+
+			oView.destroy();
+		});
 	});
 
 	QUnit.test("No sticky header on phone size", function (assert) {
@@ -1649,19 +1752,27 @@ sap.ui.define([
 		oPC.destroy();
 	});
 
-	QUnit.test("Title referencing", function(assert) {
-		var oPC = new PlanningCalendar({
+	QUnit.test("set correct aria-labelledby attribute to calendar and calendar table", async function(assert) {
+		// prepare
+		var oPlanningCalendar = new PlanningCalendar({
 			toolbarContent: [
-				new Title("Title1", {text: "Title"})
+				new Title({text: "title of planning calendar"})
 			]
 		});
 
-		oPC.placeAt("bigUiArea");
-		oCore.applyChanges();
+		oPlanningCalendar.placeAt("qunit-fixture");
+		await nextUIUpdate();
 
-		assert.strictEqual(oPC.$().attr("aria-labelledby"), "Title1", "Control's title is added in aria-labelledby");
+		var sExpectedAriaLabelBy = `${oPlanningCalendar._getHeader().getId()}"-Title`,
+			sCalendarAriaLabelBy = oPlanningCalendar.getDomRef().getAttribute("aria-labelledby"),
+			sTableAriaLabelBy = oPlanningCalendar.getAggregation("table").getDomRef().querySelector(`[id="${oPlanningCalendar.getId()}-Table-listUl"]`).getAttribute("aria-labelledby");
 
-		oPC.destroy();
+		// assert
+		assert.ok(sCalendarAriaLabelBy.indexOf(sExpectedAriaLabelBy) !== 1, "calendar aria-labelledBy attribute is correct");
+		assert.ok(sTableAriaLabelBy.indexOf(sExpectedAriaLabelBy) !== 1, "calendar table aria-labelledBy attribute is correct");
+
+		// clean
+		oPlanningCalendar.destroy();
 	});
 
 	QUnit.test("Row header referencing", function(assert) {
@@ -1688,6 +1799,45 @@ sap.ui.define([
 
 		// Assert
 		assert.ok(oRowTimeLine.getAriaLabelledBy()[0] == oRowHeader.getId(), "There is a reference to the row header");
+
+		// Clean
+		oPC.destroy();
+	});
+
+	QUnit.test("Header interval accessibility", function(assert) {
+		// Prepare
+		var oPC = new PlanningCalendar();
+		oPC.placeAt("qunit-fixture");
+		oCore.applyChanges();
+
+		var oTimesRow = oPC._oTimesRow.getDomRef(),
+			oTimesRowItem = oTimesRow.querySelector("[role='gridcell']");
+
+		// Assert
+		assert.notOk(oTimesRowItem.getAttribute("aria-describedby"), "TimesRow has no activation hint");
+		assert.notOk(oTimesRowItem.getAttribute("aria-selected"), "TimesRow has no aria-selected attribute");
+
+		// Act
+		oPC.setViewKey(CalendarIntervalType.Day);
+		oCore.applyChanges();
+
+		var oDatesRow = oPC._oDatesRow.getDomRef(),
+			oDatesRowItem = oDatesRow.querySelector("[role='gridcell']");
+
+		// Assert
+		assert.notOk(oDatesRowItem.getAttribute("aria-describedby"), "DatesRow has no activation hint");
+		assert.notOk(oDatesRowItem.getAttribute("aria-selected"), "DatesRow has no aria-selected attribute");
+
+		// Act
+		oPC.setViewKey(CalendarIntervalType.Month);
+		oCore.applyChanges();
+
+		var oMonthsRow = oPC._oMonthsRow.getDomRef(),
+			oMonthsRowItem = oMonthsRow.querySelector("[role='gridcell']");
+
+		// Assert
+		assert.notOk(oMonthsRowItem.getAttribute("aria-describedby"), "MonthsRow has no activation hint");
+		assert.notOk(oMonthsRowItem.getAttribute("aria-selected"), "MonthsRow has no aria-selected attribute");
 
 		// Clean
 		oPC.destroy();
@@ -2234,6 +2384,7 @@ sap.ui.define([
 		oOneMonthsRow = Element.getElementById("OPC-OneMonthsRow");
 
 		this.oPC.setShowDayNamesLine(true);
+		oCore.applyChanges();
 		assert.equal(oDatesRow.getShowDayNamesLine(), true, "the property is passed to the DatesRow in the days view after setting the property to the Hour view");
 
 		assert.equal(oWeeksRow.getShowDayNamesLine(), true, "the property is passed to the WeeksRow in the week view after setting the property to the Hour view");
@@ -2241,8 +2392,8 @@ sap.ui.define([
 		assert.equal(oOneMonthsRow.getShowDayNamesLine(), true, "the property is passed to the OneMonthsRow in the one month view after setting the property to the Hour view");
 
 		this.oPC.setViewKey(CalendarIntervalType.Day);
-		oCore.applyChanges();
 		this.oPC.setShowDayNamesLine(false);
+		oCore.applyChanges();
 		assert.equal(oDatesRow.getShowDayNamesLine(), false, "the property is passed to the DatesRow in the days view after setting the property to the Day view");
 
 		assert.equal(oWeeksRow.getShowDayNamesLine(), false, "the property is passed to the WeeksRow in the week view after setting the property to the Day view");
@@ -2250,8 +2401,8 @@ sap.ui.define([
 		assert.equal(oOneMonthsRow.getShowDayNamesLine(), false, "the property is passed to the OneMonthsRow in the one month view after setting the property to the Day view");
 
 		this.oPC.setViewKey(CalendarIntervalType.Week);
-		oCore.applyChanges();
 		this.oPC.setShowDayNamesLine(true);
+		oCore.applyChanges();
 		assert.equal(oDatesRow.getShowDayNamesLine(), true, "the property is passed to the DatesRow in the days view after setting the property to the Week view");
 
 		assert.equal(oWeeksRow.getShowDayNamesLine(), true, "the property is passed to the WeeksRow in the week view after setting the property to the Week view");
@@ -2259,14 +2410,13 @@ sap.ui.define([
 		assert.equal(oOneMonthsRow.getShowDayNamesLine(), true, "the property is passed to the OneMonthsRow in the one month view after setting the property to the Week view");
 
 		this.oPC.setViewKey(CalendarIntervalType.OneMonth);
-		oCore.applyChanges();
 		this.oPC.setShowDayNamesLine(false);
+		oCore.applyChanges();
 		assert.equal(oDatesRow.getShowDayNamesLine(), false, "the property is passed to the DatesRow in the days view after setting the property to the OneMonth view");
 
 		assert.equal(oWeeksRow.getShowDayNamesLine(), false, "the property is passed to the WeeksRow in the week view after setting the property to the OneMonth view");
 
 		assert.equal(oOneMonthsRow.getShowDayNamesLine(), false, "the property is passed to the OneMonthsRow in the one month view after setting the property to the OneMonth view");
-
 	});
 
 	QUnit.module('Destroy');

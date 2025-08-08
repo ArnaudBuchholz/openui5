@@ -1005,7 +1005,7 @@ sap.ui.define([
 			bAppendHeaderToContent;
 
 		if (bExpand) {
-			bIsPageTop = (this._$opWrapper.scrollTop() <= (this._getSnapPosition() + 1));
+			bIsPageTop = (Math.floor(this._$opWrapper.scrollTop()) <= (this._getSnapPosition() + 1));
 			bAppendHeaderToTitle = !this._headerBiggerThanAllowedToBeExpandedInTitleArea() && (this._shouldPreserveHeaderInTitleArea() || !bIsPageTop);
 			this._expandHeader(bAppendHeaderToTitle);
 			if (!bAppendHeaderToTitle) {
@@ -1218,6 +1218,7 @@ sap.ui.define([
 
 		if (this._hasDynamicTitle()) {
 			this.addStyleClass("sapUxAPObjectPageHasDynamicTitle");
+			this._updateMedia(iWidth, ObjectPageLayout.DYNAMIC_HEADERS_MEDIA);
 		}
 
 		if (iWidth > 0) {
@@ -1782,6 +1783,9 @@ sap.ui.define([
 				});
 			}
 
+			var bHasPromotedSubSection = this.getSubSectionLayout() === ObjectPageSubSectionLayout.TitleOnTop &&
+				iVisibleSubSections === 1 && oFirstVisibleSubSection.getTitle().trim() !== "";
+
 			//rule noVisibleSubSection: If a section has no content (or only empty subsections) the section will be hidden.
 			if (iVisibleSubSections == 0) {
 				oSection._setInternalVisible(false, bInvalidate);
@@ -1793,9 +1797,6 @@ sap.ui.define([
 					oFirstVisibleSection = oSection;
 					oFirstVisibleSection.addStyleClass("sapUxAPObjectPageSectionFirstVisible");
 				}
-
-				var bHasPromotedSubSection = this.getSubSectionLayout() === ObjectPageSubSectionLayout.TitleOnTop &&
-					iVisibleSubSections === 1 && oFirstVisibleSubSection.getTitle().trim() !== "";
 
 				//rule TitleOnTop.sectionGetSingleSubSectionTitle: If a section as only 1 subsection and the subsection title is not empty, the SubSection takes the Section's title level with titleOnTop layout only
 				if (bHasPromotedSubSection) {
@@ -1812,6 +1813,8 @@ sap.ui.define([
 
 			if (bUseIconTabBar) {
 				oTitleVisibilityInfo[oSection.getId()] = false;
+				// hide the title of the promoted subsection in iconTabBar mode only
+				bHasPromotedSubSection && oFirstVisibleSubSection && (oTitleVisibilityInfo[oFirstVisibleSubSection.getId()] = false);
 				oSection.addStyleClass("sapUxAPObjectPageSectionFirstVisible");
 			}
 		}, this);
@@ -1822,7 +1825,12 @@ sap.ui.define([
 			Log.info("ObjectPageLayout :: notEnoughVisibleSection UX rule matched", "anchorBar forced to hidden");
 			//rule firstSectionTitleHidden: the first section title is never visible if there is an anchorBar
 			if (bUseIconTabBar && oFirstVisibleSection) {
-				oTitleVisibilityInfo[oFirstVisibleSection.getId()] = true;
+				if (oFirstVisibleSection._hasPromotedSubSection() && oFirstVisibleSubSection) {
+					oTitleVisibilityInfo[oFirstVisibleSubSection.getId()] = true; // SubSection has title - show SubSection title
+				} else {
+					oTitleVisibilityInfo[oFirstVisibleSection.getId()] = true; // SubSection does not have title - show Section title
+				}
+
 			}
 		}
 
@@ -2640,7 +2648,7 @@ sap.ui.define([
 		this._aSectionBases.forEach(function (oSectionBase) {
 			var oInfo = this._oSectionInfo[oSectionBase.getId()],
 				$this = oSectionBase.$(),
-				bPromoted = false,
+				bIsSingleVisibleSubSection = false,
 				oSection;
 
 			if (!oInfo /* sectionBase is visible */ || !$this.length) {
@@ -2661,10 +2669,9 @@ sap.ui.define([
 			oInfo.positionTop = Math.ceil(realTop);
 
 			if (!oInfo.isSection && (oSection = oSectionBase.getParent())) {
-				// a promoted subSection borrows the title of its parent section
-				bPromoted = oSectionBase._isPromoted();
-				if (bPromoted) {
-					// the scrollTop required to scroll to a promoted subsection
+				bIsSingleVisibleSubSection = oSection._getVisibleSubSections().length === 1;
+				if (bIsSingleVisibleSubSection) {
+					// the scrollTop required to scroll to a single subsection
 					// is the top of the parent section (UX rule)
 					var parentRealTop = oSection.$().position().top;
 					oInfo.positionTop = Math.ceil(parentRealTop);
@@ -5193,6 +5200,7 @@ sap.ui.define([
 
 			if (sRole === AccessibleLandmarkRole.None) {
 				sRole = '';
+				sLabel = '';
 			}
 
 			return {

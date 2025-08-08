@@ -1,0 +1,93 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+
+<meta charset="utf-8">
+
+<title>Table - sap.ui.table</title>
+<link rel="shortcut icon" type="image/x-icon" href="images/controls/sap.ui.table.Table.gif">
+
+<script src="shared-config.js"></script>
+<script id="sap-ui-bootstrap"
+		data-sap-ui-libs="sap.ui.table,sap.m"
+		data-sap-ui-compatVersion="edge"
+		src="../../../../resources/sap-ui-core.js"
+		data-sap-ui-resourceroots='{
+			"sap/ui/table/qunit": "../../../../test-resources/sap/ui/table/qunit/",
+			"sap/ui/core/sample": "../../../../test-resources/sap/ui/core/demokit/sample/"
+		}'></script>
+
+<script src="Settings.js"></script>
+
+<style>
+	html {
+		height: 100%;
+	}
+
+	body {
+		display: flex;
+		flex-direction: column;
+	}
+
+	#content {
+		flex: 1 1 auto;
+	}
+</style>
+
+<script>
+	sap.ui.require([
+		"sap/ui/table/Table",
+		"sap/ui/table/plugins/ODataV4Hierarchy",
+		"sap/ui/table/plugins/ODataV4MultiSelection",
+		"sap/m/OverflowToolbar",
+		"sap/m/Title",
+		"sap/ui/table/qunit/TableQUnitUtils.ODataV4"
+	], function(
+		Table,
+		ODataV4Hierarchy,
+		ODataV4MultiSelection,
+		OverflowToolbar,
+		Title,
+		TableQUnitUtils
+	) {
+		const oTable = new Table({
+			...TableQUnitUtils.createSettingsForHierarchy(),
+			extension: [
+				new OverflowToolbar({
+					content: [
+						new Title({text: "Products"})
+					]
+				})
+			],
+			rowMode: "Auto",
+			enableBusyIndicator: true,
+			busyIndicatorDelay: 0,
+			dependents: [
+				new ODataV4Hierarchy(),
+				new ODataV4MultiSelection({enableNotification: true})
+			]
+		});
+		oTable.getColumns().forEach((oColumn) => {oColumn.setWidth();});
+		window.oTable = oTable;
+
+		TABLESETTINGS.init(oTable, function(oButton) {
+			let oToolbar = oTable.getExtension()[0];
+
+			if (!oToolbar) {
+				oToolbar = new OverflowToolbar();
+				oTable.addExtension(oToolbar);
+			}
+
+			oToolbar.addContent(oButton);
+		});
+
+		oTable.getBinding().resume();
+		oTable.placeAt("content");
+	});
+</script>
+</head>
+<body class="sapUiBody sapUiSizeCozy">
+<h1 id="header">Test Page for <code>sap.ui.table.Table</code> with <code>sap.ui.model.odata.v4.ODataModel (Hierarchy)</code></h1>
+<div id="content"></div>
+</body>
+</html>

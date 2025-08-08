@@ -157,7 +157,7 @@ sap.ui.define([
 	 */
 	PersonalizationUtils.createGroupChange = function(oTable, mSettings) {
 		const bIsGrouped = (oTable.getCurrentState().groupLevels || []).some((oGroupLevel) => {
-			return oGroupLevel.name == mSettings.propertyKey;
+			return oGroupLevel.name === mSettings.propertyKey;
 		});
 
 		oTable.getEngine().createChanges({
@@ -279,6 +279,24 @@ sap.ui.define([
 			state: [{
 				name: "ResponsiveTable",
 				showDetails: mSettings.showDetails
+			}],
+			applyAbsolute: true
+		});
+	};
+
+	/**
+	 * Creates a fixed column count change and applies it to the table.
+	 * @param {sap.ui.mdc.Table} oTable The table for which to create the change
+	 * @param {object} mSettings The change details
+	 * @param {boolean} mSettings.fixedColumnCount The new fixed column count
+	 */
+	PersonalizationUtils.createFixedColumnCountChange = function(oTable, mSettings) {
+		oTable.getEngine().createChanges({
+			control: oTable,
+			key: "ColumnFreeze",
+			state: [{
+				name: "GridTable",
+				fixedColumnCount: mSettings.fixedColumnCount
 			}],
 			applyAbsolute: true
 		});

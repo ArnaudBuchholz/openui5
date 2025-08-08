@@ -3,22 +3,26 @@
 sap.ui.define([
 	"sap/ui/core/Lib",
 	"sap/ui/mdc/field/ConditionsType",
+	"sap/ui/mdc/field/FieldBaseDelegate",
 	"sap/ui/mdc/condition/Condition",
 	"sap/ui/mdc/condition/FilterOperatorUtil",
 	"sap/ui/mdc/condition/ConditionValidateException",
 	"sap/ui/mdc/enums/ConditionValidated",
 	"sap/ui/mdc/enums/OperatorName",
+	"sap/ui/mdc/ValueHelp",
 	"sap/ui/model/type/Integer",
 	"sap/ui/model/type/Currency",
 	"sap/ui/model/odata/type/String"
 ], (
 	Library,
 	ConditionsType,
+	FieldBaseDelegate,
 	Condition,
 	FilterOperatorUtil,
 	ConditionValidateException,
 	ConditionValidated,
 	OperatorName,
+	ValueHelp,
 	IntegerType,
 	CurrencyType,
 	StringType
@@ -53,7 +57,7 @@ sap.ui.define([
 
 	QUnit.module("Default type", {
 		beforeEach() {
-			oConditionsType = new ConditionsType({operators: [OperatorName.EQ]});
+			oConditionsType = new ConditionsType({operators: [OperatorName.EQ], delegate: FieldBaseDelegate});
 		},
 		afterEach() {
 			oConditionsType.destroy();
@@ -79,11 +83,37 @@ sap.ui.define([
 
 	QUnit.test("Formatting: empty array", (assert) => {
 
+		sinon.stub(FieldBaseDelegate, "getDescription").callsFake(
+			(oField, oValueHelp, vKey, oInParameters, oOutParameters, oBindingContext, oDoNotUse, sDoNotUse, oConditionPayload, oControl, oType, bEmptyAllowed) => {
+				return vKey === null && bEmptyAllowed ? "Empty" : null;
+			});
 		let vResult = oConditionsType.formatValue([]);
 		assert.equal(vResult, "", "Result of formatting");
+		assert.ok(FieldBaseDelegate.getDescription.notCalled, "FieldBaseDelegate.getDescription not called");
 
 		vResult = oConditionsType.formatValue([], "int");
 		assert.equal(vResult, 0, "Result of formatting");
+		assert.ok(FieldBaseDelegate.getDescription.notCalled, "FieldBaseDelegate.getDescription not called");
+
+		const oValueHelp = new ValueHelp("X");
+		sinon.stub(oValueHelp, "isRestrictedToFixedValues").returns(true);
+		sinon.stub(oValueHelp, "isValidationSupported").returns(true);
+		oConditionsType.setFormatOptions({operators: [OperatorName.EQ], delegate: FieldBaseDelegate, valueHelpID: "X"});
+		vResult = oConditionsType.formatValue([]);
+		assert.ok(FieldBaseDelegate.getDescription.notCalled, "FieldBaseDelegate.getDescription not called");
+
+		oConditionsType.setFormatOptions({operators: [OperatorName.EQ], delegate: FieldBaseDelegate, valueHelpID: "X", emptyAllowed: true});
+		vResult = oConditionsType.formatValue([]);
+		assert.ok(FieldBaseDelegate.getDescription.called, "FieldBaseDelegate.getDescription called");
+		assert.equal(vResult, "Empty", "Result of formatting");
+
+		FieldBaseDelegate.getDescription.reset();
+		oValueHelp.isRestrictedToFixedValues.returns(false);
+		vResult = oConditionsType.formatValue([]);
+		assert.ok(FieldBaseDelegate.getDescription.notCalled, "FieldBaseDelegate.getDescription not called");
+		assert.equal(vResult, "", "Result of formatting");
+		oValueHelp.destroy();
+		FieldBaseDelegate.getDescription.restore();
 
 	});
 
@@ -384,6 +414,19 @@ sap.ui.define([
 		_checkCondition(assert, aConditions[0], OperatorName.EQ, ["X"], ConditionValidated.NotValidated);
 		_checkCondition(assert, aConditions[1], OperatorName.EQ, ["I1\n!=I2\nI3\tI5"], ConditionValidated.NotValidated);
 
+		// ignore duplicates
+		aConditions = [Condition.createCondition(OperatorName.EQ, ["X"], undefined, undefined, ConditionValidated.NotValidated, undefined)];
+		oConditionsType.setFormatOptions({operators: [OperatorName.EQ], maxConditions: -1, multipleLines: false, getConditions() {return aConditions;}, asyncParsing: fnAsync});
+		// eslint-disable-next-line require-atomic-updates
+		aConditions = await oConditionsType.parseValue("I1\nI2\nI1\nI3");
+		assert.ok(aConditions, "Result returned");
+		assert.ok(Array.isArray(aConditions), "Arry returned");
+		assert.equal(aConditions.length, 4, "4 condition returned");
+		_checkCondition(assert, aConditions[0], OperatorName.EQ, ["X"], ConditionValidated.NotValidated);
+		_checkCondition(assert, aConditions[1], OperatorName.EQ, ["I1"], ConditionValidated.NotValidated);
+		_checkCondition(assert, aConditions[2], OperatorName.EQ, ["I2"], ConditionValidated.NotValidated);
+		_checkCondition(assert, aConditions[3], OperatorName.EQ, ["I3"], ConditionValidated.NotValidated);
+
 		// for BT use two values
 		aConditions = [Condition.createCondition(OperatorName.EQ, ["X"], undefined, undefined, ConditionValidated.NotValidated, undefined)];
 		oConditionsType.setFormatOptions({operators: [OperatorName.BT], maxConditions: -1, multipleLines: false, getConditions() {return aConditions;}, asyncParsing: fnAsync});
@@ -416,7 +459,7 @@ sap.ui.define([
 
 	QUnit.module("Async", {
 		beforeEach() {
-			oConditionsType = new ConditionsType({operators: [OperatorName.EQ], asyncParsing: fnAsync});
+			oConditionsType = new ConditionsType({operators: [OperatorName.EQ], asyncParsing: fnAsync, delegate: FieldBaseDelegate});
 		},
 		afterEach() {
 			oConditionsType.destroy();
@@ -639,7 +682,8 @@ sap.ui.define([
 				maxConditions: -1,
 				originalDateType: oOriginalType,
 				additionalType: oUnitType,
-				getConditions() {return aConditions;}
+				getConditions() {return aConditions;},
+				delegate: FieldBaseDelegate
 			});
 			oUnitConditionsType = new ConditionsType({
 				valueType: oUnitType,
@@ -647,7 +691,8 @@ sap.ui.define([
 				originalDateType: oOriginalType,
 				additionalType: oValueType,
 				maxConditions: 1,
-				getConditions() {return aConditions;}
+				getConditions() {return aConditions;},
+				delegate: FieldBaseDelegate
 			});
 		},
 		afterEach() {
@@ -764,7 +809,7 @@ sap.ui.define([
 	QUnit.module("Not nullable type", {
 		beforeEach() {
 			oValueType = new StringType({}, {nullable: false});
-			oConditionsType = new ConditionsType({valueType: oValueType, operators: [OperatorName.EQ], maxConditions: 1});
+			oConditionsType = new ConditionsType({valueType: oValueType, operators: [OperatorName.EQ], maxConditions: 1, emptyAllowed: false});
 		},
 		afterEach() {
 			oConditionsType.destroy();
@@ -787,6 +832,17 @@ sap.ui.define([
 		assert.ok(oException, "exception fired if maxConditions=1 and only EQ operators");
 		assert.deepEqual(oException?.getCondition(), null, "exception condition");
 		assert.deepEqual(oException?.getConditions(), [], "exception conditions");
+
+		oConditionsType.setFormatOptions({valueType: oValueType, operators: [OperatorName.EQ], maxConditions: 1, emptyAllowed: true});
+		oException = undefined;
+
+		try {
+			oConditionsType.validateValue([]);
+		} catch (e) {
+			oException = e;
+		}
+
+		assert.notOk(oException, "No exception fired if maxConditions=1, only EQ operators but emptyAllowed=true (single-value FilterField case)");
 
 		oConditionsType.setFormatOptions({valueType: oValueType, operators: [], maxConditions: 1});
 		oException = undefined;

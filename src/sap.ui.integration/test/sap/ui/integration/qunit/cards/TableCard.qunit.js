@@ -1,4 +1,4 @@
-/* global QUnit*/
+/* global QUnit, sinon */
 
 sap.ui.define([
 	"sap/ui/core/Lib",
@@ -6,23 +6,25 @@ sap.ui.define([
 	"sap/ui/integration/widgets/Card",
 	"sap/ui/qunit/QUnitUtils",
 	"sap/ui/qunit/utils/nextUIUpdate",
-	"qunit/testResources/nextCardReadyEvent"
+	"qunit/testResources/nextCardReadyEvent",
+	"qunit/testResources/genericTests/actionEnablementTests",
+	"qunit/testResources/nextDialogAfterOpenEvent"
 ], function (
 	Library,
 	mLibrary,
 	Card,
 	QUnitUtils,
 	nextUIUpdate,
-	nextCardReadyEvent
+	nextCardReadyEvent,
+	actionEnablementTests,
+	nextDialogAfterOpenEvent
 ) {
 	"use strict";
 
 	var DOM_RENDER_LOCATION = "qunit-fixture";
-
 	var AvatarSize = mLibrary.AvatarSize;
 	var AvatarColor = mLibrary.AvatarColor;
 	const oRb = Library.getResourceBundleFor("sap.ui.integration");
-
 
 	var oManifest_TableCard = {
 		"sap.app": {
@@ -250,7 +252,7 @@ sap.ui.define([
 				},
 				"header": {
 					"title": "Sales Orders for Key Accounts",
-					"subTitle": "Today"
+					"subtitle": "Today"
 				},
 				"content": {
 					"data": {
@@ -447,7 +449,7 @@ sap.ui.define([
 			"type": "Table",
 			"header": {
 				"title": "Table Card with Static content",
-				"subTitle": "Table Card subtitle"
+				"subtitle": "Table Card subtitle"
 			},
 			"content": {
 				"columns": [
@@ -576,6 +578,71 @@ sap.ui.define([
 			}
 		}
 	};
+
+	actionEnablementTests("Text Cell in Table Card", {
+		manifest: {
+			"sap.app": {
+				"type": "card",
+				"id": "card.test.actions.card14"
+			},
+			"sap.card": {
+				"type": "Table",
+				"header": {
+					"title": "Card Title"
+				},
+				"content": {
+					"data": {
+						"json": [{ }]
+					},
+					"row": {
+						"columns": [{
+							"value": "Text"
+						}]
+					}
+				}
+			}
+		},
+		partUnderTestPath: "/sap.card/content/row/columns/0",
+		getActionControl: (oCard) => {
+			return oCard.getCardContent().getAggregation("_content").getItems()[0].getCells()[0];
+		},
+		DOM_RENDER_LOCATION,
+		QUnit,
+		sinon
+	});
+
+	actionEnablementTests("Status Cell in Table Card", {
+		manifest: {
+			"sap.app": {
+				"id": "card.tableCard.statusActionsTest",
+				"type": "card"
+			},
+			"sap.card": {
+				"type": "Table",
+				"header": {
+					"title": "Card Title"
+				},
+				"content": {
+					"data": {
+						"json": [{ }]
+					},
+					"row": {
+						"columns": [{
+							"value": "Status",
+							"state": "Success"
+						}]
+					}
+				}
+			}
+		},
+		partUnderTestPath: "/sap.card/content/row/columns/0",
+		getActionControl: (oCard) => {
+			return oCard.getCardContent().getAggregation("_content").getItems()[0].getCells()[0];
+		},
+		DOM_RENDER_LOCATION,
+		QUnit,
+		sinon
+	});
 
 	QUnit.module("Table Card", {
 		beforeEach: function () {
@@ -1206,6 +1273,68 @@ sap.ui.define([
 		assert.strictEqual(aItems.length, 4, "There are two list items and two group titles in the list.");
 		assert.ok(aItems[0].isA("sap.m.GroupHeaderListItem"), "The first item of the list is the group title");
 		assert.strictEqual(aItems[0].getTitle(), "Cheap", "The group title is correct");
+	});
+
+	QUnit.module("Table Card Dialog Sizing", {
+		beforeEach: async function () {
+			this.oCard = new Card({
+				manifest: {
+					"sap.app": { "id": "test.table.dialog" },
+					"sap.card": {
+						"type": "Table",
+						"header": { "title": "Table Dialog Test" },
+						"content": {
+							"data": {
+								"json": [
+									{ "Product": "A", "Stock": 10 },
+									{ "Product": "B", "Stock": 20 }
+								]
+							},
+							"row": {
+								"columns": [
+									{ "title": "Product", "value": "{Product}" },
+									{ "title": "Stock", "value": "{Stock}" }
+								]
+							}
+						},
+						"footer": {
+							"paginator": { "pageSize": 1 }
+						}
+					}
+				}
+			});
+			this.oCard.placeAt(DOM_RENDER_LOCATION);
+			await nextCardReadyEvent(this.oCard);
+			await nextUIUpdate();
+		},
+		afterEach: function () {
+			this.oCard.destroy();
+		}
+	});
+
+	QUnit.test("Table card dialog has sticky header, minimal width and auto layout", async function (assert) {
+		const oShowMoreButton = this.oCard.getCardFooter().getAggregation("_showMore");
+		assert.ok(oShowMoreButton, "'Show More' button exists");
+		QUnitUtils.triggerEvent("tap", oShowMoreButton.getDomRef());
+
+		const oDialog = this.oCard.getDependents().find(function(dep) {
+			return dep.isA && dep.isA("sap.m.Dialog");
+		});
+		assert.ok(oDialog, "Dialog is opened");
+
+		await nextDialogAfterOpenEvent(oDialog);
+		await nextUIUpdate();
+
+		const oPaginatedCard = oDialog.getContent()[0];
+		assert.ok(oPaginatedCard, "Paginated card exists in dialog");
+
+		const oTable = oPaginatedCard.getAggregation("_content").getAggregation("_content");
+
+		assert.ok(oTable, "Table exists in paginated card");
+		assert.ok(oTable.getSticky(), "Table has sticky header");
+		assert.ok(oDialog.getDomRef().offsetWidth <= 320, "Dialog hasn't stretched beyond needed width");
+		assert.strictEqual(oTable.getWidth(), "auto", "Table width is set to 'auto' in dialog");
+		assert.strictEqual(oTable.getFixedLayout(), false, "Table fixedLayout is set to false in dialog");
 	});
 
 });

@@ -1,0 +1,27 @@
+{
+  "1.140.0": {
+    "date": "August 2025",
+    "notes": [
+      {
+        "id": "3903e2ec1ba2ec124544f91d0ac4b2c7ee516bb9",
+        "type": "FIX",
+        "text": " forced-color-adjust to html tag"
+      },
+      {
+        "id": "7fbd4a5c5d4a8028761a99dd21610ec4b5a09df6",
+        "type": "FIX",
+        "text": " sap.ui.core.format.NumberFormat#getDefaultUnitPattern: Replace normal space with non-breaking space"
+      },
+      {
+        "id": "9f25e1f37d1f0090a4b5738b645040372a4d96b2",
+        "type": "FIX",
+        "text": " sap/ui/model/type/Unit.js: if quantity part is integer, set decimals to '0'"
+      },
+      {
+        "id": "c099608b890f00dca45625b0ec9680615503c6ff",
+        "type": "FIX",
+        "text": " ThemeManager: Improve robustness of versionInfo loading"
+      }
+    ]
+  }
+}

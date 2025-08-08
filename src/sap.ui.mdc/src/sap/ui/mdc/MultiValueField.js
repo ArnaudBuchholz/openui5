@@ -322,7 +322,15 @@ sap.ui.define([
 
 		for (const oItem of aItems) {
 			const oCurrentCondition = aCurrentConditions[iIndex];
-			const oCondition = oDelegate.createCondition(this, this, [_getInternalValue(oItem, "key"), _getInternalValue(oItem, "description")], oCurrentCondition);
+			const vKey = _getInternalValue(oItem, "key");
+			const vDescription = _getInternalValue(oItem, "description");
+			let oCondition;
+			if (vKey === undefined && vDescription === undefined) {
+				// item exist but binding for key and description pending or has no values right now -> just create dummy condition for index.
+				oCondition = Condition.createCondition(OperatorName.EQ, [vKey, vDescription], undefined, undefined, ConditionValidated.NotValidated, undefined);
+			} else {
+				oCondition = oDelegate.createCondition(this, this, [vKey, vDescription], oCurrentCondition);
+			}
 			aConditions.push(oCondition);
 			if (!oCurrentCondition || !Condition.compareConditions(oCurrentCondition, oCondition)) { // We do a full comparison here as FilterOperatorUtils.compareConditions may ignore text changes
 				bChanged = true;
@@ -382,6 +390,10 @@ sap.ui.define([
 
 		return false; // MultiValueField cannot be a searchField (as this only supports single-value)
 
+	};
+
+	Field.prototype.getBindingEventParameter = function (oEvent) {
+		return null; // fire event on inner control until messaging on aggregations has been clarified
 	};
 
 	/**

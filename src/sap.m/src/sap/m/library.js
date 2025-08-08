@@ -226,6 +226,7 @@ sap.ui.define([
 			"sap.m.IconTab",
 			"sap.m.IScale",
 			"sap.m.IMenuItem",
+			"sap.m.IMenuItemBehavior",
 			"sap.m.semantic.IGroup",
 			"sap.m.semantic.IFilter",
 			"sap.m.semantic.ISort",
@@ -304,6 +305,8 @@ sap.ui.define([
 			"sap.m.ListItemBase",
 			"sap.m.MaskInput",
 			"sap.m.Menu",
+			"sap.m.MenuItem",
+			"sap.m.MenuWrapper",
 			"sap.m.MenuButton",
 			"sap.m.MessagePage",
 			"sap.m.MessagePopover",
@@ -333,6 +336,7 @@ sap.ui.define([
 			"sap.m.OverflowToolbarButton",
 			"sap.m.OverflowToolbarToggleButton",
 			"sap.m.OverflowToolbarMenuButton",
+			"sap.m.OverflowToolbarTokenizer",
 			"sap.m.P13nColumnsPanel",
 			"sap.m.P13nGroupPanel",
 			"sap.m.P13nSelectionPanel",
@@ -451,9 +455,9 @@ sap.ui.define([
 			"sap.m.ImageCustomData",
 			"sap.m.LightBoxItem",
 			"sap.m.LinkTileContent",
+			"sap.m.ListItemAction",
 			"sap.m.OverflowToolbarLayoutData",
 			"sap.m.MaskInputRule",
-			"sap.m.MenuItem",
 			"sap.m.MessageItem",
 			"sap.m.MessagePopoverItem",
 			"sap.m.PageAccessibleLandmarkInfo",
@@ -494,6 +498,7 @@ sap.ui.define([
 			"sap.m.ViewSettingsFilterItem",
 			"sap.m.ViewSettingsItem",
 			"sap.m.plugins.CellSelector",
+			"sap.m.plugins.ColumnAIAction",
 			"sap.m.plugins.ColumnResizer",
 			"sap.m.plugins.CopyProvider",
 			"sap.m.plugins.DataStateIndicator",
@@ -1280,13 +1285,13 @@ sap.ui.define([
 		 * Represents the ARIA role <code>dialog</code>.
 		 * @public
 		 */
-		Dialog : "dialog",
+		Dialog : "Dialog",
 
 		/**
 		 * Represents the ARIA role <code>alertdialog</code>.
 		 * @public
 		 */
-		AlertDialog : "alertdialog"
+		AlertDialog : "AlertDialog"
 	};
 
 	/**
@@ -2372,13 +2377,55 @@ sap.ui.define([
 
 	/**
 	 *
-	 * Interface for controls which are suitable to be added as items of sap.m.Menu.
+	 * Interface definition for controls suitable to be used as items of <code>sap.m.Menu</code>.
 	 *
 	 *
 	 * @since 1.127.0
 	 * @name sap.m.IMenuItem
 	 * @interface
 	 * @public
+	 */
+
+	/**
+	 *
+	 * Interface definition for controls suitable to be used as items of <code>sap.m.Menu</code>.
+	 * This interface is used to define the behavior of the menu item.
+	 *
+	 *
+	 * @since 1.137.0
+	 * @name sap.m.IMenuItemBehavior
+	 * @interface
+	 * @public
+	 */
+
+	/**
+	 * Returns whether the firing of <code>press</code> event is allowed.
+	 * <b>Note:</b> This method can be overridden by subclasses to implement custom behavior.
+	 *
+	 * @public
+	 * @returns {boolean} Whether the item is enabled for click/press
+	 * @function
+	 * @name sap.m.IMenuItemBehavior.isInteractive
+	 */
+
+	/**
+	 * Returns whether the item can be focused.
+	 * <b>Note:</b> This method can be overridden by subclasses to implement custom behavior.
+	 *
+	 * @public
+	 * @returns {boolean} Whether the item is enabled for focus
+	 * @function
+	 * @name sap.m.IMenuItemBehavior.isFocusable
+	 */
+
+	/**
+	 * Returns whether the item can be counted in total items count.
+	 * <b>Note:</b> This method can be overridden by subclasses to implement custom behavior.
+	 *
+	 * @public
+	 * @returns {boolean} Whether the item is counted in total items count
+	 * @function
+	 * @name sap.m.IMenuItemBehavior.isCountable
 	 */
 
 	/**
@@ -3261,6 +3308,36 @@ sap.ui.define([
 		 */
 		DetailAndActive : "DetailAndActive"
 
+	};
+
+	/**
+	 * Defines the action types available for list items.
+	 *
+	 * @enum {string}
+	 * @since 1.137
+	 * @public
+	 */
+	thisLib.ListItemActionType = {
+		/**
+		 * Defines a custom action for a list item.
+		 * <b>Note:</b> The <code>icon</code> and <code>text</code> properties in the <code>sap.m.ListItemAction</code> are required for this action type.
+		 * @public
+		 */
+		Custom : "Custom",
+
+		/**
+		 * Indicates that the list item is editable.
+		 * <b>Note:</b> The <code>icon</code> and <code>text</code> properties must not be set in <code>sap.m.ListItemAction</code> for this action type.
+		 * @public
+		 */
+		Edit : "Edit",
+
+		/**
+		 * Indicates that the list item is deletable.
+		 * <b>Note:</b> The <code>icon</code> and <code>text</code> properties must not be set in <code>sap.m.ListItemAction</code> for this action type.
+		 * @public
+		 */
+		Delete : "Delete"
 	};
 
 	/**
@@ -5071,6 +5148,32 @@ sap.ui.define([
 		Narrow : "Narrow"
 	};
 
+	/**
+	 * Types of <code>sap.m.OverflowToolbarTokenizerRenderMode</code> responsive modes
+	 *
+	 * @enum {string}
+	 * @public
+	 * @since 1.139
+	 */
+	thisLib.OverflowToolbarTokenizerRenderMode = {
+		/**
+		 * In <code>Loose</code> mode, <code>sap.m.OverflowToolbarTokenizer</code> shows all its tokens, even if it requires scrolling.
+		 * @public
+		 */
+		Loose : "Loose",
+
+		/**
+		 * In <code>Narrow</code> mode, <code>sap.m.OverflowToolbarTokenizer</code> shows as many tokens as its width allows and an n-More indicator with the count of the hidden tokens. The rest of the tokens remain hidden.
+		 * @public
+		 */
+		Narrow : "Narrow",
+
+		/**
+		 * In <code>Overflow</code> mode, <code>sap.m.OverflowToolbarTokenizer</code> shows only a <code>sap.m.Button</code> as an n-More indicator without visible tokens. This mode is used when <code>sap.m.OverflowToolbarTokenizer</code> is within the <code>sap.m.OverflowToolbar</code> overflow area.
+		 * @public
+		 */
+		Overflow : "Overflow"
+	};
 
 	/**
 	 * Types of the Toolbar Design.
@@ -5558,13 +5661,13 @@ sap.ui.define([
 		 * Public mode of the <code>VariantItem</code>.
 		 * @public
 		 */
-		Public: "public",
+		Public: "Public",
 
 		/**
 		 * Private mode of the <code>VariantItem</code>.
 		 * @public
 		 */
-		Private: "private"
+		Private: "Private"
 	};
 
 	/**
@@ -6665,6 +6768,7 @@ sap.ui.define([
 	DataType.registerEnum("sap.m.ListMode", thisLib.ListMode);
 	DataType.registerEnum("sap.m.ListSeparators", thisLib.ListSeparators);
 	DataType.registerEnum("sap.m.ListType", thisLib.ListType);
+	DataType.registerEnum("sap.m.ListItemActionType", thisLib.ListItemActionType);
 	DataType.registerEnum("sap.m.LoadState", thisLib.LoadState);
 	DataType.registerEnum("sap.m.MenuButtonMode", thisLib.MenuButtonMode);
 	DataType.registerEnum("sap.m.MultiSelectMode", thisLib.MultiSelectMode);

@@ -64,14 +64,6 @@ sap.ui.define([
 		return oReturn;
 	}
 
-	function setTextAndTriggerEnterOnEditableField(oPlugin, sText) {
-		oPlugin._oEditableControlDomRef.textContent = sText;
-		oPlugin._oEditableField.textContent = oPlugin._oEditableControlDomRef.textContent;
-		var oEvent = new Event("keydown");
-		oEvent.keyCode = KeyCodes.ENTER;
-		oPlugin._oEditableField.dispatchEvent(oEvent);
-	}
-
 	QUnit.module("Given a designTime and ControlVariant plugin are instantiated", {
 		before() {
 			this.oVariantManagementControl = new SmartVariantManagement("svm", {
@@ -151,8 +143,9 @@ sap.ui.define([
 		QUnit.test("Rename", async function(assert) {
 			const sNewText = "myFancyText";
 			var oMenuItem = getContextMenuEntryById.call(this, "CTX_COMP_VARIANT_RENAME");
-			oMenuItem.handler([this.oVariantManagementOverlay]);
-			setTextAndTriggerEnterOnEditableField(this.oPlugin, sNewText);
+			RtaQunitUtils.simulateRename(sandbox, sNewText, () => {
+				oMenuItem.handler([this.oVariantManagementOverlay]);
+			});
 			const oParameters = await waitForCommandToBeCreated(this.oPlugin);
 			const oCommand = oParameters.command;
 			const mExpectedNewVariantProps = {};
@@ -518,11 +511,17 @@ sap.ui.define([
 					actions: {
 						compVariant: {
 							name: "myFancyName",
+							additionalInfoKey: "ADDITIONALINFO_I18N_KEY",
 							changeType: "variantContent",
 							handler: this.oDTHandlerStub
 						}
 					}
 				});
+				sandbox.stub(this.oOverlay.getDesignTimeMetadata(), "getLibraryText")
+				.callThrough()
+				.withArgs(this.oControl, "ADDITIONALINFO_I18N_KEY")
+				.returns("Additional Info");
+
 				// make sure _isEditable is checked with the newly set action
 				this.oPlugin.deregisterElementOverlay(this.oOverlay);
 				this.oPlugin.registerElementOverlay(this.oOverlay);
@@ -539,8 +538,9 @@ sap.ui.define([
 	}, function() {
 		QUnit.test("getMenuItems", function(assert) {
 			var aMenuItems = this.oPlugin.getMenuItems([this.oOverlay]);
-			assert.strictEqual(aMenuItems.length, 1, "one context menu items is visible");
+			assert.strictEqual(aMenuItems.length, 1, "one context menu item is visible");
 			assert.strictEqual(aMenuItems[0].id, "CTX_COMP_VARIANT_CONTENT", "VariantContent is the only entry");
+			assert.strictEqual(aMenuItems[0].additionalInfo, "Additional Info", "the additional info is set");
 		});
 
 		QUnit.test("the handler is called", function(assert) {

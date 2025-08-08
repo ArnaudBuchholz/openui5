@@ -983,11 +983,7 @@ var FrameType = library.FrameType;
 				layout: ({columns: 6, rowSize: "80px", columnSize: "80px", gap: sGap}),
 				items: [
 					this.oTile1 = new SlideTile({
-						header: "headerText 1",
-						subheader: "subheaderText",
-						state:"Loaded",
-						layoutData: new GridContainerItemLayoutData({ columns: 2, rows: 2 }),
-						items: [this.oTile3 = new GenericTile({
+						tiles: [this.oTile3 = new GenericTile({
 							header: "headerText 2",
 							subheader: "subheaderText",
 							frameType : FrameType.TwoByOne,
@@ -1103,6 +1099,28 @@ var FrameType = library.FrameType;
 			document.querySelector("html").classList.remove("sap-phone");
 			document.querySelector("html").classList.add("sap-desktop");
 		}
+	});
+
+	QUnit.test("Slide Tile should have the class sapMSTLargeScreen if its more than 800px", async function(assert) {
+		this.oSlideTile = this.createSlideTile().placeAt("qunit-fixture");
+		await nextUIUpdate();
+		assert.ok(this.oSlideTile.hasStyleClass("sapMSTLargeScreen"),"The class is present");
+
+	});
+
+	QUnit.test("Slide Tile should have the class sapMSTSmallScreen if its less than 180px", async function(assert) {
+		this.initializeMobileView();
+		this.oSlideTile = this.createSlideTile(true).placeAt("qunit-fixture");
+		await nextUIUpdate();
+		assert.ok(this.oSlideTile.hasStyleClass("sapMSTSmallScreen"), "The class is present");
+	});
+
+	QUnit.test("Slide Tile should not have the class sapMSTLargeScreen if its less than 800px", async function(assert) {
+		this.initializeMobileView();
+		this.oSlideTile = this.createSlideTile(true).placeAt("qunit-fixture");
+		await nextUIUpdate();
+
+		assert.notOk(this.oSlideTile.hasStyleClass("sapMSTLargeScreen"),"The class is not present");
 	});
 
 	QUnit.test("Slide Tile should get paused when the it gets focus on it", async function(assert) {
@@ -1224,7 +1242,7 @@ var FrameType = library.FrameType;
 		}
 		for (var i = 0; i < aTileContainerContentArea.length; i++ ) {
 			var oTileContentAreaProperties = getComputedStyle(aTileContainerContentArea[i]);
-			assert.equal(oTileContentAreaProperties.marginTop, "16px", "Property set Correctly");
+			assert.equal(oTileContentAreaProperties.marginTop, "0px", "Property set Correctly");
 		}
 		for (var i = 0; i < aGenericTile.length; i++ ) {
 			if (aGenericTile[i] && aGenericTile[i].arialabel){
@@ -1360,6 +1378,14 @@ var FrameType = library.FrameType;
 			assert.ok(Number.isInteger(oInnerDiv.style.webkitLineClamp * 1),"Line clamp has been added successfully to subheader");
 			fnDone();
 		},0);
+	});
+
+	QUnit.test("_setHeaderContentBackgroundImage method to be called when the slideTile is longer than 800px", async function(assert){
+		this.oSlideTile = this.createSlideTile(false,true).placeAt("qunit-fixture");
+		this.oSlideTile.setWidth("900px");
+		var oSpy = this.spy(this.oSlideTile.getTiles()[0], "_setHeaderContentBackgroundImage");
+		await nextUIUpdate();
+		assert.strictEqual(oSpy.callCount, 1, "_setHeaderContentBackgroundImage has been called");
 	});
 
 	// Checks whether the given DomRef is contained or equals (in) one of the given container

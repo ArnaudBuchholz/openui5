@@ -1237,7 +1237,8 @@ sap.ui.define([
 			var sConfigurationPath = this.getConfigurationPath();
 			this._oDestinations = new Destinations({
 				host: oHostInstance,
-				manifestConfig: this._manifestModel.getProperty(sConfigurationPath + "/destinations")
+				manifestConfig: this._manifestModel.getProperty(sConfigurationPath + "/destinations"),
+				prefix: "destinations"
 			});
 		}
 	};
@@ -1948,7 +1949,16 @@ sap.ui.define([
 				for (var n in Editor.fieldMap) {
 					Editor.Fields[n] = arguments[Object.keys(Editor.fieldMap).indexOf(n)];
 				}
-				resolve();
+
+				const aFieldsDependencies = [];
+
+				for (const FieldClass of Object.values(Editor.Fields)) {
+					if (FieldClass.loadDependencies) {
+						aFieldsDependencies.push(FieldClass.loadDependencies());
+					}
+				}
+
+				Promise.all(aFieldsDependencies).then(resolve);
 			});
 		});
 	};

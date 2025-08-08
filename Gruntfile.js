@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2024 SAP SE
+ * Copyright (c) 2025 SAP SE
  */
 
 'use strict';
@@ -29,7 +29,7 @@ module.exports = function(grunt) {
 	if (!configExtensionFile) {
 		grunt.log.error([
 			'For more information about the OpenUI5 development setup, check here:',
-			'https://github.com/SAP/openui5/blob/master/docs/developing.md',
+			'https://github.com/UI5/openui5/blob/master/docs/developing.md',
 		].join("\n\t"));
 	}
 
@@ -91,7 +91,6 @@ module.exports = function(grunt) {
 						'!sap-*',
 						// CorePlugin, shouldn't be installed by default
 						'!sap/ui/core/plugin/DeclarativeSupport.js',
-						'!sap/ui/core/plugin/LessSupport.js',
 						// exclude non-productive code
 						'!sap/ui/debug/**',
 						'!sap/ui/core/support/**',

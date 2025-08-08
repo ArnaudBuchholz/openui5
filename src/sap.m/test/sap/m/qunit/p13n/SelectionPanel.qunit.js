@@ -655,7 +655,7 @@ sap.ui.define([
 		oPanel.setShowHeader(true);
 		// Arrange
 		let oBundle;
-		const sOriginalLanguage = "en_US";
+		const sOriginalLanguage = Localization.getLanguage();
 		const sChangedLanguage = "de";
 
 		const oSpy = sinon.spy(oPanel, "_updateLocalizationTexts");
@@ -663,21 +663,126 @@ sap.ui.define([
 		oBundle = oPanel.oResourceBundle;
 
 		// Assert
+
+		const oOriginalLanguageBundle = Library.getResourceBundleFor("sap.m", sOriginalLanguage);
 		const oModel = oPanel.getModel(oPanel.LOCALIZATION_MODEL);
 		const sShowSelected = oModel.getProperty("/showSelectedText");
-		assert.strictEqual(oBundle.sLocale, sOriginalLanguage, "Returned the already loaded bundle");
-		assert.strictEqual(oPanel.getFieldColumn(), "Field", "fieldColumn value is correctly initialized");
-		assert.strictEqual(sShowSelected, "Show Selected", "showSelected text is correctly initialized");
+		assert.strictEqual(oBundle, oOriginalLanguageBundle, "Returned the already loaded bundle");
+		assert.strictEqual(oPanel.getFieldColumn(), oOriginalLanguageBundle.getText("p13n.DEFAULT_DESCRIPTION"), "fieldColumn value is correctly initialized");
+		assert.strictEqual(sShowSelected, oOriginalLanguageBundle.getText("p13n.SHOW_SELECTED"), "showSelected text is correctly initialized");
 
 		// Act
 		Localization.setLanguage(sChangedLanguage);
 		oBundle = oPanel.oResourceBundle;
 
+		const oChangedLanguageBundle = Library.getResourceBundleFor("sap.m", sChangedLanguage);
+
 		// Assert
 		const sShowSelectedTranslated = oModel.getProperty("/showSelectedText");
 		assert.equal(oSpy.called, true, "_updateLocalizationTexts called after Localization.setLanguage");
-		assert.strictEqual(oBundle.sLocale, sChangedLanguage, "Returned the newly loaded bundle");
-		assert.strictEqual(oPanel.getFieldColumn(), "Feld", "fieldColumn value is correctly translated");
-		assert.strictEqual(sShowSelectedTranslated, "Auswahl einblenden", "showSelected text is correctly initialized");
+		assert.strictEqual(oBundle, oChangedLanguageBundle, "Returned the newly loaded bundle");
+		assert.strictEqual(oPanel.getFieldColumn(), oChangedLanguageBundle.getText("p13n.DEFAULT_DESCRIPTION"), "fieldColumn value is correctly translated");
+		assert.strictEqual(sShowSelectedTranslated, oChangedLanguageBundle.getText("p13n.SHOW_SELECTED"), "showSelected text is correctly initialized");
+	});
+
+	const aTestFilter = [
+		{
+			filter: {
+				search: undefined,
+				showSelected: false,
+				hideDescriptions: false
+			},
+			resultDelta: 0
+		},
+		{
+			filter: {
+				search: "Field 4",
+				showSelected: false,
+				hideDescriptions: false
+			},
+			resultDelta: -5 // 1 item is shown
+		},
+		{
+			filter: {
+				search: undefined,
+				showSelected: true,
+				hideDescriptions: false
+			},
+			resultDelta: -3 // 3 items are selected
+		},
+		{
+			filter: {
+				search: undefined,
+				showSelected: false,
+				hideDescriptions: true
+			},
+			resultDelta: -6 // 0 items are selected
+		},
+		{
+			filter: {
+				search: undefined,
+				showSelected: true,
+				hideDescriptions: true
+			},
+			resultDelta: -6 // 0 items are selected
+		},
+		{
+			filter: {
+				search: "Field 5",
+				showSelected: true,
+				hideDescriptions: true
+			},
+			resultDelta: -6 // 0 items are selected, because 5 has isRedundant=true
+		}
+	];
+
+	aTestFilter.forEach(function(oTestData, index) {
+		QUnit.test(`Check '_filterList' - ${index}`, function(assert) {
+			// Arrange
+			const oP13nData = this.getTestData();
+			oP13nData[2].isRedundant = true;
+			oP13nData[4].isRedundant = true;
+			this.oSelectionPanel.setP13nData(oP13nData);
+
+			this.oSelectionPanel._oListControl.getBinding("items").filter(null); // reset any previous filters
+
+			// Act
+			this.oSelectionPanel._filterList(oTestData.filter.showSelected, oTestData.filter.search, oTestData.filter.hideDescriptions);
+
+			// Assert
+			const oResultItems = this.oSelectionPanel._oListControl.getItems();
+
+			const actualDelta = oResultItems.length - this.getTestData().length;
+			assert.equal(actualDelta, oTestData.resultDelta, "No length difference for items");
+		});
+	});
+
+	QUnit.test("hideDescriptions - check default value without redundant items", function(assert){
+		// arrange
+		assert.ok(this.oSelectionPanel, "Panel created");
+
+		// act
+		this.oSelectionPanel.setP13nData(this.getTestData());
+
+		// assert
+		const bHideDescriptions = this.oSelectionPanel.getModel(this.oSelectionPanel.P13N_MODEL).getProperty("/hideDescriptions");
+		assert.equal(bHideDescriptions, false, "Hide descriptions is set to false by default");
+	});
+
+	QUnit.test("hideDescriptions - check default value with redundant items", function(assert){
+		// arrange
+		assert.ok(this.oSelectionPanel, "Panel created");
+
+		const oP13nData = this.getTestData();
+		oP13nData[2].isRedundant = true;
+		oP13nData[4].isRedundant = true;
+		this.oSelectionPanel.setP13nData(oP13nData);
+
+		// act
+		this.oSelectionPanel.setP13nData(oP13nData);
+
+		// assert
+		const bHideDescriptions = this.oSelectionPanel.getModel(this.oSelectionPanel.P13N_MODEL).getProperty("/hideDescriptions");
+		assert.equal(bHideDescriptions, true, "Hide descriptions is set to false by default");
 	});
 });

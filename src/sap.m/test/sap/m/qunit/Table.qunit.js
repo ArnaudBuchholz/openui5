@@ -11,7 +11,6 @@ sap.ui.define([
 	"sap/ui/model/Filter",
 	"sap/ui/model/Sorter",
 	"sap/ui/core/InvisibleText",
-	"sap/ui/core/dnd/DragDropInfo",
 	"sap/m/ListBase",
 	"sap/m/Table",
 	"sap/m/Column",
@@ -22,6 +21,7 @@ sap.ui.define([
 	"sap/m/Button",
 	"sap/m/Input",
 	"sap/m/ColumnListItem",
+	"sap/m/ListItemAction",
 	"sap/m/Text",
 	"sap/m/Title",
 	"sap/m/ScrollContainer",
@@ -37,7 +37,7 @@ sap.ui.define([
 	"sap/ui/core/Item",
 	"sap/m/TextArea",
 	"sap/ui/core/Control"
-], function(Localization, Element, Library, qutils, nextUIUpdate, KeyCodes, JSONModel, Device, Filter, Sorter, InvisibleText, DragDropInfo, ListBase, Table, Column, Label, Link, Toolbar, ToolbarSpacer, Button, Input, ColumnListItem, Text, Title, ScrollContainer, library, GroupHeaderListItem, VerticalLayout, Message, jQuery, IllustratedMessage, ComboBox, CheckBox, RatingIndicator, Item, TextArea, Control) {
+], function(Localization, Element, Library, qutils, nextUIUpdate, KeyCodes, JSONModel, Device, Filter, Sorter, InvisibleText, ListBase, Table, Column, Label, Link, Toolbar, ToolbarSpacer, Button, Input, ColumnListItem, ListItemAction, Text, Title, ScrollContainer, library, GroupHeaderListItem, VerticalLayout, Message, jQuery, IllustratedMessage, ComboBox, CheckBox, RatingIndicator, Item, TextArea, Control) {
 	"use strict";
 
 	const TestControl = Control.extend("sap.m.test.TestControl", {
@@ -1171,12 +1171,26 @@ sap.ui.define([
 		assert.ok(oColumn.getHeader().hasListeners("_change"), "Property change event handler is added for the new column header");
 
 		sut.setMode("MultiSelect");
+		await nextUIUpdate();
 		$tblHeader = sut.$("tblHeader").trigger("focus");
 		oInvisibleText = document.getElementById($tblHeader.attr("aria-labelledby"));
 		assert.equal(oInvisibleText.innerHTML, oResourceBundle.getText("ACC_CTR_TYPE_HEADER_ROW") + " . Select All Rows . Name . Color . Number .",
 			"Custom announcement for column header in MultiSelect mode");
 
+		const $tblSelectionColumnHeder = sut.$("tblHeadModeCol");
+		assert.equal($tblSelectionColumnHeder.attr("role"), "columnheader", "Selection column header has role columnheader");
+		assert.equal($tblSelectionColumnHeder.attr("aria-label"), oResourceBundle.getText("TABLE_SELECTION_COLUMNHEADER"),
+					"Selection column header has correct aria-label");
+		assert.equal($tblSelectionColumnHeder.attr("aria-description"),
+					oResourceBundle.getText("TABLE_SELECTION_COLUMNHEADER_DESCRIPTION") + " " + oResourceBundle.getText("ACC_CTR_STATE_NOT_CHECKED"),
+					"Selection column header has correct aria-description");
+
 		sut.selectAll();
+
+		assert.equal($tblSelectionColumnHeder.attr("aria-description"),
+					oResourceBundle.getText("TABLE_SELECTION_COLUMNHEADER_DESCRIPTION") + " " + oResourceBundle.getText("ACC_CTR_STATE_CHECKED"),
+					"Selection column header aria-description has updated to checked state");
+
 		$tblHeader = sut.$("tblHeader").trigger("focus");
 		oInvisibleText = document.getElementById($tblHeader.attr("aria-labelledby"));
 		assert.equal(oInvisibleText.innerHTML, oResourceBundle.getText("ACC_CTR_TYPE_HEADER_ROW") + " . All Selected . Name . Color . Number .",
@@ -1383,6 +1397,36 @@ sap.ui.define([
 		assert.strictEqual(oListItem.getContentAnnouncementOfPopin(), "Last Name Mustermann . Available Checkbox Not Checked");
 		oVisiblePopinStub.reset();
 		oTable.destroy();
+	});
+
+	QUnit.test("ColumnListItem announcement of empty cells", async function(assert) {
+		const sut = createSUT(true, true);
+		sut.placeAt("qunit-fixture");
+
+		sut.getItems().forEach((oItem) => {
+			oItem.setType("Detail");
+		});
+
+		sut.addItem(new ColumnListItem({
+			type: "Inactive",
+			header: "Col1 Header",
+			cells: [
+				new Label({text: "Max"}),
+				new Label({text: ""}),
+				new Label({text: "Pi"})
+			]
+		}));
+
+		await nextUIUpdate();
+
+		let oListItem = sut.getItems()[3];
+		const aColumns = sut.getColumns();
+		assert.strictEqual(oListItem.getContentAnnouncementOfCell(aColumns[0]), "Max", "Content announcement");
+		assert.strictEqual(oListItem.getContentAnnouncementOfCell(aColumns[1]), "Empty", "Content announcement of empty cell");
+		assert.strictEqual(oListItem.getContentAnnouncementOfRowAction(), "Empty", "Content announcement of empty row action cell");
+
+		oListItem = sut.getItems()[2];
+		assert.strictEqual(oListItem.getContentAnnouncementOfRowAction(), undefined, "Content announcement of non-empty row action cell is undefined");
 	});
 
 	QUnit.test("Internal SelectAll checkbox should not be disabled by the EnabledPropagator", async function(assert) {
@@ -1747,9 +1791,9 @@ sap.ui.define([
 		var oModel = new JSONModel({data: aRows});
 
 		var oTable = new Table({
-			infoToolbar: new sap.m.Toolbar({
+			infoToolbar: new Toolbar({
 				content: [
-					new sap.m.Label({
+					new Label({
 						text: "This is an InfoToolbar"
 					})
 				]
@@ -1765,7 +1809,7 @@ sap.ui.define([
 			items: {
 				path: "/data",
 				sorter: new Sorter("col1", false, true),
-				template: new sap.m.ColumnListItem({
+				template: new ColumnListItem({
 					cells: [
 						new Text({text: "{col1}"}),
 						new Input({text: "{col2}"})
@@ -2225,7 +2269,7 @@ sap.ui.define([
 
 		const sut = createSUT(true);
 
-		var oModel = new sap.ui.model.json.JSONModel({
+		var oModel = new JSONModel({
 			tableData: [
 				{ groupHeader: "Group Header 1" },
 				{ text: "Item 1.1", additionalText: "Additional Text 1.1" },
@@ -2243,21 +2287,21 @@ sap.ui.define([
 			factory: function(sId, oContext) {
 				var groupHeader = oContext.getProperty("groupHeader");
 				if (groupHeader) {
-					return new sap.m.GroupHeaderListItem({
+					return new GroupHeaderListItem({
 						title: groupHeader
 					});
 				} else {
-					return new sap.m.ColumnListItem({
+					return new ColumnListItem({
 						cells: [
-							new sap.m.Text({ text: "{text}" }),
-							new sap.m.Text({ text: "{additionalText}" })
+							new Text({ text: "{text}" }),
+							new Text({ text: "{additionalText}" })
 						]
 					});
 				}
 			}
 		});
 
-		var oGrouping = new sap.ui.model.Sorter("groupHeader", false, function(oContext) {
+		var oGrouping = new Sorter("groupHeader", false, function(oContext) {
 			return {
 				key: oContext.getProperty("groupHeader"),
 				text: oContext.getProperty("groupHeader")
@@ -2842,7 +2886,7 @@ sap.ui.define([
 		const aItems = oTable.getItems();
 
 		// expected value is 6, 3(rem) for selection column and 3(rem) for the navigation column
-		let fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth(aItems);
+		let fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth();
 		assert.strictEqual(fInitAccumulatedWidth, 6.25, "Initial accumulated width based on table setup is " + fInitAccumulatedWidth + "rem");
 
 		const fAccumulatedWidth = Table._updateAccumulatedWidth(aColumns, false, fInitAccumulatedWidth);
@@ -2851,14 +2895,27 @@ sap.ui.define([
 
 		oTable.setInset(true);
 		await nextUIUpdate();
-		fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth(aItems);
+		fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth();
 		assert.strictEqual(fInitAccumulatedWidth, 10.25, "Initial accumulated width is " + fAccumulatedWidth + "rem");
+
+		aItems[0].addAction(new ListItemAction({type: "Edit"}));
+		aItems[0].addAction(new ListItemAction({type: "Delete"}));
+		oTable.setItemActionCount(2);
+		await nextUIUpdate();
+		fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth();
+		assert.strictEqual(fInitAccumulatedWidth, 15.75, "Initial accumulated width is " + fAccumulatedWidth + "rem. Since two custom actions are added");
 
 		document.getElementById("qunit-fixture").classList.add("sapUiSizeCompact");
 		oTable.placeAt("qunit-fixture");
 		await nextUIUpdate();
-		fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth(aItems);
-		assert.strictEqual(fInitAccumulatedWidth, 8.25, "Initial accumulated width is " + fInitAccumulatedWidth + "rem. Since compact theme density is applied");
+		fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth();
+		assert.strictEqual(fInitAccumulatedWidth, 13.25, "Initial accumulated width is " + fInitAccumulatedWidth + "rem. Since compact theme density is applied");
+
+		oTable.setMode("Delete");
+		await nextUIUpdate();
+		fInitAccumulatedWidth = oTable._getInitialAccumulatedWidth();
+		assert.strictEqual(fInitAccumulatedWidth, 11.25, "Initial accumulated width is " + fAccumulatedWidth + "rem. Since Delete mode wont be rendered");
+
 		oTable.destroy();
 	});
 
@@ -4412,5 +4469,72 @@ sap.ui.define([
 			assert.notOk(this.oTable._bMouseDown ,"mouse down flag is reset on the table");
 			done();
 		}.bind(this));
+	});
+
+	QUnit.module("Actions", {
+		beforeEach: async function() {
+			this.oItem1 = new ColumnListItem({
+				type: "Navigation",
+				cells: [
+					new Text({text: "Cell 1"})
+				],
+				actions: [
+					new ListItemAction({
+						type: "Edit"
+					}),
+					new ListItemAction({
+						type: "Delete"
+					})
+				]
+			});
+			this.oTable = new Table({
+				columns : [
+					new Column({
+						header: new Text({text: "Column 1"})
+					})
+				],
+				items: [this.oItem1],
+				mode: "Delete",
+				itemActionCount: 2
+			}).placeAt("qunit-fixture");
+			await nextUIUpdate();
+		},
+		afterEach: function() {
+			this.oTable.destroy();
+		}
+	});
+
+	QUnit.test("Rendering", async function(assert) {
+		assert.ok(this.oTable.getDomRef("tblHeadActions"), "Actions column header is rendered");
+		assert.equal(this.oTable.getDomRef("tblHeadActions").getAttribute("aria-label"), "Row Action", "aria-label is set for the actions column header");
+		assert.ok(this.oTable.getDomRef("tblHeadActions").classList.contains("sapMTable2ActionsCol"), "2 actions column header class is added");
+		assert.ok(this.oTable.getDomRef("tblHeadNav"), "Navigation column header is rendered since type is Navigation");
+		assert.notOk(this.oTable.getDomRef("tblHeadModeCol"), "Delete column is not rendered since custom row actions are enabled");
+
+		assert.ok(this.oItem1.getDomRef("Actions"), "Actions cell is rendered for the item");
+		assert.ok(this.oItem1.getDomRef("actions"), "Actions cell content is rendered for the item");
+		assert.equal(this.oItem1.getDomRef("actions").childElementCount, 2, "There are two actions");
+
+		this.oItem1.getActions()[1].setVisible(false);
+		await nextUIUpdate();
+		assert.ok(this.oItem1.getDomRef().querySelector(".sapMLIBActionHidden"), "There hidden class is added for the hidden action");
+		assert.equal(this.oItem1.getDomRef().querySelector(".sapMLIBActionHidden"), this.oItem1.getDomRef("actions").lastChild);
+
+		this.oTable.setItemActionCount(1);
+		await nextUIUpdate();
+		assert.ok(this.oTable.getDomRef("tblHeadActions").classList.contains("sapMTable1ActionsCol"), "1 action column header class is added");
+		assert.equal(this.oItem1.getDomRef("actions").childElementCount, 1, "There is only one action");
+
+		this.oTable.setItemActionCount(0);
+		await nextUIUpdate();
+		assert.notOk(this.oItem1.getDomRef("Actions"), "There is no more actions to render");
+		assert.ok(this.oTable.getDomRef("tblHeadNav"), "Navigation column header is still rendered");
+		assert.notOk(this.oTable.getDomRef("tblHeadModeCol"), "Delete column is still not rendered");
+
+		this.oTable.setItemActionCount(-1);
+		await nextUIUpdate();
+		assert.notOk(this.oItem1.getDomRef("Actions"), "There is no more actions to render");
+		assert.ok(this.oTable.getDomRef("tblHeadNav"), "Navigation column header is still rendered");
+		assert.ok(this.oTable.getDomRef("tblHeadModeCol"), "Delete column is now rendered");
 	});
 });

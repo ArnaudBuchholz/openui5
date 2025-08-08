@@ -37,7 +37,8 @@ sap.ui.define([
 	"sap/ui/core/Locale",
 	"sap/ui/core/date/UI5Date",
 	// load all required calendars in advance
-	"sap/ui/core/date/Islamic"
+	"sap/ui/core/date/Islamic",
+	"sap/ui/core/Core"
 ], function(
 	Formatting,
 	LanguageTag,
@@ -74,7 +75,9 @@ sap.ui.define([
 	deepEqual,
 	KeyCodes,
 	Locale,
-	UI5Date
+	UI5Date,
+	Islamic,
+	oCore
 ) {
 	"use strict";
 
@@ -905,6 +908,66 @@ sap.ui.define([
 		oPlanningCalendar.destroy();
 	});
 
+	QUnit.test("Title rendered with proper title style", async function(assert) {
+		// prepare
+		var oPlanningCalendar = new PlanningCalendar({
+			toolbarContent: [
+				new Title("idtitle", {text: "title of planning calendar", titleStyle: "H3"})
+			]
+		});
+
+		oPlanningCalendar.placeAt("qunit-fixture");
+		await nextUIUpdate();
+
+		var oInnerTitle = oPlanningCalendar._getHeader()._oTitle;
+		// assert
+		assert.ok(oInnerTitle.getDomRef().getAttribute("aria-level"), 3,"The title is renderer with correct aria-label attribute.");
+		assert.ok(oInnerTitle.$().hasClass("sapMTitleStyleH3"), "The title is renderer with correct title style class.");
+
+		// clean
+		oPlanningCalendar.destroy();
+	});
+
+	QUnit.test("Title rendered with proper level", async function(assert) {
+		// prepare
+		var oPlanningCalendar = new PlanningCalendar({
+			toolbarContent: [
+				new Title("idtitle", {text: "title of planning calendar", level: "H3"})
+			]
+		});
+
+		oPlanningCalendar.placeAt("qunit-fixture");
+		await nextUIUpdate();
+
+		var oInnerTitle = oPlanningCalendar._getHeader()._oTitle;
+		// assert
+		assert.ok(oInnerTitle.$().has("h3"), "The title is renderer with correct level.");
+
+		// clean
+		oPlanningCalendar.destroy();
+	});
+
+	QUnit.test("Title rendered with proper level and title style", async function(assert) {
+		// prepare
+		var oPlanningCalendar = new PlanningCalendar({
+			toolbarContent: [
+				new Title("idtitle", {text: "title of planning calendar", level: "H3", titleStyle: "H3"})
+			]
+		});
+
+		oPlanningCalendar.placeAt("qunit-fixture");
+		await nextUIUpdate();
+
+		var oInnerTitle = oPlanningCalendar._getHeader()._oTitle;
+		// assert
+		assert.ok(oInnerTitle.$().has("h3"), "The title is renderer with correct level.");
+		assert.ok(!oInnerTitle.getDomRef().getAttribute("aria-level"), "The title is renderer without aria-level attribute.");
+		assert.ok(oInnerTitle.$().hasClass("sapMTitleStyleH3"), "The title is renderer with correct title style class.");
+
+		// clean
+		oPlanningCalendar.destroy();
+	});
+
 	QUnit.module("rendering - Hours View", {
 		beforeEach: function () {
 			this.oPC = createPlanningCalendar("PC3", new SearchField(), new Button());
@@ -1203,6 +1266,62 @@ sap.ui.define([
 		assert.equal(this.oPC.getEndDate().getTime(), oEndDate.getTime(), "end date is correct");
 
 		assert.equal(this.oPC.getVisibleIntervalsCount(), 31, "correct number of shown intervals");
+	});
+
+	QUnit.test("Next button is disabled when maxDate is reached in month view", async function(assert) {
+		// Prepare
+		const oPCView = new PlanningCalendarView({
+			key: "1Month",
+			intervalType: "Month",
+			intervalsS: 1,
+			intervalsM: 1,
+			intervalsL: 1,
+			showSubIntervals: true
+		});
+		const oPC = new PlanningCalendar({
+			startDate: UI5Date.getInstance(2025, 0, 1),
+			minDate: UI5Date.getInstance(2025, 0, 1),
+			maxDate: UI5Date.getInstance(2025, 2, 23),
+			views: [oPCView],
+			viewKey: "1Month"
+		}).placeAt("smallUiArea");
+
+		await nextUIUpdate();
+
+		// Act: Navigate to the max month
+		const sNextButtonId = oPC.getId() + "-Header-NavToolbar-NextBtn";
+		qutils.triggerEvent("tap", sNextButtonId); // Navigate to February
+		await nextUIUpdate();
+		qutils.triggerEvent("tap", sNextButtonId); // Navigate to March
+		await nextUIUpdate();
+
+		// Assert: The next button should be disabled
+		const oNextButton = Element.getElementById(sNextButtonId);
+		assert.ok(oNextButton.getEnabled() === false, "Next button is disabled when maxDate is reached.");
+
+		// Clean up
+		oPC.destroy();
+	});
+
+	QUnit.test("Next button is disabled when maxDate is reached in 3 month view", async function(assert) {
+		// Prepare
+		const oPC = new PlanningCalendar({
+			startDate: UI5Date.getInstance(2025, 0, 1),
+			minDate: UI5Date.getInstance(2025, 0, 1),
+			maxDate: UI5Date.getInstance(2025, 2, 30),
+			viewKey: CalendarIntervalType.Month
+		}).placeAt("verySmallUiArea");
+
+		await nextUIUpdate();
+
+		const sNextButtonId = oPC.getId() + "-Header-NavToolbar-NextBtn";
+		const oNextButton = Element.getElementById(sNextButtonId);
+
+		// Assert: The next button should be disabled
+		assert.notOk(oNextButton.getEnabled(), "Next button is disabled when maxDate is reached.");
+
+		// Clean up
+		oPC.destroy();
 	});
 
 	QUnit.module("rendering - relativeView",{
@@ -1648,6 +1767,7 @@ sap.ui.define([
 
 		//Act
 		oPC1.setShowRowHeaders(false);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		//Assert
@@ -1658,6 +1778,7 @@ sap.ui.define([
 
 		//Act
 		oPC1.setShowRowHeaders(true);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		//Assert
@@ -2580,6 +2701,7 @@ sap.ui.define([
 		// argument: true - desktop; false - tablet or phone
 		this.oPC.setSingleSelection(false);
 		this.oPC.setShowRowHeaders(false);
+		oCore.applyChanges();
 
 		// Assert
 		this.checkItemPlacementAfterHidingRowHeaders(true);
@@ -2593,6 +2715,7 @@ sap.ui.define([
 		// Act
 		this.oPC.setSingleSelection(false);
 		this.oPC.setShowRowHeaders(false);
+		oCore.applyChanges();
 
 		// Assert
 		// argument: true - desktop; false - tablet or phone
@@ -2613,6 +2736,7 @@ sap.ui.define([
 
 		// Act
 		this.oPC.setFirstDayOfWeek(3);
+		oCore.applyChanges();
 
 		// Assert
 		assert.strictEqual(oPicker.getFirstDayOfWeek(), 3, "firstDayOfWeek in Hours view propagated to picker");
@@ -2657,6 +2781,7 @@ sap.ui.define([
 
 		// Act
 		this.oPC.setFirstDayOfWeek(2);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		oStartDate.setDate(30);
@@ -2700,6 +2825,7 @@ sap.ui.define([
 
 		// Act
 		this.oPC.setFirstDayOfWeek(5);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		sCurrentPickerId = this.oPC._getHeader().getAssociation("currentPicker");
@@ -2712,7 +2838,7 @@ sap.ui.define([
 
 		// Act
 		this.oPC.setFirstDayOfWeek(-1);
-		await nextUIUpdate();
+		oCore.applyChanges();
 
 		aDays = oRow.getDomRef().querySelectorAll(".sapUiCalItem");
 		$Date = aDays[0];
@@ -2727,10 +2853,12 @@ sap.ui.define([
 
 		// Act
 		this.oPC.setFirstDayOfWeek(10);
+		oCore.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		assert.strictEqual(oErrorSpy.callCount, 1, "There is an error in the console when invalid value is passed.");
-		assert.strictEqual(this.oPC.getFirstDayOfWeek(), -1, "The value is not set.");
+		//assert.strictEqual(this.oPC.getFirstDayOfWeek(), -1, "The value is not set."); Since overridden setter is removed this assert is not relevant anymore.
 
 	});
 
@@ -3212,6 +3340,7 @@ sap.ui.define([
 
 		$02Mar.focus();
 		await nextUIUpdate();
+		oCore.applyChanges();
 		assert.ok(bStartDateChange, "selected day from next month must fire startDateChange");
 	});
 
@@ -3733,6 +3862,7 @@ sap.ui.define([
 		this.oPC2.setStartDate(UI5Date.getInstance(2023, 1, 5));
 		this.oPC2.setBuiltInViews(["Week"]);
 		this.oPC2.setFirstDayOfWeek(0);
+		oCore.applyChanges();
 
 		iSelectedDate = this.oPC2._getHeader().getStartDate().getDate();
 
@@ -3769,6 +3899,7 @@ sap.ui.define([
 
 		// Act - Set FirstDayOfWeek to wednesday
 		this.oPC2.setFirstDayOfWeek(3);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		// Assert - First day of week is changed to wednesday
@@ -3805,6 +3936,7 @@ sap.ui.define([
 
 		// Act - Change FirstDayOfWeek
 		this.oPC2.setFirstDayOfWeek(4);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		// Assert - Changing first day of week updates Planning Calendar start date
@@ -3823,6 +3955,7 @@ sap.ui.define([
 
 		// Act
 		this.oPC2.setFirstDayOfWeek(3);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		// Assert - First day of week is changed to wednesday
@@ -3836,6 +3969,7 @@ sap.ui.define([
 
 		// Act
 		this.oPC2.setFirstDayOfWeek(4);
+		oCore.applyChanges();
 		await nextUIUpdate();
 
 		// Assert

@@ -287,6 +287,8 @@ sap.ui.define([
 			/**
 			 * Labels of the column which are displayed in the column header. Define a control for
 			 * each header row in the table. Use this aggregation if you want to use multiple headers per column.
+			 *
+			 * <bNote:</b> The {@link sap.m.plugins.ColumnAIAction ColumnAIAction} plugin is not compatible with multi labels.
 			 * @since 1.13.1
 			 */
 			multiLabels: {type: "sap.ui.core.Control", multiple: true, singularName: "multiLabel"},
@@ -333,7 +335,13 @@ sap.ui.define([
 			 *
 			 * @deprecated As of version 1.117, use the <code>headerMenu</code> association instead.
 			 */
-			menu: {type: "sap.ui.unified.Menu", multiple: false}
+			menu: {type: "sap.ui.unified.Menu", multiple: false},
+
+			/**
+			 * Control to be displayed as an action in the column header.
+			 * @since 1.136
+			 */
+			_action: {type: "sap.ui.core.Control", multiple: false, visibility: "hidden"}
 		},
 		associations: {
 			/**
@@ -1327,8 +1335,50 @@ sap.ui.define([
 			throw new Error("Column is not rendered");
 		}
 
-		TableUtils.Column.autoResizeColumn(this);
+		const oTable = this._getTable();
+		const sCurrentWidth = this.getWidth();
+		const iNewWidth = calculateColumnWidth(this);
+
+		if (iNewWidth + "px" !== sCurrentWidth) {
+			TableUtils.Column.resizeColumn(oTable, this, iNewWidth);
+		}
 	};
+
+	/**
+	 * Calculates the widest content width of the currently visible column cells including headers.
+	 * Headers with column span are not taken into account.
+	 *
+	 * @param {sap.ui.table.Column} oColumn The column control
+	 * @returns {int} iWidth Calculated column width
+	 * @private
+	 */
+	function calculateColumnWidth(oColumn) {
+		const oTableElement = oColumn._getTable().getDomRef();
+		const oHiddenArea = document.createElement("div");
+
+		oHiddenArea.classList.add("sapUiTableHiddenSizeDetector", "sapUiTableHeaderDataCell", "sapUiTableDataCell");
+		oTableElement.appendChild(oHiddenArea);
+
+		// Create a copy of all visible cells in the column, including the header cells without colspan
+		const aCells = Array.from(oTableElement.querySelectorAll(`td[data-sap-ui-colid="${oColumn.getId()}"]:not([colspan])`))
+			.filter((element) => !element.classList.contains("sapUiTableHidden"))
+			.map((element) => element.firstElementChild.cloneNode(true));
+
+		aCells.forEach((cell) => {
+			cell.removeAttribute('id');
+			oHiddenArea.appendChild(cell);
+		});
+
+		// Determine the column width
+		let iWidth = oHiddenArea.getBoundingClientRect().width + 4; // widest cell + 4px for borders and rounding
+		const iTableWidth = oTableElement.querySelector('.sapUiTableCnt').getBoundingClientRect().width;
+		iWidth = Math.min(iWidth, iTableWidth); // no wider as the table
+		iWidth = Math.max(iWidth, TableUtils.Column.getMinColumnWidth()); // not too small
+
+		oTableElement.removeChild(oHiddenArea);
+
+		return Math.round(iWidth);
+	}
 
 	Column.prototype.getFieldHelpInfo = function() {
 		return {

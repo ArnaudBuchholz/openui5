@@ -2,38 +2,40 @@
 
 sap.ui.define([
 	"../RtaQunitUtils",
+	"sap/base/Log",
 	"sap/m/Button",
+	"sap/m/Image",
+	"sap/ui/core/Core",
 	"sap/ui/core/Lib",
 	"sap/ui/fl/write/api/VersionsAPI",
+	"sap/ui/fl/Utils",
 	"sap/ui/layout/VerticalLayout",
 	"sap/ui/model/json/JSONModel",
+	"sap/ui/qunit/utils/nextUIUpdate",
 	"sap/ui/rta/toolbar/Adaptation",
 	"sap/ui/rta/toolbar/Base",
 	"sap/ui/rta/toolbar/Fiori",
 	"sap/ui/rta/RuntimeAuthoring",
 	"sap/ui/rta/Utils",
-	"sap/m/Image",
-	"sap/base/Log",
-	"sap/ui/core/Core",
-	"sap/ui/thirdparty/sinon-4",
-	"sap/ui/qunit/utils/nextUIUpdate"
+	"sap/ui/thirdparty/sinon-4"
 ], function(
 	RtaQunitUtils,
+	Log,
 	Button,
+	Image,
+	Core,
 	Lib,
 	VersionsAPI,
+	Utils,
 	VerticalLayout,
 	JSONModel,
+	nextUIUpdate,
 	Adaptation,
 	BaseToolbar,
 	Fiori,
 	RuntimeAuthoring,
 	RtaUtils,
-	Image,
-	Log,
-	Core,
-	sinon,
-	nextUIUpdate
+	sinon
 ) {
 	"use strict";
 
@@ -47,31 +49,34 @@ sap.ui.define([
 			src: sLogoSource
 		});
 
-		this.oImage.attachEventOnce("load", function() {
-			done();
-		}, this);
+		this.oImage.attachEventOnce("load", done);
 
 		this.oImage.placeAt("qunit-fixture");
 
+		const oGetLogoStub = sandbox.stub().returns(this.oImage.getSrc());
+		const oGetLogoDomRefStub = sandbox.stub().returns(this.oImage.getDomRef());
+		this.oUshellApi = {
+			getLogo: oGetLogoStub,
+			getLogoDomRef: oGetLogoDomRefStub
+		};
+
+		sandbox.stub(Utils, "getUshellContainer").returns({
+			async getServiceAsync() {}
+		});
+		RtaQunitUtils.stubSapUiRequire(sandbox, [{
+			name: "sap/ushell/api/RTA",
+			stub: this.oUshellApi
+		}]);
 		sandbox.stub(RtaUtils, "getFiori2Renderer").returns({
 			getRootControl: function() {
 				return {
 					getShellHeader: function() {
 						return {
-							getLogo() {
-								return sLogoSource;
-							},
 							addStyleClass: function(sText) {
 								this.sAdd = sText;
 							}.bind(this),
 							removeStyleClass: function(sText) {
 								this.sRemove = sText;
-							}.bind(this),
-							getShowLogo() {
-								return true;
-							},
-							getDomRef: function() {
-								return this.oImage.getDomRef();
 							}.bind(this)
 						};
 					}.bind(this)
@@ -83,9 +88,7 @@ sap.ui.define([
 	QUnit.module("Basic functionality", {
 		async beforeEach(assert) {
 			await nextUIUpdate();
-
 			this.oToolbarControlsModel = RtaQunitUtils.createToolbarControlsModel();
-
 			stubFioriRenderer.call(this, assert);
 		},
 		afterEach() {
@@ -97,6 +100,7 @@ sap.ui.define([
 			const done = assert.async();
 
 			this.oToolbar = new Fiori({
+				ushellApi: this.oUshellApi,
 				textResources: Lib.getResourceBundleFor("sap.ui.rta")
 			});
 			this.oToolbar.setModel(this.oToolbarControlsModel, "controls");
@@ -133,6 +137,7 @@ sap.ui.define([
 			const done = assert.async();
 
 			this.oToolbar = new Fiori({
+				ushellApi: this.oUshellApi,
 				textResources: Lib.getResourceBundleFor("sap.ui.rta")
 			});
 			this.oToolbar.setModel(this.oToolbarControlsModel, "controls");
@@ -156,30 +161,6 @@ sap.ui.define([
 				});
 				this.oToolbar.destroy();
 			}.bind(this));
-		});
-		QUnit.test("when buildControls is called and image dimensions are 0", async function(assert) {
-			this.oToolbar = new Fiori({
-				textResources: Lib.getResourceBundleFor("sap.ui.rta")
-			});
-			this.oToolbar.setModel(this.oToolbarControlsModel, "controls");
-			sinon.stub(this.oToolbar._oFioriHeader.getDomRef(), "querySelector")
-			.callThrough()
-			.withArgs("#shell-header-icon")
-			.returns(document.createElement("div"));
-
-			await this.oToolbar.onFragmentLoaded();
-			this.oToolbar.show();
-			assert.strictEqual(
-				Core.byId(`${this.oToolbar.getId()}_fragment--sapUiRta_icon`).getWidth(),
-				"0px",
-				"Image should have a width of 0px"
-			);
-			assert.strictEqual(
-				Core.byId(`${this.oToolbar.getId()}_fragment--sapUiRta_icon`).getHeight(),
-				"0px",
-				"Image should have a height of 0px"
-			);
-			this.oToolbar.destroy();
 		});
 	});
 
@@ -238,10 +219,10 @@ sap.ui.define([
 			document.getElementById("qunit-fixture").style.width = "600px";
 			const oSetLogoVisibilityStub = sandbox.stub(Fiori.prototype, "_setLogoVisibility")
 			.callsFake(function(...aArgs) {
-				oSetLogoVisibilityStub.wrappedMethod.apply(this.oToolbar, aArgs);
-				assert.notOk(this.oToolbar.getControl("iconBox").getVisible(), "then the logo is not visible");
+				oSetLogoVisibilityStub.wrappedMethod.apply(oSetLogoVisibilityStub.lastCall.thisValue, aArgs);
+				assert.notOk(oSetLogoVisibilityStub.lastCall.thisValue.getControl("iconBox").getVisible(), "then the logo is not visible");
 				fnDone();
-			}.bind(this));
+			});
 			return createAndStartRTA.call(this);
 		});
 
@@ -250,16 +231,16 @@ sap.ui.define([
 			document.getElementById("qunit-fixture").style.width = "1600px";
 			const oSetLogoVisibilityStub = sandbox.stub(Fiori.prototype, "_setLogoVisibility")
 			.callsFake(function(...aArgs) {
-				oSetLogoVisibilityStub.wrappedMethod.apply(this.oToolbar, aArgs);
-				assert.notOk(this.oToolbar.getControl("iconBox").getVisible(), "then the logo disappears");
+				oSetLogoVisibilityStub.wrappedMethod.apply(oSetLogoVisibilityStub.lastCall.thisValue, aArgs);
+				assert.notOk(oSetLogoVisibilityStub.lastCall.thisValue.getControl("iconBox").getVisible(), "then the logo disappears");
 				oSetLogoVisibilityStub.callsFake(function(...aArgs) {
-					oSetLogoVisibilityStub.wrappedMethod.apply(this.oToolbar, aArgs);
-					assert.ok(this.oToolbar.getControl("iconBox").getVisible(), "then the logo is visible again");
+					oSetLogoVisibilityStub.wrappedMethod.apply(oSetLogoVisibilityStub.lastCall.thisValue, aArgs);
+					assert.ok(oSetLogoVisibilityStub.lastCall.thisValue.getControl("iconBox").getVisible(), "then the logo is visible again");
 					fnDone();
-				}.bind(this));
+				});
 				document.getElementById("qunit-fixture").style.width = "1600px";
 				window.dispatchEvent(new Event("resize"));
-			}.bind(this));
+			});
 			return createAndStartRTA.call(this).then(function() {
 				assert.ok(this.oToolbar.getControl("iconBox").getVisible(), "first the logo is visible");
 				document.getElementById("qunit-fixture").style.width = "600px";

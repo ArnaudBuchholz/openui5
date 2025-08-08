@@ -108,6 +108,7 @@ sap.ui.define([
 			this.sideNavigation.$().find(".sapTntNLOverflow").each(function (index, item) {
 				assert.strictEqual(item.querySelector("a").getAttribute('role'), 'menuitem', 'li should have role "menuitem"');
 				assert.strictEqual(item.querySelector("a").getAttribute('aria-roledescription'), oRB.getText("NAVIGATION_LIST_ITEM_ROLE_DESCRIPTION_MENUITEM"), 'li should have aria-roledescription "Navigation list menu item"');
+				assert.strictEqual(item.querySelector("a").getAttribute('aria-label'), oRB.getText("NAVIGATION_LIST_OVERFLOW_ITEM_LABEL"), 'li should have aria-label "Displays remaining navigation items"');
 				assert.ok(item.classList.contains("sapTntNLIHidden"), 'overflow item is hidden');
 			});
 
@@ -635,7 +636,7 @@ sap.ui.define([
 	});
 
 	QUnit.test("Aria attributes - aria-label", async function (assert) {
-
+		const oRB = Library.getResourceBundleFor("sap.tnt");
 		var label = "Side navigation menu with options";
 
 		assert.notOk(this.sideNavigation.$().attr('aria-label'),  'aria-label is not set initially');
@@ -644,5 +645,7 @@ sap.ui.define([
 		await nextUIUpdate(this.clock);
 
 		assert.strictEqual(this.sideNavigation.$().attr('aria-label'), label, 'aria-label is as expected');
+		assert.strictEqual(this.sideNavigation.getAggregation("item").$().attr('aria-label'), oRB.getText("SIDE_NAVIGATION_FLEXIBLE_LIST_LABEL"), 'ul for flexible list should have aria-label "Primary Navigation Menu"');
+		assert.strictEqual(this.sideNavigation.getAggregation("fixedItem").$().attr('aria-label'), oRB.getText("SIDE_NAVIGATION_FIXED_LIST_LABEL"), 'ul for fixed list should have aria-label "Footer Navigation Menu"');
 	});
 });

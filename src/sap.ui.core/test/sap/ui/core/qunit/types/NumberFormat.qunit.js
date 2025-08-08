@@ -159,20 +159,56 @@ sap.ui.define([
 });
 
 	//*********************************************************************************************
-[-1, 0].forEach(function (iGroupingSize) {
-	QUnit.test("invalid groupingSize: " + iGroupingSize, function(assert) {
-		this.oLogMock.expects("error")
-			.withExactArgs("Grouping requires the 'groupingSize' format option to be a positive number, but it is '"
-				+ iGroupingSize + "' instead.");
-		const oIntegerInstance = NumberFormat.getIntegerInstance({groupingEnabled: true, groupingSize: iGroupingSize});
-		assert.strictEqual(oIntegerInstance.format(12345), "", "integer with groupingSize: '" + iGroupingSize + "'");
+[
+	{sFactoryMethod: "getFloatInstance", sResult: "12345"},
+	{sFactoryMethod: "getIntegerInstance", sResult: "12345"},
+	{sFactoryMethod: "getCurrencyInstance", sResult: "12345.00"},
+	{sFactoryMethod: "getUnitInstance", sResult: "12345"},
+	{sFactoryMethod: "getPercentInstance", sResult: "1234500%"}
+].forEach(({sFactoryMethod, sResult}) => {
+	QUnit.test(`checkGroupingFormatOptions for ${sFactoryMethod} leads to warning`, function(assert) {
+		this.oLogMock.expects("warning")
+			.withExactArgs("Grouping is disabled due to non-positive groupingSize set to '0'.");
 
-		this.oLogMock.expects("error")
-			.withExactArgs("Grouping requires the 'groupingSize' format option to be a positive number, but it is '"
-				+ iGroupingSize + "' instead.");
-		// float instance has groupingEnabled: true by default
-		const oFloatInstance = NumberFormat.getFloatInstance({groupingSize: iGroupingSize});
-		assert.strictEqual(oFloatInstance.format(12345), "", "float with groupingSize: '" + iGroupingSize + "'");
+		// code under test
+		const oFormat = NumberFormat[sFactoryMethod]({
+			groupingEnabled: true,
+			groupingSize: 0
+		});
+
+		assert.strictEqual(oFormat.format(12345), sResult);
+		assert.strictEqual(oFormat.oFormatOptions.groupingEnabled, false);
+	});
+});
+
+	//*********************************************************************************************
+[
+	{sFactoryMethod: "getFloatInstance", sType: "float"},
+	{sFactoryMethod: "getIntegerInstance", sType: "integer"},
+	{sFactoryMethod: "getCurrencyInstance", sType: "currency"},
+	{sFactoryMethod: "getUnitInstance", sType: "unit"},
+	{sFactoryMethod: "getPercentInstance", sType: "percent"}
+].forEach(({sFactoryMethod, sType}) => {
+	QUnit.test(`${sFactoryMethod} calls checkGroupingFormatOptions`, function (assert) {
+		const oFormat = {
+			getLocaleFormatOptions() {},
+			checkGroupingFormatOptions() {},
+			...(sType === "currency" && {
+				_defineCustomCurrencySymbols() {},
+				showTrailingCurrencyCode() {}
+			})
+		};
+		this.mock(NumberFormat).expects("createInstance").withExactArgs({}, "~oLocale").returns(oFormat);
+		const oFormatMock = this.mock(oFormat);
+		oFormatMock.expects("getLocaleFormatOptions").withExactArgs(sType).returns({});
+		oFormatMock.expects("checkGroupingFormatOptions").withExactArgs();
+		if (sType === "currency") {
+			oFormatMock.expects("showTrailingCurrencyCode").withExactArgs();
+			oFormatMock.expects("_defineCustomCurrencySymbols").withExactArgs();
+		}
+
+		// code under test
+		NumberFormat[sFactoryMethod]({}, "~oLocale");
 	});
 });
 
@@ -1493,7 +1529,7 @@ sap.ui.define([
 	QUnit.test("NumberFormat.getDefaultUnitPattern() - Default unitPattern-count-other pattern", function(assert) {
 		var sDefaultPattern = NumberFormat.getDefaultUnitPattern("MyOwnUnit");
 
-		assert.strictEqual(sDefaultPattern, "{0} MyOwnUnit", "Correct default pattern was created");
+		assert.strictEqual(sDefaultPattern, "{0}\u00a0MyOwnUnit", "Correct default pattern was created");
 
 		// check usage
 		var oFormat = NumberFormat.getUnitInstance({
@@ -1507,7 +1543,7 @@ sap.ui.define([
 
 		var sFormatted = oFormat.format(1234, "MY");
 
-		assert.strictEqual(sFormatted, "1,234.00 MyOwnUnit", "Pattern can be used for formatting");
+		assert.strictEqual(sFormatted, "1,234.00\u00a0MyOwnUnit", "Pattern can be used for formatting");
 		assert.deepEqual(oFormat.parse(sFormatted), [1234, "MY"], "Pattern can be used for parsing");
 	});
 
@@ -1630,8 +1666,8 @@ sap.ui.define([
 		var oLocale = new Locale("en");
 		var oFormat = NumberFormat.getUnitInstance({}, oLocale);
 
-		assert.strictEqual(oFormat.format(1123, "coordinateUnit"), "1,123 coordinateUnit", "invalid unit pattern");
-		assert.strictEqual(oFormat.format(1123, "per"), "1,123 per", "invalid unit pattern");
+		assert.strictEqual(oFormat.format(1123, "coordinateUnit"), "1,123\u00a0coordinateUnit", "invalid unit pattern");
+		assert.strictEqual(oFormat.format(1123, "per"), "1,123\u00a0per", "invalid unit pattern");
 	});
 
 	QUnit.test("Unit format with unknown locale", function (assert) {
@@ -1674,7 +1710,7 @@ sap.ui.define([
 		}, oLocale);
 
 		// test exclusiveness
-		assert.strictEqual(oFormat.format(20, "area-hectare"), "20 area-hectare", "20 ha");
+		assert.strictEqual(oFormat.format(20, "area-hectare"), "20\u00a0area-hectare", "20 ha");
 
 		// test "other" units
 		assert.strictEqual(oFormat.format(20, "olf"), "20 olfers", "20 olfers");
@@ -2126,9 +2162,9 @@ sap.ui.define([
 		assert.strictEqual(oFormat.format(20, "IND"), "20 H", "20 H");
 		assert.strictEqual(oFormat.format(20, "MTR"), "20 m", "20 m");
 		assert.strictEqual(oFormat.format(20, "MET"), "20 m", "20 m");
-		assert.strictEqual(oFormat.format(20, "DET"), "20 DET", "mapping of mapping");
-		assert.strictEqual(oFormat.format(20, "one"), "20 one", "recursive mapping");
-		assert.strictEqual(oFormat.format(20, "two"), "20 two", "recursive mapping");
+		assert.strictEqual(oFormat.format(20, "DET"), "20\u00a0DET", "mapping of mapping");
+		assert.strictEqual(oFormat.format(20, "one"), "20\u00a0one", "recursive mapping");
+		assert.strictEqual(oFormat.format(20, "two"), "20\u00a0two", "recursive mapping");
 
 		Formatting.setCustomUnits(undefined);
 		Formatting.setUnitMappings(undefined);
@@ -2387,7 +2423,7 @@ sap.ui.define([
 		//invalid unit
 		assert.strictEqual(oFormat.format(12, 33), "", "");
 		assert.strictEqual(oFormat.format(12, ""), "12", "");
-		assert.strictEqual(oFormat.format(12, "a"), "12 a", "a");
+		assert.strictEqual(oFormat.format(12, "a"), "12\u00a0a", "a");
 		assert.strictEqual(oFormat.format(12, true), "", "boolean true");
 		assert.strictEqual(oFormat.format(12, false), "", "boolean false");
 		assert.strictEqual(oFormat.format(12, null), "12", "null");
@@ -5060,6 +5096,7 @@ sap.ui.define([
 				})
 			},
 			getLocaleFormatOptions() {},
+			checkGroupingFormatOptions() {},
 			...(sGetter === "getCurrencyInstance" && {
 				_defineCustomCurrencySymbols() {},
 				showTrailingCurrencyCode() {}
@@ -5071,6 +5108,7 @@ sap.ui.define([
 			maxFractionDigits: "~maxFractionDigits~fromLocaleFormatOptions"
 		};
 		this.mock(oNumberFormat).expects("getLocaleFormatOptions").withExactArgs(sType).returns(oLocaleFormatOptions);
+		this.mock(oNumberFormat).expects("checkGroupingFormatOptions").withExactArgs();
 		if (oNumberFormat._defineCustomCurrencySymbols) {
 			this.mock(oNumberFormat).expects("_defineCustomCurrencySymbols").withExactArgs();
 			this.mock(oNumberFormat).expects("showTrailingCurrencyCode").withExactArgs().returns("~trailingCurrency");

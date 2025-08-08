@@ -6,18 +6,22 @@ sap.ui.define([
 	"sap/ui/core/util/reflection/JsControlTreeModifier",
 	"sap/ui/fl/apply/_internal/controlVariants/Utils",
 	"sap/ui/fl/apply/_internal/flexObjects/FlexObjectFactory",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/FlexInfoSession",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/write/_internal/flexState/FlexObjectManager",
 	"sap/ui/fl/write/_internal/Storage",
+	"sap/ui/fl/write/api/ChangesWriteAPI",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils"
 ], (
 	JsControlTreeModifier,
 	ControlVariantsUtils,
 	FlexObjectFactory,
+	FlexInfoSession,
 	ManifestUtils,
 	FlexObjectManager,
 	Storage,
+	ChangesWriteAPI,
 	Layer,
 	Utils
 ) => {
@@ -120,7 +124,7 @@ sap.ui.define([
 	 * Saves all the changes.
 	 *
 	 * @param {sap.ui.core.Element} oControl - Control instance
-	 * @returns {Promise<sap.ui.fl.apply._internal.flexObjects.FlexObject[]>} All saved Flex objects
+	 * @returns {Promise<sap.ui.fl.apply._internal.flexObjects.FlexObject[]>} Resolves with all saved Flex Objects
 	 * @private
 	 * @ui5-restricted SAP Business Network
 	 */
@@ -129,6 +133,55 @@ sap.ui.define([
 			selector: oControl,
 			includeCtrlVariants: true
 		});
+	};
+
+	/**
+	 * Set the max layer to CUSTOMER to disable personalization.
+	 *
+	 * @param {string} sReference - Flex reference of the app
+	 * @throws {Error} If the provided reference is invalid
+	 * @private
+	 * @ui5-restricted SAP Business Network
+	 */
+	BusinessNetworkAPI.disablePersonalization = function(sReference) {
+		const oFlexInfoSession = FlexInfoSession.getByReference(sReference);
+		if (!oFlexInfoSession || Object.keys(oFlexInfoSession).length === 0) {
+			throw new Error(`Invalid reference provided: ${sReference}`);
+		}
+
+		oFlexInfoSession.maxLayer = Layer.CUSTOMER;
+		// The flag can't be cleared here because the app is started in a different flow. But not clearing the flag will only have an effect
+		// if the user would start the app again in that session, which is not a supported scenario.
+		oFlexInfoSession.saveChangeKeepSession = true;
+		FlexInfoSession.setByReference(oFlexInfoSession, sReference);
+		window.sessionStorage.setItem("sap.ui.rta.skipReload", true);
+	};
+
+	/**
+	 * Deletes a list of control variants and their associated changes, and saves.
+	 *
+	 * @param {object} mPropertyBag - Object with parameters as properties
+	 * @param {sap.ui.fl.variants.VariantManagement} mPropertyBag.vmControl - Variant Management control instance
+	 * @param {string[]} mPropertyBag.variants - Variant IDs to be deleted
+	 * @param {sap.ui.fl.Layer} [mPropertyBag.layer="CUSTOMER"] - Layer of the variants to be deleted
+	 * @returns {Promise<sap.ui.fl.apply._internal.flexObjects.FlexObject[]>} Resolves with an array of Flex Objects that were deleted
+	 * @private
+	 * @ui5-restricted SAP Business Network
+	 */
+	BusinessNetworkAPI.deleteVariants = async function(mPropertyBag) {
+		const aFlexObjectsToDelete = ChangesWriteAPI.deleteVariantsAndRelatedObjects({
+			variantManagementControl: mPropertyBag.vmControl,
+			variants: mPropertyBag.variants,
+			layer: mPropertyBag.layer || Layer.CUSTOMER,
+			forceDelete: true // Skips the deletion checks such as draft status
+		});
+		await FlexObjectManager.saveFlexObjects({
+			selector: mPropertyBag.vmControl,
+			flexObjects: aFlexObjectsToDelete,
+			layer: mPropertyBag.layer || Layer.CUSTOMER,
+			includeCtrlVariants: true
+		});
+		return aFlexObjectsToDelete;
 	};
 
 	return BusinessNetworkAPI;

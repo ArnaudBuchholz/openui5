@@ -1857,11 +1857,15 @@ function(
 		this._bBackspaceOrDelete = (oEvent.which === KeyCodes.BACKSPACE) || (oEvent.which === KeyCodes.DELETE);
 		this._bDoTypeAhead = !Device.os.android && this.getAutocomplete() && !this._bBackspaceOrDelete;
 
-		if (this.areHotKeysPressed(oEvent) && this._isSuggestionsPopoverOpen()) {
-			var oSuggestionsPopover = this._getSuggestionsPopover();
-			oSuggestionsPopover.setValueStateActiveState(true);
-			oSuggestionsPopover._handleValueStateLinkNav(this, oEvent);
-			oSuggestionsPopover.updateFocus(this, null);
+		if (this.areHotKeysPressed(oEvent)) {
+			if (this._isSuggestionsPopoverOpen()){
+				var oSuggestionsPopover = this._getSuggestionsPopover();
+				oSuggestionsPopover.setValueStateActiveState(true);
+				oSuggestionsPopover._handleValueStateLinkNav(this, oEvent);
+				oSuggestionsPopover.updateFocus(this, null);
+			} else {
+				this._handleValueStateLinkNav();
+			}
 		}
 	};
 
@@ -2008,7 +2012,7 @@ function(
 
 			// update Accessibility text for suggestion
 			this._oInvisibleMessage?.announce(sAriaText, CoreLibrary.InvisibleMessageMode.Polite);
-		}.bind(this), 0);
+		}.bind(this), 100);
 	};
 
 	/**
@@ -2606,6 +2610,10 @@ function(
 	 * @public
 	 */
 	Input.prototype.setValue = function(sValue) {
+		// set the type syncronously before the value is set
+		// to avoid password field's text to be shown when triggering type
+		this.getDomRef("inner")?.setAttribute("type", this.getType().toLowerCase());
+
 		this._iSetCount++;
 		InputBase.prototype.setValue.call(this, sValue);
 		this._onValueUpdated(sValue);

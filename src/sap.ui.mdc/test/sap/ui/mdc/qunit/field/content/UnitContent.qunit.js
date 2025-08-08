@@ -92,6 +92,14 @@ sap.ui.define([
 				valueStateText: "My Warning"
 			}
 		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			},
+			{
+				ariaLabelledBy: ["MyLabel"]
+			}
+		],
 		events: [
 			{
 				change: {value: "1"},
@@ -139,6 +147,14 @@ sap.ui.define([
 				showSuggestion: false,
 				valueState: "Warning",
 				valueStateText: "My Warning"
+			}
+		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			},
+			{
+				ariaLabelledBy: ["MyLabel"]
 			}
 		],
 		events: [
@@ -214,6 +230,14 @@ sap.ui.define([
 				valueStateText: "My Warning"
 			}
 		],
+		associations: [
+			{
+				ariaLabelledBy: ["MyLabel"]
+			},
+			{
+				ariaLabelledBy: ["MyLabel"]
+			}
+		],
 		events: [
 			{
 				change: {value: "1"},
@@ -243,6 +267,17 @@ sap.ui.define([
 	ContentBasicTest.controlMap.EditForHelp.getPathsFunction = "getEditForHelp";
 	ContentBasicTest.controlMap.EditForHelp.createFunction = "createEditForHelp";
 
+	ContentBasicTest.controlMap.EditSelect = {
+		getPathsFunction: "getEditSelect",
+		paths: [null],
+		modules: [],
+		instances: [],
+		createFunction: "createEditSelect",
+		noFormatting: false,
+		editMode: FieldEditMode.Editable,
+		throwsError: true
+	};
+
 	const sInvisibleTextIdNumber = InvisibleText.getStaticId("sap.ui.mdc", "field.NUMBER");
 	const sInvisibleTextIdUnit = InvisibleText.getStaticId("sap.ui.mdc", "field.UNIT");
 	const sInvisibleTextIdCurrency = InvisibleText.getStaticId("sap.ui.mdc", "field.CURRENCY");
@@ -256,10 +291,9 @@ sap.ui.define([
 	const fnCheckValueState = (assert, aControls, oValue) => {
 		const oFakeField = this.oContentFactory.getField();
 		sinon.stub(oFakeField, "isInvalidInput").returns(true);
-		sinon.stub(oFakeField, "_isInvalidInputForContent").withArgs(aControls[0]).returns(false);
-		oFakeField._isInvalidInputForContent.withArgs(aControls[1]).returns(true);
-		sinon.stub(oFakeField, "_getInvalidInputException").withArgs(aControls[0]).returns(null);
-		oFakeField._getInvalidInputException.withArgs(aControls[1]).returns(new Error("My Exception"));
+		sinon.stub(oFakeField, "hasValueStateForContent").returns(true);
+		sinon.stub(oFakeField, "getValueStateForContent").withArgs(aControls[0].getId()).returns(null);
+		oFakeField.getValueStateForContent.withArgs(aControls[1].getId()).returns({valueState: "Error", valueStateText: "My Exception"});
 		const oData = ContentBasicTest.model.getData();
 		const oBindingValueState0 = aControls[0].getBinding("valueState");
 		const oBindingValueState1 = aControls[1].getBinding("valueState");
@@ -277,8 +311,8 @@ sap.ui.define([
 		assert.equal(aControls[0].getValueStateText(), "", "ValueStateText on first control");
 		assert.equal(aControls[1].getValueStateText(), "My Exception", "ValueStateText on second control");
 		oFakeField.isInvalidInput.restore();
-		oFakeField._isInvalidInputForContent.restore();
-		oFakeField._getInvalidInputException.restore();
+		oFakeField.hasValueStateForContent.restore();
+		oFakeField.getValueStateForContent.restore();
 		oData.valueState = "Warning";
 		oData.valueStateText = "My Warning";
 	};
@@ -304,7 +338,7 @@ sap.ui.define([
 			}
 			case "getEdit": {
 				assert.deepEqual(oFormatOptions, {decimals: 3, showNumber: true, showMeasure: false, strictParsing: true, preserveDecimals: true, emptyString: 0, parseAsString: true, unitOptional: false}, "DataType: FormatOptions");
-				assert.deepEqual(oUnitFormatOptions, {decimals: 3, showNumber: false, showMeasure: true, strictParsing: true, preserveDecimals: true, emptyString: 0, parseAsString: true, unitOptional: false}, "UnitType: FormatOptions");
+				assert.deepEqual(oUnitFormatOptions, {decimals: 3, showNumber: false, showMeasure: true, strictParsing: true, preserveDecimals: true, emptyString: "", parseAsString: true, unitOptional: false}, "UnitType: FormatOptions");
 				assert.deepEqual(oUnitOriginalFormatOptions, {decimals: 3, preserveDecimals: true, emptyString: 0, parseAsString: true, unitOptional: true}, "UnitOriginalType: FormatOptions");
 
 				assert.ok(aControls[0].getAriaDescribedBy().indexOf(sInvisibleTextIdNumber) >= 0, "InvisibleText set on ariaDescribedBy for Number");
@@ -326,7 +360,7 @@ sap.ui.define([
 			}
 			case "getEditMultiValue": {
 				assert.deepEqual(oFormatOptions, {decimals: 3, showNumber: true, showMeasure: false, strictParsing: true, preserveDecimals: true, emptyString: 0, parseAsString: true, unitOptional: false}, "DataType: FormatOptions");
-				assert.deepEqual(oUnitFormatOptions, {decimals: 3, showNumber: false, showMeasure: true, strictParsing: true, preserveDecimals: true, emptyString: 0, parseAsString: true, unitOptional: false}, "UnitType: FormatOptions");
+				assert.deepEqual(oUnitFormatOptions, {decimals: 3, showNumber: false, showMeasure: true, strictParsing: true, preserveDecimals: true, emptyString: "", parseAsString: true, unitOptional: false}, "UnitType: FormatOptions");
 				assert.deepEqual(oUnitOriginalFormatOptions, {decimals: 3, preserveDecimals: true, emptyString: 0, parseAsString: true, unitOptional: true}, "UnitOriginalType: FormatOptions");
 
 				assert.ok(aControls[0].getAriaDescribedBy().indexOf(sInvisibleTextIdNumber) >= 0, "InvisibleText set on ariaDescribedBy for Number");

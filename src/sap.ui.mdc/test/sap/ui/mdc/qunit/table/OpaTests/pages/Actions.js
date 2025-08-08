@@ -10,6 +10,7 @@ sap.ui.define([
 	"test-resources/sap/ui/mdc/testutils/opa/table/waitForTable",
 	"test-resources/sap/ui/mdc/testutils/opa/table/Actions",
 	"test-resources/sap/ui/mdc/qunit/table/OpaTests/pages/Util",
+	"sap/ui/test/actions/EnterText",
 	"sap/ui/test/actions/Drag",
 	"sap/ui/test/actions/Drop",
 	"sap/ui/mdc/enums/TableType"
@@ -21,6 +22,7 @@ sap.ui.define([
 	/** @type sap.ui.test.Opa5 */ waitForTable,
 	/** @type sap.ui.test.Opa5 */ TableActions,
 	/** @type sap.ui.mdc.qunit.table.OpaTests.pages.Util */ Util,
+	/** @type sap.ui.test.actions.EnterText */ EnterText,
 	/** @type sap.ui.test.actions.Drag */ Drag,
 	/** @type sap.ui.test.actions.Drop */ Drop,
 	/** @type sap.ui.mdc.enums.TableType */ TableType) {
@@ -181,7 +183,9 @@ sap.ui.define([
 						controlType: "sap.m.MenuButton",
 						actions: new Press(),
 						success: function(oMenuButton) {
-							const sExpandText = bExpandAll ? oResourceBundle.getText("table.EXPAND_TREE") : oResourceBundle.getText("table.EXPAND_NODE");
+							const sExpandText = bExpandAll
+								? oResourceBundle.getText("table.EXPAND_TREE")
+								: oResourceBundle.getText("table.EXPAND_NODE");
 							const oMenuItem = oMenuButton?.getMenu()?.getItems().find((oMenuItem) => oMenuItem.getText() === sExpandText);
 
 							// Simulate menu item press (Having a matcher with an Action does not work in Safari)
@@ -218,8 +222,6 @@ sap.ui.define([
 			});
 		},
 
-
-
 		/**
 		 * Emulates a click action on the expand all rows button.
 		 *
@@ -240,7 +242,9 @@ sap.ui.define([
 						controlType: "sap.m.MenuButton",
 						actions: new Press(),
 						success: function(oMenuButton) {
-							const sCollapseText = bCollapseAll ? oResourceBundle.getText("table.COLLAPSE_TREE") : oResourceBundle.getText("table.COLLAPSE_NODE");
+							const sCollapseText = bCollapseAll
+								? oResourceBundle.getText("table.COLLAPSE_TREE")
+								: oResourceBundle.getText("table.COLLAPSE_NODE");
 							const oMenuItem = oMenuButton?.getMenu()?.getItems().find((oMenuItem) => oMenuItem.getText() === sCollapseText);
 
 							// Simulate menu item press (Having a matcher with an Action does not work in Safari)
@@ -540,7 +544,7 @@ sap.ui.define([
 						matchers: [{
 							ancestor: oTable
 						}],
-						success: function (aGridTableTypes) {
+						success: function(aGridTableTypes) {
 							if (aGridTableTypes.length > 1) {
 								throw new Error("Found too many instances of GridTableType");
 							}
@@ -569,20 +573,35 @@ sap.ui.define([
 					let oColumnSelectable;
 					return this.waitFor({
 						controlType: "sap.ui.mdc.table.Column",
-						check : function (aColumns) {
+						check: function(aColumns) {
 							for (let i = 0; i < aColumns.length; i++) {
-								if (aColumns[i].getHeader() === vColumn || ( typeof vColumn === 'object' && aColumns[i].getHeader() === vColumn.getHeader())) {
+								if (aColumns[i].getHeader() === vColumn ||
+									typeof vColumn === 'object' && aColumns[i].getHeader() === vColumn.getHeader()) {
 									oColumnSelectable = aColumns[i];
 									return true;
 								}
 							}
 							return false;
 						},
-						success: function () {
+						success: function() {
 							new Press().executeOn(oColumnSelectable);
 						},
 						errorMessage: "The column " + vColumn + " is not available"
 					});
+				}
+			});
+		},
+
+		iEnterColumnWidthValue: function(iWidth) {
+			return Util.waitForColumnMenu.call(this, {
+				success: function(oColumnMenu) {
+					const oStepInput = oColumnMenu._getAllEffectiveQuickActions().find(function(oAction) {
+						return oAction.isA("sap.m.table.columnmenu.QuickResize");
+					}).getContent()[0];
+
+					new EnterText({
+						text: iWidth
+					}).executeOn(oStepInput);
 				}
 			});
 		},
@@ -693,6 +712,36 @@ sap.ui.define([
 							});
 						},
 						errorMessage: "Column menu QuickTotalItem not found"
+					});
+				}
+			});
+		},
+
+		iUseColumnMenuQuickFreeze: function() {
+			return Util.waitForColumnMenu.call(this, {
+				success: function(oColumnMenu) {
+					this.waitFor({
+						controlType: "sap.m.table.columnmenu.QuickAction",
+						visible: false,
+						matchers: [{
+							ancestor: oColumnMenu,
+							properties: {
+								label: "Freeze"
+							}
+						}],
+						success: function(aQuickFreezeItems) {
+							this.waitFor({
+								controlType: "sap.m.Switch",
+								matchers: [{
+									ancestor: aQuickFreezeItems[0].getParent()
+								}],
+								success: function(aSwitches) {
+									new Press().executeOn(aSwitches[0]);
+								},
+								errorMessage: "QuickFreeze content is not visible"
+							});
+						},
+						errorMessage: "Column menu QuickFreeze not found"
 					});
 				}
 			});
@@ -912,7 +961,7 @@ sap.ui.define([
 		 *
 		 * @returns {Promise} OPA waitFor
 		 */
-		iOpenP13nDialog: function () {
+		iOpenP13nDialog: function() {
 			return this.waitFor({
 				controlType: "sap.m.Button",
 				matchers: new PropertyStrictEquals({

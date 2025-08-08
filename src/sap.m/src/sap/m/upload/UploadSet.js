@@ -1051,7 +1051,7 @@ sap.ui.define([
 
 		// Set the illustrated message based on drag indicator presence
 		if (this._getDragIndicator()) {
-			oAggregation.setIllustrationType(IllustratedMessageType.UploadCollection);
+			oAggregation.setIllustrationType(IllustratedMessageType.DragFilesToUpload);
 			oAggregation.setTitle(this.getDragDropText());
 			oAggregation.setDescription(this.getUploadEnabled() ? this.getDragDropDescription() : " ");
 		} else {
@@ -1137,6 +1137,7 @@ sap.ui.define([
 				noDataText: this._setListNoDataText()
 			});
 			this._oList.addStyleClass("sapMUCList");
+			this._oList.applyAriaRoleDescription("UPLOAD_SET_LIST_ROLE_DESCRIPTION");
 			this.addDependent(this._oList);
 		}
 
@@ -2301,6 +2302,13 @@ sap.ui.define([
 		}
 		return null;
 	};
+
+	/**
+	 * private property to indicate that the UploadSet is delegating item handling (insertion / removal into the list) to the developer if items aggregation is bound to a model.
+	 * This property should not be modified by the developer. It is a read-only property.
+	 * @private
+	 */
+	UploadSet.prototype._bUploadSetDelegatesItemHandling = true;
 
 	return UploadSet;
 });

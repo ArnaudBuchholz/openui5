@@ -501,6 +501,18 @@ sap.ui.define([
 					]
 				}
 			},
+			"plugin/rename/Rename": {
+				group: "Plugin",
+				coverage: {
+					only: ["sap/ui/rta/plugin/rename/Rename"]
+				}
+			},
+			"plugin/rename/RenameDialog": {
+				group: "Plugin",
+				coverage: {
+					only: ["sap/ui/rta/plugin/rename/RenameDialog"]
+				}
+			},
 			"plugin/AddXMLAtExtensionPoint": {
 				group: "Plugin",
 				coverage: {
@@ -591,12 +603,6 @@ sap.ui.define([
 					only: ["sap/ui/rta/plugin/Remove"]
 				}
 			},
-			"plugin/Rename": {
-				group: "Plugin",
-				coverage: {
-					only: ["sap/ui/rta/plugin/Rename"]
-				}
-			},
 			"plugin/Resize": {
 				group: "Plugin",
 				coverage: {
@@ -662,6 +668,18 @@ sap.ui.define([
 				group: "Service",
 				coverage: {
 					only: ["sap/ui/rta/service/Outline"]
+				},
+				ui5: {
+					resourceroots: {
+						testdata: "test-resources/sap/ui/rta/testdata/",
+						testComponent: "test-resources/sap/ui/rta/qunit/testComponent"
+					}
+				}
+			},
+			"service/Receiver": {
+				group: "Service",
+				coverage: {
+					only: ["sap/ui/rta/service/Receiver"]
 				},
 				ui5: {
 					resourceroots: {
@@ -878,6 +896,14 @@ sap.ui.define([
 				coverage: {
 					only: [
 						"sap/ui/rta/util/changeVisualization/ChangeIndicatorRegistry"
+					]
+				}
+			},
+			"util/changeVisualization/resolveBinding": {
+				group: "Change visualization",
+				coverage: {
+					only: [
+						"sap/ui/rta/util/changeVisualization/resolveBinding"
 					]
 				}
 			},
@@ -1130,6 +1156,22 @@ sap.ui.define([
 							"sap.ui.rta.test": "test-resources/sap/ui/rta/internal/testdata/rta/"
 						},
 						flexibilityServices: '[{"loadConnector": "my/connectors/TestSessionStorageConnectorWithoutVersioning", "writeConnector": "my/connectors/TestSessionStorageConnectorWithoutVersioning"}]'
+					}
+				},
+				"util/guidedTour/GuidedTour": {
+					group: "util",
+					ui5: {
+						resourceroots: {
+							qunit: "test-resources/sap/ui/rta/qunit/",
+							"my.connectors": "./test-resources/sap/ui/fl/qunit/testConnectors/",
+							"sap.ui.rta.qunitrta": "test-resources/sap/ui/rta/internal/testdata/qunit_rta/",
+							"sap.ui.rta.test": "test-resources/sap/ui/rta/internal/testdata/rta/"
+						}
+					},
+					coverage: {
+						only: [
+							"sap/ui/rta/util/guidedTour/GuidedTour"
+						]
 					}
 				},
 				"util/BindingsExtractor": {

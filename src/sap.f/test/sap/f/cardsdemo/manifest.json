@@ -130,6 +130,11 @@
 					"target": "numericHeader"
 				},
 				{
+					"pattern": "headerInfoSection",
+					"name": "headerInfoSection",
+					"target": "headerInfoSection"
+				},
+				{
 					"pattern": "clonedHeader",
 					"name": "clonedHeader",
 					"target": "clonedHeader"
@@ -363,6 +368,11 @@
 					"pattern": "fixedHeight",
 					"name": "fixedHeight",
 					"target": "fixedHeight"
+				},
+				{
+					"pattern": "destinations",
+					"name": "destinations",
+					"target": "destinations"
 				}
 			],
 			"targets": {
@@ -419,6 +429,11 @@
 				"numericHeader": {
 					"id": "numericHeader",
 					"name": "NumericHeader",
+					"level": 1
+				},
+				"headerInfoSection": {
+					"id": "headerInfoSection",
+					"name": "HeaderInfoSection",
 					"level": 1
 				},
 				"clonedHeader": {
@@ -648,6 +663,11 @@
 				"fixedHeight": {
 					"id": "fixedHeight",
 					"name": "FixedHeight",
+					"level": 1
+				},
+				"destinations": {
+					"id": "destinations",
+					"name": "Destinations",
 					"level": 1
 				}
 			}

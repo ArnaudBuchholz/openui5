@@ -170,7 +170,6 @@ sap.ui.define([
 				offsetX: 0,
 				offsetY: 0,
 				initialFocus: parent,
-				bounce: false,
 				ariaLabelledBy: InvisibleText.getStaticId("sap.m", "INPUT_AVALIABLE_VALUES"),
 				afterOpen: function () {
 					oInput._applySuggestionAcc();
@@ -216,8 +215,10 @@ sap.ui.define([
 
 		this.setPopoverMinWidth = function() {
 			var oPopoverDomRef = self._oPopover.getDomRef();
+			var iShadow = self._oPopover._fThickShadowSize;
+
 			if (oPopoverDomRef) {
-				var w = (oInput.$().outerWidth() / parseFloat(library.BaseFontSize)) + "rem";
+				var w = ((oInput.$().outerWidth() - (iShadow * 2)) / parseFloat(library.BaseFontSize)) + "rem";
 				oPopoverDomRef.style.minWidth = w;
 			}
 		};

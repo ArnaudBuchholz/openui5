@@ -639,20 +639,24 @@ sap.ui.define([
 	 *
 	 * @param {boolean} bSelected
 	 *   Whether this context is to be selected
-	 * @param {boolean} [bDoNotUpdateAnnotation]
-	 *   Whether the client-side annotation "@$ui5.context.isSelected" should not be updated
+	 * @param {boolean} [bSilent]
+	 *   Whether the client-side annotation "@$ui5.context.isSelected" should not be updated and
+	 *   the binding should not be informed via
+	 *   {@link sap.ui.model.odata.v4.ODataListBinding#onKeepAliveChanged}
 	 * @returns {boolean}
 	 *   Whether the selection state of this context has changed
 	 *
 	 * @private
 	 * @see #setSelected
 	 */
-	Context.prototype.doSetSelected = function (bSelected, bDoNotUpdateAnnotation) {
+	Context.prototype.doSetSelected = function (bSelected, bSilent) {
 		if (this.bSelected === bSelected) {
 			return false;
 		}
 		this.bSelected = bSelected;
-		this.oBinding.onKeepAliveChanged(this); // selected contexts are effectively kept alive
+		if (!bSilent) {
+			this.oBinding.onKeepAliveChanged(this); // selected contexts are effectively kept alive
+		}
 		const oHeaderContext = this.oBinding.getHeaderContext();
 		if (oHeaderContext === this) {
 			if (!bSelected) {
@@ -664,7 +668,7 @@ sap.ui.define([
 		}
 
 		// Note: data binding may cause #setSelected to be called redundantly!
-		if (!bDoNotUpdateAnnotation) {
+		if (!bSilent) {
 			this.withCache((oCache, sPath) => {
 				if (this.oBinding) {
 					oCache.setProperty("@$ui5.context.isSelected", bSelected, sPath);
@@ -1021,9 +1025,9 @@ sap.ui.define([
 	/**
 	 * Returns the value for the given path relative to this context. The function allows access to
 	 * the complete data the context points to (if <code>sPath</code> is "") or any part thereof.
-	 * The data is a JSON structure as described in <a href=
-	 * "https://docs.oasis-open.org/odata/odata-json-format/v4.0/odata-json-format-v4.0.html"
-	 * >"OData JSON Format Version 4.0"</a>.
+	 * The data is a JSON structure as described in
+	 * <a href="https://docs.oasis-open.org/odata/odata-json-format/v4.0/">
+	 * "OData JSON Format Version 4.0"</a>.
 	 * Note that the function clones the result. Modify values via
 	 * {@link sap.ui.model.odata.v4.ODataPropertyBinding#setValue}.
 	 *
@@ -1180,9 +1184,9 @@ sap.ui.define([
 	/**
 	 * Returns the value for the given path. The function allows access to the complete data the
 	 * context points to (if <code>sPath</code> is "") or any part thereof. The data is a JSON
-	 * structure as described in <a href=
-	 * "https://docs.oasis-open.org/odata/odata-json-format/v4.0/odata-json-format-v4.0.html"
-	 * >"OData JSON Format Version 4.0"</a>.
+	 * structure as described in
+	 * <a href="https://docs.oasis-open.org/odata/odata-json-format/v4.0/">
+	 * "OData JSON Format Version 4.0"</a>.
 	 * Note that the function returns the cache instance. Do not modify the result, use
 	 * {@link sap.ui.model.odata.v4.ODataPropertyBinding#setValue} instead.
 	 *
@@ -1326,8 +1330,7 @@ sap.ui.define([
 			&& this.oBinding.getHeaderContext?.()
 			&& this.oBinding.getHeaderContext().isSelected() !== this.isSelected()
 			&& (mParameters.$$ownRequest || !this.oBinding.isRelative())
-			&& !_Helper.isDataAggregation(mParameters)
-			// check for key predicate in the last path segment
+			// check for "key predicate" (not index) in the last path segment
 			&& this.sPath.indexOf("(", this.sPath.lastIndexOf("/")) > 0;
 	};
 
@@ -1698,9 +1701,9 @@ sap.ui.define([
 	/**
 	 * Returns a promise on the value for the given path relative to this context. The function
 	 * allows access to the complete data the context points to (if <code>sPath</code> is "") or
-	 * any part thereof. The data is a JSON structure as described in <a href=
-	 * "https://docs.oasis-open.org/odata/odata-json-format/v4.0/odata-json-format-v4.0.html"
-	 * >"OData JSON Format Version 4.0"</a>.
+	 * any part thereof. The data is a JSON structure as described in
+	 * <a href="https://docs.oasis-open.org/odata/odata-json-format/v4.0/">
+	 * "OData JSON Format Version 4.0"</a>.
 	 * Note that the function clones the result. Modify values via {@link #setProperty}.
 	 *
 	 * The header context of a list binding only delivers <code>$count</code> and
@@ -2127,7 +2130,8 @@ sap.ui.define([
 			oBinding = oCandidate.oBinding;
 			sPath = oBinding.getPath();
 			oParentContext = oBinding.getContext();
-			if (oBinding.oCache && (!oContext || oBinding.oCache.hasChangeListeners())) {
+			if (oBinding.oCache?.hasChangeListeners() || !oContext && oBinding.oCache !== null) {
+				// Note: undefined cache looks like a refresh in progress
 				oContext = oCandidate; // active binding with own cache is a good target
 			}
 			if (oContext && sPath) {
@@ -2135,9 +2139,6 @@ sap.ui.define([
 				break;
 			}
 			if (!oBinding.getBoundContext) {
-				if (oBinding.oCache === undefined) {
-					return undefined; // nothing to do - looks like a refresh in progress
-				}
 				throw new Error("Not a context binding: " + oBinding);
 			}
 			oCandidate = oParentContext;

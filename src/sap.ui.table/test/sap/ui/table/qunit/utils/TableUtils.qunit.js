@@ -15,8 +15,6 @@ sap.ui.define([
 	"sap/ui/core/InvisibleMessage",
 	"sap/ui/core/message/MessageType",
 	"sap/ui/base/Object",
-	"sap/base/i18n/ResourceBundle",
-	"sap/base/i18n/Localization",
 	"sap/ui/thirdparty/jquery",
 	// provides jQuery custom selectors ":sapTabbable", ":sapFocusable"
 	"sap/ui/dom/jquery/Selectors"
@@ -35,8 +33,6 @@ sap.ui.define([
 	InvisibleMessage,
 	MessageType,
 	BaseObject,
-	ResourceBundle,
-	Localization,
 	jQuery
 ) {
 	"use strict";
@@ -75,11 +71,6 @@ sap.ui.define([
 	QUnit.test("Column", function(assert) {
 		assert.ok(!!TableUtils.Column, "Column namespace available");
 		assert.ok(TableUtils.Column.TableUtils === TableUtils, "Dependency forwarding of TableUtils correct");
-	});
-
-	QUnit.test("Binding", function(assert) {
-		assert.ok(!!TableUtils.Binding, "Binding namespace available");
-		assert.ok(TableUtils.Binding.TableUtils === TableUtils, "Dependency forwarding of TableUtils correct");
 	});
 
 	QUnit.test("isRowSelectionAllowed", async function(assert) {
@@ -763,16 +754,6 @@ sap.ui.define([
 		assert.strictEqual(TableUtils.getRowIndexOfFocusedCell(oTable), -1, "COLUMNROWHEADER");
 	});
 
-	QUnit.test("focusItem", function(assert) {
-		let oCell = getCell(1, 1);
-		TableUtils.focusItem(oTable, 14 /*SelectAll + 5 Headers + 1st Row (Rowselector + 5 cells) + 2nd row (Rowselector + 2 cells)*/);
-		assert.ok(oCell.get(0) !== document.activeElement, "Focus not set becuase item navigation not yet initialized");
-		getCell(0, 0, true);
-		TableUtils.focusItem(oTable, 14 /*SelectAll + 5 Headers + 1st Row (Rowselector + 5 cells) + 2nd row (Rowselector + 2 cells)*/);
-		oCell = getCell(1, 1);
-		assert.ok(oCell.get(0) === document.activeElement, "Focus set");
-	});
-
 	QUnit.test("scrollTableToIndex", function(assert) {
 		const oRowsUpdatedSpy = sinon.spy();
 		oTable.attachRowsUpdated(oRowsUpdatedSpy);
@@ -1001,36 +982,6 @@ sap.ui.define([
 		assert.strictEqual(TableUtils.hasData(oTable), false, "Table has no data");
 	});
 
-	QUnit.test("isBusyIndicatorVisible", async function(assert) {
-		oTable.setBusyIndicatorDelay(0);
-
-		assert.ok(!TableUtils.isBusyIndicatorVisible(), "Invalid parameter passed: Returned false");
-		assert.ok(!TableUtils.isBusyIndicatorVisible(null), "Invalid parameter passed: Returned false");
-		assert.ok(!TableUtils.isBusyIndicatorVisible(oTable), "The busy indicator is not visible: Returned false");
-
-		oTable.setBusy(true);
-		await nextUIUpdate();
-		assert.ok(TableUtils.isBusyIndicatorVisible(oTable),
-			"The tables busy indicator is visible: Returned true");
-
-		oTable.getRows()[0].getCells()[0].setBusyIndicatorDelay(0);
-		oTable.getRows()[0].getCells()[0].setBusy(true);
-		await nextUIUpdate();
-		assert.ok(TableUtils.isBusyIndicatorVisible(oTable),
-			"The tables busy indicator is visible, and a cells busy indicator is visible: Returned true");
-
-		oTable.setBusy(false);
-		await nextUIUpdate();
-		assert.ok(!TableUtils.isBusyIndicatorVisible(oTable),
-			"The tables busy indicator is not visible, but a cells busy indicator is visible: Returned false");
-
-		oTable.setCreationRow(new CreationRow());
-		oTable.setBusy(true);
-		await nextUIUpdate();
-		assert.ok(TableUtils.isBusyIndicatorVisible(oTable),
-			"The tables busy indicator is visible, but doesn't cover the CreationRow");
-	});
-
 	QUnit.test("isA", function(assert) {
 		const oBaseObjectIsA = this.spy(BaseObject, "isObjectA");
 
@@ -1054,28 +1005,6 @@ sap.ui.define([
 		});
 
 		oBaseObjectIsA.restore();
-	});
-
-	QUnit.test("isFirstScrollableRow / isLastScrollableRow", async function(assert) {
-		const iVisibleRowCount = 6;
-		const iFixedTop = 2;
-		const iFixedBottom = 2;
-
-		oTable.setRowMode(new FixedRowMode({
-			rowCount: iVisibleRowCount,
-			fixedTopRowCount: iFixedTop,
-			fixedBottomRowCount: iFixedBottom
-		}));
-		await nextUIUpdate();
-
-		for (let j = 0; j < 2; j++) {
-			for (let i = 0; i < iVisibleRowCount; i++) {
-				assert.equal(TableUtils.isFirstScrollableRow(oTable, getCell(i, 0)), i === iFixedTop, "isFirstScrollableRow (" + i + ")");
-				assert.equal(TableUtils.isLastScrollableRow(oTable, getCell(i, 0)), i === iVisibleRowCount - iFixedBottom - 1,
-					"isLastScrollableRow (" + i + ")");
-			}
-			oTable._getScrollExtension().scrollVertically(true);
-		}
 	});
 
 	QUnit.test("getCell", async function(assert) {
@@ -1183,7 +1112,6 @@ sap.ui.define([
 	});
 
 	QUnit.test("getInteractiveElements", async function(assert) {
-		TableQUnitUtils.addColumn(oTable, "Focusable & Not Tabbable", "Focus&NoTabSpan", false, true, false);
 		TableQUnitUtils.addColumn(oTable, "Not Focusable & Not Tabbable", "NoFocus&NoTabSpan", false, false, false);
 		TableQUnitUtils.addColumn(oTable, "Focusable & Tabbable", "Focus&TabInput", true, null, true, null, null, true);
 		TableQUnitUtils.addColumn(oTable, "Focusable & Not Tabbable", "Focus&NoTabInput", true, null, false);
@@ -1194,27 +1122,23 @@ sap.ui.define([
 		/* Data cells */
 
 		let $InteractiveElements = TableUtils.getInteractiveElements(getCell(0, oTable.columnCount - 1));
-		assert.strictEqual($InteractiveElements.length, 1, "(JQuery) Data cell with focusable element: One element was returned");
-		assert.strictEqual($InteractiveElements[0].value, "Focus&NoTabInput1",
-			"(JQuery) Data cell with focusable element: The correct element was returned");
+		assert.strictEqual($InteractiveElements, null, "(JQuery) Data cell with focusable and non-tabbable element: Null was returned");
 
 		$InteractiveElements = TableUtils.getInteractiveElements(getCell(0, oTable.columnCount - 1)[0]);
-		assert.strictEqual($InteractiveElements.length, 1, "(HTMLElement) Data cell with focusable element: One element was returned");
-		assert.strictEqual($InteractiveElements[0].value, "Focus&NoTabInput1",
-			"(HTMLElement) Data cell with focusable element: The correct element was returned");
+		assert.strictEqual($InteractiveElements, null, "(HTMLElement) Data cell with focusable and non-tabbable element: Null was returned");
 
 		$InteractiveElements = TableUtils.getInteractiveElements(getCell(0, oTable.columnCount - 2));
-		assert.strictEqual($InteractiveElements.length, 1, "(jQuery) Data cell with focusable & tabbable element: One element was returned");
-		assert.strictEqual($InteractiveElements[0].value, "Focus&TabInput1",
+		assert.strictEqual($InteractiveElements?.length, 1, "(jQuery) Data cell with focusable & tabbable element: One element was returned");
+		assert.strictEqual($InteractiveElements?.[0].value, "Focus&TabInput1",
 			"(jQuery) Data cell with focusable & tabbable element: The correct element was returned");
 
 		$InteractiveElements = TableUtils.getInteractiveElements(getCell(0, oTable.columnCount - 2)[0]);
-		assert.strictEqual($InteractiveElements.length, 1, "(HTMLElement) Data cell with focusable & tabbable element: One element was returned");
-		assert.strictEqual($InteractiveElements[0].value, "Focus&TabInput1",
+		assert.strictEqual($InteractiveElements?.length, 1, "(HTMLElement) Data cell with focusable & tabbable element: One element was returned");
+		assert.strictEqual($InteractiveElements?.[0].value, "Focus&TabInput1",
 			"(HTMLElement) Data cell with focusable & tabbable element: The correct element was returned");
 
 		$InteractiveElements = TableUtils.getInteractiveElements(getCell(0, oTable.columnCount - 3));
-		assert.strictEqual($InteractiveElements, null, "Data cell without interactive element: Null was returned");
+		assert.strictEqual($InteractiveElements, null, "Data cell with non-focusable and non-tabbable: Null was returned");
 
 		/* Row action cells */
 
@@ -1354,8 +1278,8 @@ sap.ui.define([
 		assert.equal(TableUtils.convertCSSSizeToPixel(100.11), null, "Float could not be converted. Returned null.");
 	});
 
-	QUnit.test("getBaseFontSize", function(assert) {
-		assert.equal(TableUtils.getBaseFontSize(), 16, "Base font size returned");
+	QUnit.test("_getBaseFontSize", function(assert) {
+		assert.equal(TableUtils._getBaseFontSize(), 16, "Base font size returned");
 	});
 
 	QUnit.test("addDelegate", function(assert) {
@@ -1365,9 +1289,6 @@ sap.ui.define([
 
 		TableUtils.addDelegate();
 		assert.ok(oDelegateSpy.notCalled, "No parameters passed: Element#addDelegate was not called");
-
-		TableUtils.addDelegate(oTable);
-		assert.ok(oDelegateSpy.notCalled, "No delegate passed: Element#addDelegate was not called");
 
 		TableUtils.addDelegate(oTable, oDelegateDummy);
 		assert.ok(oDelegateSpy.calledOnce, "Element#addDelegate was called once");
@@ -1379,23 +1300,6 @@ sap.ui.define([
 		assert.ok(oDelegateSpy.calledOnce, "Element#addDelegate was called once");
 		assert.ok(oDelegateSpy.calledWithExactly(oDelegateDummy, false, oThisDummy, false),
 			"Element#addDelegate is called with the correct parameters");
-
-		oDelegateSpy.restore();
-	});
-
-	QUnit.test("removeDelegate", function(assert) {
-		const oDelegateSpy = sinon.spy(oTable, "removeDelegate");
-		const oDelegateDummy = {prop: 1};
-
-		TableUtils.removeDelegate();
-		assert.ok(oDelegateSpy.notCalled, "No parameters passed: Element#removeDelegate was not called");
-
-		TableUtils.removeDelegate(oTable);
-		assert.ok(oDelegateSpy.notCalled, "No delegate passed: Element#removeDelegate was not called");
-
-		TableUtils.removeDelegate(oTable, oDelegateDummy);
-		assert.ok(oDelegateSpy.calledOnce, "Element#addDelegate was called once");
-		assert.ok(oDelegateSpy.calledWithExactly(oDelegateDummy), "Element#removeDelegate is called with the correct parameters");
 
 		oDelegateSpy.restore();
 	});
@@ -1486,6 +1390,43 @@ sap.ui.define([
 		oPos = TableUtils.getEventPosition(oEvent, oTable);
 		assert.equal(oPos.x, x, "TouchEvent (wrapped) - X");
 		assert.equal(oPos.y, y, "TouchEvent (wrapped) - Y");
+	});
+
+	QUnit.test("getBindingContextOfRow", async function(assert) {
+		const oTable = TableQUnitUtils.createTable({
+			columns: TableQUnitUtils.createTextColumn(),
+			rows: "{/}",
+			models: {
+				undefined: TableQUnitUtils.createJSONModelWithEmptyRows(3),
+				myModel: TableQUnitUtils.createJSONModelWithEmptyRows(3)
+			},
+			rowMode: new FixedRowMode({rowCount: 3})
+		});
+		await oTable.qunit.whenRenderingFinished();
+
+		const aRows = oTable.getRows();
+
+		assert.strictEqual(TableUtils.getBindingContextOfRow(aRows[0]), aRows[0].getBindingContext(), "Unnamed model");
+
+		oTable.bindRows({path: "/", model: "myModel"});
+		await oTable.qunit.whenRenderingFinished();
+		assert.strictEqual(TableUtils.getBindingContextOfRow(aRows[0]), aRows[0].getBindingContext("myModel"), "Named model");
+
+		// Returns the binding context of the unnamed model if the row is not a child of the table.
+		oTable.getRowMode().setRowCount(2);
+		await oTable.qunit.whenRenderingFinished();
+		assert.strictEqual(TableUtils.getBindingContextOfRow(aRows[2]), aRows[2].getBindingContext(), "Row was removed from the aggregation");
+
+		// Returns the binding context of the unnamed model if the rows aggregation is not bound.
+		oTable.setShowNoData(false);
+		oTable.unbindRows();
+		await oTable.qunit.whenRenderingFinished();
+		assert.strictEqual(TableUtils.getBindingContextOfRow(aRows[0]), aRows[0].getBindingContext(), "Table is not bound");
+
+		assert.throws(() => { TableUtils.getBindingContextOfRow({}); }, "Invalid row passed");
+		assert.throws(() => { TableUtils.getBindingContextOfRow(); }, "No row passed");
+
+		oTable.destroy();
 	});
 
 	QUnit.module("Resize Handler", {

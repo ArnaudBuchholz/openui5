@@ -7,7 +7,6 @@ sap.ui.define([
 	"./library",
 	"sap/ui/core/Control",
 	"sap/ui/core/Element",
-	"sap/ui/core/InvisibleText",
 	"sap/ui/core/EnabledPropagator",
 	"sap/ui/core/AccessKeysEnablement",
 	"sap/ui/core/LabelEnablement",
@@ -25,7 +24,6 @@ function(
 	library,
 	Control,
 	Element,
-	InvisibleText,
 	EnabledPropagator,
 	AccessKeysEnablement,
 	LabelEnablement,
@@ -483,13 +481,15 @@ function(
 	 */
 	Link.prototype._handlePress = function(oEvent) {
 		var oTarget = oEvent.target,
+			parentElement,
 			bEmptyHref;
 
 		if (this.getEnabled()) {
 			// mark the event for components that needs to know if the event was handled by the link
 			oEvent.setMarked();
 
-			bEmptyHref = (oTarget.classList.contains("sapMLnk") || oTarget.parentElement.classList.contains("sapMLnk")) && (oTarget.getAttribute("href") == "#" || oTarget.parentElement.getAttribute("href") == "#");
+			parentElement = oTarget.parentElement && oTarget.parentElement.classList.contains("sapMLnkText") ? oTarget.parentElement.parentElement : oTarget.parentElement;
+			bEmptyHref = (oTarget.classList.contains("sapMLnk") || parentElement.classList.contains("sapMLnk")) && (oTarget.getAttribute("href") == "#" || parentElement.getAttribute("href") == "#");
 			if (!this.firePress({ctrlKey: !!oEvent.ctrlKey, metaKey: !!oEvent.metaKey}) || bEmptyHref) { // fire event and check return value whether default action should be prevented
 				oEvent.preventDefault();
 			}
@@ -517,29 +517,6 @@ function(
 			// for controls which need to know whether they should handle events bubbling from here
 			oEvent.setMarked();
 		}
-	};
-
-
-	/* override standard setters */
-
-	Link.prototype.setSubtle = function(bSubtle){
-		this.setProperty("subtle", bSubtle);
-
-		if (bSubtle && !Link.prototype._sAriaLinkSubtleId) {
-			Link.prototype._sAriaLinkSubtleId = InvisibleText.getStaticId("sap.m", "LINK_SUBTLE");
-		}
-
-		return this;
-	};
-
-	Link.prototype.setEmphasized = function(bEmphasized){
-		this.setProperty("emphasized", bEmphasized);
-
-		if (bEmphasized && !Link.prototype._sAriaLinkEmphasizedId) {
-			Link.prototype._sAriaLinkEmphasizedId = InvisibleText.getStaticId("sap.m", "LINK_EMPHASIZED");
-		}
-
-		return this;
 	};
 
 	Link.prototype.setIcon = function(sSrc) {

@@ -28,7 +28,8 @@ sap.ui.define([
 	 * @alias sap.ui.base.BindingParser
 	 */
 	var BindingParser = {
-			_keepBindingStrings : false
+			_keepBindingStrings : false,
+			UI5ObjectMarker : Symbol("ui5object") // Marker to not 'forget' ui5Objects
 		};
 
 	/**
@@ -175,7 +176,7 @@ sap.ui.define([
 	// A qualified name, followed by a .bind(id) call
 	// 1st capturing group matches the qualified name w/o .bind() call
 	// 2nd capturing group matches the .bind() argument
-	const rFormatterBind = /(^(?:[$_\p{ID_Start}][$_\p{ID_Continue}]*\.)*[\p{ID_Start}][$_\p{ID_Continue}]*)\.bind\(([$_\p{ID_Start}][$_\p{ID_Continue}]*)\)$/u;
+	const rFormatterBind = /(^(?:\.)?(?:[$_\p{ID_Start}][$_\p{ID_Continue}]*\.)*[\p{ID_Start}][$_\p{ID_Continue}]*)\.bind\(([$_\p{ID_Start}][$_\p{ID_Continue}]*)\)$/u;
 
 	function resolveBindingInfo(oEnv, oBindingInfo) {
 		var mVariables = Object.assign({".": oEnv.oContext}, oEnv.mLocals);
@@ -206,7 +207,7 @@ sap.ui.define([
 					if (!aMatch) {
 						throw new Error(`Error in formatter '${sName}': Either syntax error in the usage of '.bind(...)' or wrong number of arguments given. Only one argument is allowed when using '.bind()'.`);
 					}
-					if (aMatch[2].startsWith("$") && !Object.hasOwn(oEnv.mAdditionalBindableValues, aMatch[2])) {
+					if (aMatch[2].startsWith("$") && (!oEnv.mAdditionalBindableValues || !Object.hasOwn(oEnv.mAdditionalBindableValues, aMatch[2]))) {
 						throw new Error(`Error in formatter '${sName}': The argument '${aMatch[2]}' used in the '.bind()' call starts with '$', which is only allowed for framework-reserved variables. Please rename the variable so that it doesn't start with '$'.`);
 					}
 
@@ -514,7 +515,8 @@ sap.ui.define([
 			bUnescaped,
 			p = 0,
 			m,
-			oEmbeddedBinding;
+			oEmbeddedBinding,
+			vExpressionConst; // the constant value resulting from an expression binding
 
 		/**
 		 * Parses an expression. Sets the flags accordingly.
@@ -565,7 +567,8 @@ sap.ui.define([
 			if (oBinding.result) {
 				setMode(oBinding.result);
 			} else {
-				aFragments[aFragments.length - 1] = String(oBinding.constant);
+				vExpressionConst = oBinding.constant;
+				aFragments[aFragments.length - 1] = String(vExpressionConst);
 				bUnescaped = true;
 			}
 			return oBinding;
@@ -643,14 +646,18 @@ sap.ui.define([
 
 			return oBindingInfo;
 		} else if ( bUnescape && bUnescaped ) {
-			var sResult = aFragments.join('');
+			// non-string constant -> static binding
+			const vResult = vExpressionConst !== undefined && typeof vExpressionConst !== "string"
+					&& aFragments.length === 1
+				? {value : vExpressionConst, [BindingParser.UI5ObjectMarker] : false}
+				: aFragments.join('');
 			if (bResolveTypesAsync) {
 				return {
-					bindingInfo: sResult,
+					bindingInfo: vResult,
 					resolved: Promise.resolve()
 				};
 			}
-			return sResult;
+			return vResult;
 		}
 
 	};

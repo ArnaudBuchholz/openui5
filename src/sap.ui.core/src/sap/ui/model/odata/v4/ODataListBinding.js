@@ -29,6 +29,7 @@ sap.ui.define([
 	"use strict";
 
 	var sClassName = "sap.ui.model.odata.v4.ODataListBinding",
+		rLambdaOperators = /All|Any|NotAll|NotAny/,
 		mSupportedEvents = {
 			AggregatedDataStateChange : true,
 			change : true,
@@ -578,8 +579,8 @@ sap.ui.define([
 	 * <code>start</code> and <code>length</code> parameters can be used to retrieve the received
 	 * data via {@link #requestContexts}.
 	 *
-	 * If the request fails, the <code>errorMessage</code> is a UI5 message containing the back-end
-	 * error. It is reported to the message model by default unless
+	 * If the request fails, the <code>messagesOnError</code> is an array of UI5 messages containing
+	 * the back-end messages. They are reported to the message model by default unless
 	 * {@link sap.ui.base.Event#preventDefault} is called.
 	 *
 	 * @param {sap.ui.base.Event} oEvent
@@ -594,12 +595,12 @@ sap.ui.define([
 	 *   The start index of the requested range
 	 * @param {number} oEvent.getParameters.length
 	 *   The length of the requested range
-	 * @param {sap.ui.core.message.Message} [oEvent.getParameters.errorMessage]
-	 *   A UI5 message of type {@link module:sap/ui/core/message/MessageType MessageType.Error}
+	 * @param {sap.ui.core.message.Message[]} [oEvent.getParameters.messagesOnError]
+	 *   An array of UI5 messages if the request failed; <code>undefined</code> otherwise
 	 *
 	 * @event sap.ui.model.odata.v4.ODataListBinding#separateReceived
-	 * @experimental As of version 1.131.0
 	 * @public
+	 * @since 1.137.0
 	 */
 
 	/**
@@ -2075,11 +2076,14 @@ sap.ui.define([
 				}
 
 				sOperator = oFilter.getOperator();
-				if (sOperator === FilterOperator.All || sOperator === FilterOperator.Any) {
+				if (rLambdaOperators.test(sOperator)) {
+					const bNot = sOperator.startsWith("Not");
+					sOperator = sOperator.replace("Not", "");
+					const sPrefix = (bNot ? "not " : "") + oFilter.getPath() + "/";
 					oCondition = oFilter.getCondition();
 					sLambdaVariable = oFilter.getVariable();
-					if (sOperator === FilterOperator.Any && !oCondition) {
-						return oFilter.getPath() + "/any()";
+					if (sOperator === "Any" && !oCondition) {
+						return sPrefix + "any()";
 					}
 					// multifilters are processed in parallel, so clone mLambdaVariableToPath
 					// to allow same lambda variables in different filters
@@ -2087,10 +2091,8 @@ sap.ui.define([
 					mLambdaVariableToPath[sLambdaVariable]
 						= replaceLambdaVariables(oFilter.getPath(), mLambdaVariableToPath);
 
-					return fetchFilter(
-						oCondition, mLambdaVariableToPath
-					).then(function (sFilterValue) {
-						return oFilter.getPath() + "/" + oFilter.getOperator().toLowerCase()
+					return fetchFilter(oCondition, mLambdaVariableToPath).then((sFilterValue) => {
+						return sPrefix + sOperator.toLowerCase()
 							+ "(" + sLambdaVariable + ":" + sFilterValue + ")";
 					});
 				}
@@ -2530,14 +2532,14 @@ sap.ui.define([
 			length : iEnd - iStart
 		};
 		if (oError) {
-			oParameters.errorMessage = this.oModel.reportTransitionMessages(
-				_Helper.extractMessages(oError), oError.resourcePath, /*bSilent*/true)[0];
+			oParameters.messagesOnError = this.oModel.reportTransitionMessages(
+				_Helper.extractMessages(oError), oError.resourcePath, /*bSilent*/true);
 		}
 
 		const bDefaultAction = this.fireEvent("separateReceived", oParameters, true);
 
 		if (oError && bDefaultAction) {
-			Messaging.updateMessages(undefined, [oParameters.errorMessage]);
+			Messaging.updateMessages(undefined, oParameters.messagesOnError);
 		}
 	};
 
@@ -2620,7 +2622,7 @@ sap.ui.define([
 	 * @param {string} sResourcePath
 	 *   The resource path for the cache
 	 * @param {object} mQueryOptions
-	 *   The query options for the cache
+	 *   The query options for the cache (requires "copy on write"!)
 	 * @returns {sap.ui.model.odata.v4.lib._CollectionCache|undefined}
 	 *   The cache or <code>undefined</code> if the model has no matching temporary binding
 	 *
@@ -3421,7 +3423,7 @@ sap.ui.define([
 	 * because the binding may have acquired them via autoExpandSelect.
 	 *
 	 * @param {object} mQueryOptions
-	 *   The query options
+	 *   A map of key-value pairs representing the query string (requires "copy on write"!)
 	 * @param {sap.ui.model.Context} [oContext]
 	 *   The context instance to be used, must be <code>undefined</code> for absolute bindings
 	 * @returns {object} The merged query options
@@ -3628,6 +3630,10 @@ sap.ui.define([
 	 */
 	ODataListBinding.prototype.isUnchangedParameter = function (sName, vOtherValue) {
 		if (sName === "$$aggregation") {
+			if (!vOtherValue) {
+				return this.mParameters.$$aggregation === vOtherValue;
+			}
+
 			// Note: $fetchMetadata is lost here, but never mind - $apply does not matter, only
 			// normalization is needed
 			vOtherValue = _Helper.clone(vOtherValue); // avoid modification due to normalization
@@ -4758,7 +4764,7 @@ sap.ui.define([
 
 	/**
 	 * Sets a new data aggregation object and derives the system query option <code>$apply</code>
-	 * implicitly from it.
+	 * implicitly from it. If the aggregation is unchanged, nothing happens.
 	 *
 	 * @param {object} [oAggregation]
 	 *   An object holding the information needed for data aggregation; see also
@@ -4809,7 +4815,9 @@ sap.ui.define([
 	 *   <code>hierarchyQualifier</code> is given. Root nodes are on the first level. By default,
 	 *   only root nodes are available; they are not yet expanded. Since 1.120.0,
 	 *   <code>expandTo >= Number.MAX_SAFE_INTEGER</code> can be used to expand all levels
-	 *   (<code>1E16</code> is recommended inside XML views for simplicity).
+	 *   (<code>1E16</code> is recommended inside XML views for simplicity). Since 1.139.0,
+	 *   {@link #getAggregation} returns <code>expandTo : Number.MAX_SAFE_INTEGER</code> instead of
+	 *   values greater than this. These differences do not count as changes.
 	 * @param {boolean} [oAggregation.grandTotalAtBottomOnly]
 	 *   Tells whether the grand totals for aggregatable properties are displayed at the bottom only
 	 *   (since 1.86.0); <code>true</code> for bottom only, <code>false</code> for top and bottom,
@@ -4879,12 +4887,13 @@ sap.ui.define([
 	 *     <li> the binding has a {@link sap.ui.model.odata.v4.Context#isKeepAlive kept-alive}
 	 *       context when switching the use case of data aggregation (recursive hierarchy, pure data
 	 *       aggregation, or none at all),
-	 *     <li> there are pending changes,
+	 *     <li> there are pending changes (unless the aggregation is unchanged),
 	 *     <li> a recursive hierarchy is requested, but the model does not use the
 	 *       <code>autoExpandSelect</code> parameter,
 	 *     <li> the binding is part of a {@link #create deep create} because it is relative to a
 	 *       {@link sap.ui.model.odata.v4.Context#isTransient transient} context,
-	 *     <li> the binding has {@link sap.ui.model.Filter.NONE}
+	 *     <li> the binding has {@link sap.ui.model.Filter.NONE} (unless the aggregation is
+	 *       unchanged)
 	 *   </ul>
 	 *
 	 * @example <caption>First group level is product category including subtotals for the net
@@ -4928,6 +4937,9 @@ sap.ui.define([
 		}
 
 		this.checkTransient();
+		if (this.isUnchangedParameter("$$aggregation", oAggregation)) {
+			return;
+		}
 		if (this.hasFilterNone()) {
 			throw new Error("Cannot combine Filter.NONE with $$aggregation");
 		}

@@ -28,6 +28,110 @@ sap.ui.define([
 	// Cache to store loaded XML documents
 	const oInteractionXMLCache = new Map();
 
+	const getNormalizedShortcutString = (input) => {
+		const allParts = input.split('+').map((p) => p.trim());
+
+		const modifiers = {
+			ctrl: false,
+			alt: false,
+			shift: false
+		};
+
+		let key = null;
+
+		for (const part of allParts) {
+			const lower = part.toLowerCase();
+			if (lower === 'ctrl') {
+				modifiers.ctrl = true;
+			} else if (lower === 'alt') {
+				modifiers.alt = true;
+			} else if (lower === 'shift') {
+				modifiers.shift = true;
+			} else if (!key) {
+				if (part.length === 1) {
+					key = part.toUpperCase(); // Single character keys are transformed to uppercase
+				} else {
+					key = part;
+				}
+			}
+		}
+
+		const result = [];
+		if (modifiers.ctrl) {
+			result.push(Device.os.macintosh ? 'Cmd' : 'Ctrl');
+		}
+		if (modifiers.alt) {
+			result.push('Alt');
+		}
+		if (modifiers.shift) {
+			result.push('Shift');
+		}
+		if (key) {
+			result.push(key);
+		}
+
+		return result.join('+');
+	};
+
+	/**
+	 * Translates a keyboard shortcut string by localizing each key segment.
+	 * The shortcut string is expected to use '+' as a delimiter (e.g., "Ctrl+Shift+S").
+	 * If a translation is not found, the original key is used.
+	 *
+	 * @param {string} sShortcut The shortcut string
+	 * @return {string} The translated shortcut string
+	 */
+	const localizeKeys = (sShortcut) => {
+		const oResourceBundle = Library.getResourceBundleFor("sap.ui.core");
+		return sShortcut
+			.split("+")
+			.map((key) => {
+				const sKey = key.trim();
+				const sPropertiesKey = `Keyboard.Shortcut.${sKey}`;
+				const sText = sKey.length > 1 ? oResourceBundle.getText(sPropertiesKey) : sKey;
+				return sText === sPropertiesKey ? key.trim() : sText;
+			}).join("+");
+	};
+
+	/**
+	 * Translates and annotates all <kbd> elements.
+ 	 *
+ 	 * For each <kbd> element:
+ 	 * - If it doesn't already have a `data-sap-ui-kbd-raw` attribute, it computes a normalized
+ 	 *   version of its text content using `getNormalizedShortcutString()` and sets this attribute.
+	 * - Replaces the <kbd> element's text content with the translated shortcut via `translateShortcut()`.
+	 *
+	 * @param {array<Element>} kbds An array of <kbd> elements to be translated and annotated.
+	 * @return {array<Element>} The modified array of <kbd> elements with translated text and attributes.
+	 */
+	const annotateAndTranslateKbdTags = (kbds) => {
+		kbds.forEach((kbd) => {
+			if (!kbd.hasAttribute("data-sap-ui-kbd-raw")) {
+				const sNormalized = getNormalizedShortcutString(kbd.textContent);
+				kbd.setAttribute("data-sap-ui-kbd-raw", sNormalized);
+				kbd.textContent = localizeKeys(sNormalized);
+			}
+		});
+
+		return kbds;
+	};
+
+	/**
+	 * Translates the interaction XML document by annotating and translating all <kbd> tags
+	 * within the interaction nodes and their descriptions.
+	 * This function modifies the XML document in place.
+	 *
+	 * @param {XMLDocument} oInteractionXML The interaction XML document to translate.
+	 * @return {XMLDocument} The translated interaction XML document.
+	 */
+	const translateInteractionXML = (oInteractionXML) => {
+		const oInteractionDoc = oInteractionXML.documentElement;
+		const kbdElements = Array.from(oInteractionDoc.querySelectorAll("kbd"));
+		annotateAndTranslateKbdTags(kbdElements);
+
+		return oInteractionXML;
+	};
+
 	/**
 	 * Retrieves the command information for a given control.
 	 * @param  {sap.ui.core.Control} oControl The control to analyze.
@@ -40,10 +144,14 @@ sap.ui.define([
 		for (const oDependent of aDependents) {
 			if (oDependent.isA("sap.ui.core.CommandExecution") && oDependent.getVisible()) {
 				const oCommandInfo = oDependent._getCommandInfo();
+				const sKbd = getNormalizedShortcutString(oCommandInfo.shortcut);
 
 				aCommandInfos.push({
 					name: oDependent.getCommand(),
-					kbd: Device.os.macintosh ? [oCommandInfo.shortcut.replace("Ctrl", "Cmd")] : [oCommandInfo.shortcut],
+					kbd: [{
+						raw: sKbd,
+						translated: localizeKeys(sKbd)
+					}],
 					description: oCommandInfo.description
 				});
 			}
@@ -105,7 +213,9 @@ sap.ui.define([
 					if (oInteractionDoc) {
 						const aControlInteractionNodes = [...oInteractionDoc.querySelectorAll("control-interactions")];
 						const oMatchingControl = aControlInteractionNodes.find((oNode) => {
-							return oNode.querySelector("control")?.getAttribute("name") === oControl.getMetadata().getName();
+							return Array.from(oNode.querySelectorAll(`control[name]`)).find((oNode) => {
+								return oNode.getAttribute("name") === oControl.getMetadata().getName();
+							});
 						});
 
 						sAccessibilityInfoLabel = oMatchingControl?.querySelector("control")?.querySelector("defaultLabel")?.textContent;
@@ -154,10 +264,6 @@ sap.ui.define([
 			return null;
 		}
 
-		if (oInteractionXMLCache.has(sLibrary)) {
-			return oInteractionXMLCache.get(sLibrary);
-		}
-
 		const sLanguage = Localization.getLanguage();
 		const aFallbackChain = LanguageFallback.getFallbackLocales(sLanguage);
 		let oInteractionXML = null;
@@ -166,6 +272,11 @@ sap.ui.define([
 			const sLocale = aFallbackChain.shift();
 			const sFileName = sLocale ? `interaction_${sLocale}.xml` : `interaction.xml`;
 			const sResource = sap.ui.require.toUrl(`${sLibrary.replace(/\./g, "/")}/i18n/${sFileName}`);
+			const sCacheKey = `${sLibrary}:${sLocale}`;
+
+			if (oInteractionXMLCache.has(sCacheKey)) {
+				return oInteractionXMLCache.get(sCacheKey);
+			}
 
 			try {
 				const oResponse = await fetch(sResource);
@@ -177,8 +288,11 @@ sap.ui.define([
 				oInteractionXML = XMLHelper.parse(text);
 
 				if (oInteractionXML) {
+					// Translate kbds and descriptions in the interaction XML
+					oInteractionXML = translateInteractionXML(oInteractionXML);
+
 					// cache the loaded interaction document
-					oInteractionXMLCache.set(sLibrary, oInteractionXML);
+					oInteractionXMLCache.set(sCacheKey, oInteractionXML);
 					break;
 				}
 			} catch (error) {
@@ -204,25 +318,38 @@ sap.ui.define([
 
 		const aControlInteractionNodes = [...oInteractionDoc.querySelectorAll("control-interactions")];
 		const oMatchingControl = aControlInteractionNodes.find((oNode) => {
-			return oNode.querySelector("control")?.getAttribute("name") === sControlName;
+			return Array.from(oNode.querySelectorAll(`control[name]`)).find((oNode) => {
+				return oNode.getAttribute("name") === sControlName;
+			});
 		});
 
 		if (!oMatchingControl) {
 			return [];
 		}
 
-		return [...oMatchingControl.querySelectorAll("interaction")].map((oInteractionNode) => ({
-			kbd: Array.from(oInteractionNode.children).filter((child) => child.tagName === "kbd").map((kbd) => kbd.textContent.trim()),
-			description: oInteractionNode.querySelector("description")?.innerHTML || ""
-		}));
+		return [...oMatchingControl.querySelectorAll("interaction")].map((oInteractionNode) => {
+			const kbdElements = Array.from(oInteractionNode.children).filter((child) => child.tagName === "kbd");
+			const kbd = kbdElements.map((kbd) => {
+				return {
+					raw: kbd.getAttribute("data-sap-ui-kbd-raw"),
+					translated: kbd.textContent
+				};
+			});
+
+			return {
+				kbd,
+				description: oInteractionNode.querySelector("description")?.innerHTML || ""
+			};
+		});
 	};
+
 
 	let oCurrentPort;
 	let bThrottled = false;
 
 	/**
 	 * Initializes the keyboard interaction information gathering.
-	 * @param  {Event} event The 'focusin' event triggering the initialization.
+	 * @param  {Event} event The 'focusin' or 'focusout' event triggering the initialization.
 	 */
 	const init = async (event) => {
 		if (bThrottled) {
@@ -235,24 +362,29 @@ sap.ui.define([
 		}, 300);
 
 		const aControlTree = [];
-		const elements = [];
 		const docs = {};
-		const oTargetControl = Element.closestTo(event?.target || document.activeElement);
+		const oLabelMap = new Map();
 
-		if (!oTargetControl) {
-			return;
+		let oTargetElement;
+		if (event) {
+			oTargetElement = event.type === "focusin" ? event.target : event.relatedTarget;
 		}
+		oTargetElement ??= document.activeElement;
+
+		const oTargetControl = Element.closestTo(oTargetElement);
 
 		// get generic key interactions from sap.ui.core
 		const oCoreXML = await loadInteractionXMLFor(null, "sap.ui.core");
 		if (oCoreXML) {
 			const oResourceBundle = Library.getResourceBundleFor("sap.ui.core");
+			const sLabel = oResourceBundle.getText("Generic.Keyboard.Interaction.Text");
 			docs["sap.ui.core.Control"] = {
 				"interactions": getInteractions("sap.ui.core.Control", oCoreXML)
 			};
-			elements.push({
+			oLabelMap.set(sLabel, {
+				"index": -1,
 				"class": "sap.ui.core.Control",
-				"label": oResourceBundle.getText("Generic.Keyboard.Interaction.Text"),
+				"label": sLabel,
 				"interactions": [{
 					"$ref": `docs/sap.ui.core.Control/interactions`
 				}]
@@ -282,7 +414,6 @@ sap.ui.define([
 			}
 
 			const sClassName = oControl.getMetadata().getName();
-
 			if (aDocs.length > 0) {
 				docs[sClassName] = {
 					"interactions": aDocs
@@ -292,19 +423,31 @@ sap.ui.define([
 				});
 			}
 
-			elements.push({
-				"id": oControl.getId(),
-				"class": sClassName,
-				"label": getLabelFor(oControl, oInteractionXML),
-				"interactions": aInteractions
-			});
+			const sLabel = getLabelFor(oControl, oInteractionXML);
+			if (!oLabelMap.has(sLabel)) {
+				oLabelMap.set(sLabel, { interactions: [], label: sLabel });
+			}
+
+			const oMapEntry = oLabelMap.get(sLabel);
+			oMapEntry.index = i;
+			oMapEntry.id = oControl.getId();
+			oMapEntry.class = sClassName;
+			oMapEntry.interactions.unshift(...aInteractions.reverse());
 		}
 
 		// Update protocol with gathered elements and documentation
-		oProtocol.elements = elements;
+		oProtocol.elements = Array.from(oLabelMap.values())
+			.sort((a, b) => {
+				return a.index - b.index;
+			})
+			.map((oEntry) => {
+				delete oEntry.index;
+				return oEntry;
+			});
+
 		oProtocol.docs = docs;
 
-			// Send protocol
+		// Send protocol
 		oCurrentPort?.postMessage(JSON.parse(JSON.stringify({
 			service: POST_MESSAGE_ENDPOINT_UPDATE,
 			type: "request",
@@ -314,7 +457,7 @@ sap.ui.define([
 
 	/**
 	 * Module that handles the gathering and sending of keyboard interaction information.
-	 * When active, it starts listening for pointer and focus events to collect the keyboard interaction data.
+	 * When active, it starts listening for focusin and focusout event to collect the keyboard interaction data.
 	 * The gathered data is then sent via a MessagePort to a connected entity.
 	 *
 	 * @private
@@ -325,7 +468,7 @@ sap.ui.define([
 
 		/**
 		 * Activates the keyboard interaction information gathering.
-		 * This methods starts listening for pointer and focus events to gather the keyboard interaction information.
+		 * This methods starts listening for focusin and focusout events to gather the keyboard interaction information.
 		 *
 		 * @param  {MessagePort} oPort The MessagePort used to send the keyboard interaction information.
 		 * @private
@@ -337,13 +480,20 @@ sap.ui.define([
 
 			this._isActive = true;
 			await init();
-			document.addEventListener("pointerdown", init);
+			// need to register for both focusin and focusout event
+			// Browser fires:
+			//  * only focusin when focus is moved from <body> to a focusable element
+			//  * only focusout when focus is moved from a focused element to <body>
+			//  * first focusout then focusin when moved from a focused element to another focusable element
 			document.addEventListener("focusin", init);
+			document.addEventListener("focusout", init);
+
+			Localization.attachChange(init);
 		},
 
 		/**
 		 * Deactivates the keyboard interaction information gathering
-		 * This methods stops listening for pointer and focus events, effectively stopping the collection
+		 * This methods stops listening focusin and focusout events, effectively stopping the collection
 		 * of the keyboard interaction information.
 		 *
 		 * @private
@@ -353,8 +503,23 @@ sap.ui.define([
 				return;
 			}
 			this._isActive = false;
-			document.removeEventListener("pointerdown", init);
 			document.removeEventListener("focusin", init);
+			document.removeEventListener("focusout", init);
+
+			Localization.detachChange(init);
+		},
+
+		/**
+		 * Expose for testing.
+		 * @private
+		 */
+		_: {
+			getNormalizedShortcutString,
+			translateInteractionXML,
+			localizeKeys,
+			annotateAndTranslateKbdTags,
+			getInteractions,
+			getCommandInfosFor
 		}
 	};
 });

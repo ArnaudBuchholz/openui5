@@ -3,16 +3,18 @@
  */
 
 sap.ui.define([
+	"sap/base/Log",
 	"sap/m/Image",
-	"./Adaptation",
-	"../Utils",
-	"sap/base/Log"
+	"sap/ui/rta/toolbar/Adaptation",
+	"sap/ui/rta/toolbar/AdaptationRenderer",
+	"sap/ui/rta/Utils"
 ],
 function(
+	Log,
 	Image,
 	Adaptation,
-	Utils,
-	Log
+	AdaptationRenderer,
+	Utils
 ) {
 	"use strict";
 
@@ -39,9 +41,15 @@ function(
 	 */
 	const Fiori = Adaptation.extend("sap.ui.rta.toolbar.Fiori", {
 		metadata: {
-			library: "sap.ui.rta"
+			library: "sap.ui.rta",
+			properties: {
+				ushellApi: {
+					type: "any", // sap.ushell.api.RTA
+					defaultValue: null
+				}
+			}
 		},
-		renderer: "sap.ui.rta.toolbar.AdaptationRenderer",
+		renderer: AdaptationRenderer,
 		type: "fiori"
 	});
 
@@ -58,14 +66,12 @@ function(
 
 	Fiori.prototype.buildControls = function(...aArgs) {
 		return Adaptation.prototype.buildControls.apply(this, aArgs).then(function(aControls) {
-			const sLogoPath = this._oFioriHeader.getLogo();
+			const sLogoPath = this.getUshellApi().getLogo();
 
-			if (this._oFioriHeader.getShowLogo() && sLogoPath) {
-				// Unstable: if FLP changes ID of <img> element, logo could be not found
-				const oLogo = this._oFioriHeader.getDomRef().querySelector("#shell-header-icon");
+			if (sLogoPath) {
+				const oLogo = this.getUshellApi().getLogoDomRef();
 				let iWidth;
 				let iHeight;
-
 				if (oLogo) {
 					iWidth = oLogo.getBoundingClientRect().width;
 					iHeight = oLogo.getBoundingClientRect().height;
@@ -75,7 +81,6 @@ function(
 				this.getControl("iconSpacer").setWidth("8px");
 				this._iLogoWidth = iWidth + 8;
 
-				// first control is the left HBox
 				this.getControl("iconBox").addItem(
 					new Image(`${this.getId()}_fragment--sapUiRta_icon`, {
 						src: sLogoPath,

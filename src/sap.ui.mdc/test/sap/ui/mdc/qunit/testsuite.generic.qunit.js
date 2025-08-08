@@ -272,12 +272,12 @@ sap.ui.define([
 					oMTable.getContent(); // to create internal controls
 					oDialog.getContainerControl(); // to create internal controls
 					oValueHelp.open(false);
+					let fResolve;
 					const oPromise = new Promise(function(fnResolve, fnReject) {
-						setTimeout(function() { // wait for resolving promise and Dialog started to open
-							setTimeout(function() { // wait until Dialog has opened (has some animation duration)
-								fnResolve();
-							}, 301);
-						}, 0);
+						fResolve = fnResolve;
+					});
+					oValueHelp.attachOpened((oEvent) => { // wait until Dialog has opened
+						fResolve();
 					});
 					await oPromise;
 					return oField;
@@ -296,7 +296,8 @@ sap.ui.define([
 					contentEdit: GenericTestCollection.ExcludeReason.SetterNeedsSpecificSettings, // we want to test creation of internal content
 					fieldInfo: GenericTestCollection.ExcludeReason.SetterNeedsSpecificSettings, // we want to test standard content
 					items: GenericTestCollection.ExcludeReason.OnlyChangeableViaBinding // as tested with binding
-				}
+				},
+				countControlInstances: false // the create function above is not deterministic with regards to control counts, it relies on the timing of a Dialog opening
 			},
 			"sap.ui.mdc.valuehelp.base.DefineConditionPanel": {
 				create: async (DefineConditionPanel, mSettings) => {

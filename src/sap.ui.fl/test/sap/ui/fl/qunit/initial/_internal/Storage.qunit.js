@@ -90,10 +90,10 @@ sap.ui.define([
 				{
 					connector: "LrepConnector",
 					url: this.url,
-					layers: []
+					layers: [Layer.CUSTOMER]
 				}, {
 					connector: "JsObjectConnector",
-					layers: [Layer.CUSTOMER]
+					layers: [Layer.PUBLIC]
 				}, {
 					connector: "PersonalizationConnector",
 					url: this.url,
@@ -103,23 +103,9 @@ sap.ui.define([
 
 			const oExpectedResponse = {
 				isKeyUser: true,
-				isKeyUserTranslationEnabled: false,
-				isVariantSharingEnabled: false,
-				isContextSharingEnabled: true,
-				isPublicFlVariantEnabled: false,
-				isVariantPersonalizationEnabled: true,
-				isVariantAuthorNameAvailable: false,
-				isLocalResetEnabled: false,
-				isAtoAvailable: false,
-				isAtoEnabled: false,
 				versioning: {
 					CUSTOMER: false
-				},
-				isProductiveSystem: true,
-				isPublicLayerAvailable: false,
-				isZeroDowntimeUpgradeRunning: false,
-				system: "",
-				client: ""
+				}
 			};
 			const oLogResolveSpy = sandbox.spy(StorageUtils, "logAndResolveDefault");
 
@@ -183,27 +169,7 @@ sap.ui.define([
 				isProductiveSystem: true
 			});
 
-			const DEFAULT_FEATURES = {
-				isKeyUser: false,
-				isKeyUserTranslationEnabled: false,
-				isVariantSharingEnabled: false,
-				isContextSharingEnabled: false,
-				isPublicFlVariantEnabled: false,
-				isVariantPersonalizationEnabled: true,
-				isVariantAuthorNameAvailable: false,
-				isAtoAvailable: false,
-				isAtoEnabled: false,
-				draft: {},
-				isProductiveSystem: true,
-				isPublicLayerAvailable: false,
-				isLocalResetEnabled: false,
-				isZeroDowntimeUpgradeRunning: false,
-				system: "",
-				client: ""
-			};
-
 			return Storage.loadFeatures().then(function(mFeatures) {
-				assert.strictEqual(Object.keys(mFeatures).length, Object.keys(DEFAULT_FEATURES).length, "only 13 feature was provided");
 				assert.strictEqual(mFeatures.isProductiveSystem, true, "the property was overruled by the second connector");
 			});
 		});
@@ -306,6 +272,17 @@ sap.ui.define([
 			return Storage.loadFlexData({reference: sFlexReference}).then(function(oResult) {
 				assert.deepEqual(oResult, merge(StorageUtils.getEmptyFlexDataResponse(), {cacheKey: null}));
 			});
+		});
+
+		QUnit.test("Given loadFlexData is called with skipLoadBundle", async function(assert) {
+			const oStaticFileConnectorStub = sandbox.stub(StaticFileConnector, "loadFlexData").resolves(StorageUtils.getEmptyFlexDataResponse());
+			const oJsObjectConnectorStub = sandbox.stub(JsObjectConnector, "loadFlexData").resolves(StorageUtils.getEmptyFlexDataResponse());
+			const oLrepConnectorStub = sandbox.stub(LrepConnector, "loadFlexData").resolves(StorageUtils.getEmptyFlexDataResponse());
+
+			await Storage.loadFlexData({reference: sFlexReference, skipLoadBundle: true});
+			assert.strictEqual(oStaticFileConnectorStub.callCount, 0, "the StaticFileConnector.loadFlexData was not called");
+			assert.strictEqual(oJsObjectConnectorStub.callCount, 1, "the JsObjectConnector.loadFlexData was called once");
+			assert.strictEqual(oLrepConnectorStub.callCount, 1, "the LrepConnector.loadFlexData was called once");
 		});
 
 		QUnit.test("Given 2 connectors provide their own cacheKey values", function(assert) {

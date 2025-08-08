@@ -5,6 +5,7 @@
 	xmlns:u="sap.ui.unified"
 	xmlns:c="sap.ui.core"
 	xmlns:m="sap.m"
+	xmlns:p="sap.m.plugins"
     height="100%">
 	<m:Page
 		showHeader="false"
@@ -27,6 +28,9 @@
 						<template>
 							<m:Text text="{Name}" wrapping="false" />
 						</template>
+						<dependents>
+							<p:ColumnAIAction press="onAIActionPress"></p:ColumnAIAction>
+						</dependents>
 					</Column>
 					<Column width="11rem">
 						<m:Label text="Product Id" />
@@ -58,7 +62,7 @@
 					<Column width="12rem">
 						<m:Label text="Supplier" />
 						<template>
-							<m:ComboBox value="{SupplierName}" items="{/Suppliers}">
+							<m:ComboBox value="{SupplierName}" items="{ path: '/Suppliers', templateShareable: false }">
 								<c:Item text="{Name}"/>
 							</m:ComboBox>
 						</template>
@@ -87,7 +91,7 @@
 					<Column width="12rem">
 						<m:Label text="Main Category" />
 						<template>
-							<m:Select selectedKey="{Category}" items="{/Categories}">
+							<m:Select selectedKey="{Category}" items="{ path: '/Categories', templateShareable: false }">
 								<c:Item text="{Name}" key="{Name}"/>
 							</m:Select>
 						</template>
@@ -98,9 +102,13 @@
 							<m:MultiInput
 								tokenUpdate="updateMultipleSelection"
 								value="{AdditionalCategory}"
-								tokens="{AdditionalCategoriesSelection}"
+								tokens="{
+									path: 'AdditionalCategoriesSelection',
+									templateShareable: false
+								}"
 								suggestionItems="{
 									path: '/Categories',
+									templateShareable: false,
 									sorter: { path: 'Name' }
 								}"
 								showValueHelp="false"

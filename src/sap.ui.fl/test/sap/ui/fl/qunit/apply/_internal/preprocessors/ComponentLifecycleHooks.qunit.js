@@ -8,12 +8,11 @@ sap.ui.define([
 	"sap/ui/fl/apply/_internal/changes/descriptor/InlineApplier",
 	"sap/ui/fl/apply/_internal/flexObjects/FlexObjectFactory",
 	"sap/ui/fl/apply/_internal/flexState/FlexState",
-	"sap/ui/fl/apply/_internal/flexState/ManifestUtils",
+	"sap/ui/fl/initial/_internal/ManifestUtils",
 	"sap/ui/fl/apply/_internal/preprocessors/ComponentLifecycleHooks",
 	"sap/ui/fl/apply/api/ControlVariantApplyAPI",
 	"sap/ui/fl/changeHandler/ChangeAnnotation",
 	"sap/ui/fl/initial/_internal/changeHandlers/ChangeHandlerRegistration",
-	"sap/ui/fl/FlexControllerFactory",
 	"sap/ui/fl/Layer",
 	"sap/ui/fl/Utils",
 	"sap/ui/thirdparty/sinon-4"
@@ -30,7 +29,6 @@ sap.ui.define([
 	ControlVariantApplyAPI,
 	ChangeAnnotation,
 	ChangeHandlerRegistration,
-	FlexControllerFactory,
 	Layer,
 	Utils,
 	sinon
@@ -330,7 +328,6 @@ sap.ui.define([
 		afterEach() {
 			window.sessionStorage.removeItem("sap.ui.rta.restart.CUSTOMER");
 			this.oAppComponent.destroy();
-			FlexControllerFactory._instanceCache = {};
 			sandbox.restore();
 		}
 	}, function() {
@@ -627,7 +624,7 @@ sap.ui.define([
 				asyncHints: oAsyncHints,
 				componentId: this.oAppComponent.getId(),
 				reference: this.oAppComponent.getId(),
-				partialFlexState: true
+				skipLoadBundle: true
 			}, "FlexState was initialized with the correct parameters");
 			assert.deepEqual(this.oFlexStateInitStub.getCall(0).args[0], this.oFlexStateInitStub.getCall(1).args[0]);
 			assert.deepEqual(this.oFlexStateInitStub.getCall(1).args[0], this.oFlexStateInitStub.getCall(2).args[0]);
@@ -658,6 +655,8 @@ sap.ui.define([
 
 			const aAnnoChangesModel3 = await this.oSetAnnotationChangeStub3.getCall(0).args[0];
 			assert.strictEqual(aAnnoChangesModel3.length, 0, "the third model was set with no annotation change");
+
+			assert.ok(this.oAnnotationChanges.every((oChange) => oChange._appliedOnModel), "all changes are marked as passed to the model");
 		});
 
 		QUnit.test("hook gets called with a model on an embedded component", async function(assert) {
@@ -679,7 +678,7 @@ sap.ui.define([
 				asyncHints: oAsyncHints,
 				componentId: this.oAppComponent.getId(),
 				reference: this.oAppComponent.getId(),
-				partialFlexState: true
+				skipLoadBundle: true
 			}, "FlexState was initialized with the correct parameters");
 
 			assert.ok(this.oSetAnnotationChangeStub1.calledOnce, "the promise was set on the first model");

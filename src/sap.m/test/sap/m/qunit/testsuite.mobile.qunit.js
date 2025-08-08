@@ -11,7 +11,6 @@ sap.ui.define([
 			bootCore: true,
 			ui5: {
 				libs: "sap.m",
-				theme: "sap_belize",
 				noConflict: true,
 				preload: "auto",
 				"xx-waitForTheme": "init"
@@ -604,10 +603,7 @@ sap.ui.define([
 				}
 			},
 			IconTabHeader: {
-				title: "QUnit Page for sap.m.IconTabHeader",
-				sinon: {
-					useFakeTimers: true
-				}
+				title: "QUnit Page for sap.m.IconTabHeader"
 			},
 			IconTabBarSelectList: {
 				title: "QUnit Page for sap.m.IconTabBarSelectList",
@@ -754,16 +750,6 @@ sap.ui.define([
 					paths: {
 						resourceroot: "test-resources/sap/m/qunit/"
 					}
-				},
-				ui5: {
-					language: "en-US",
-					libs: ["sap.m", "sap.ui.unified"] // to compensate sync loadLibrary
-				}
-			},
-			MenuItem: {
-				title: "QUnit Page for sap.m.MenuItem",
-				coverage: {
-					only: ["sap/m/MenuItem"]
 				},
 				ui5: {
 					language: "en-US",
@@ -922,6 +908,9 @@ sap.ui.define([
 			OverflowToolbarMenuButton: {
 				title: "Test Page for sap.m.OverflowToolbarMenuButton"
 			},
+			OverflowToolbarTokenizer: {
+				title: "Test Page for sap.m.OverflowToolbarTokenizer"
+			},
 			/**
 			 * @deprecated as of version 1.98
 			 */
@@ -1019,6 +1008,15 @@ sap.ui.define([
 				loader: {
 					paths: {
 						resourceroot: "test-resources/sap/m/qunit/p13n/handler"
+					}
+				}
+			},
+			"p13n.util.diff": {
+				title: "Test Page for sap.m.p13n.util.diff",
+				module: "test-resources/sap/m/qunit/p13n/util/diff.qunit",
+				loader: {
+					paths: {
+						resourceroot: "test-resources/sap/m/qunit/p13n/util"
 					}
 				}
 			},
@@ -1464,6 +1462,9 @@ sap.ui.define([
 			Select2: {
 				title: "Separate test page for sap.m.Select"
 			},
+			SelectDialogBase: {
+				title: "QUnit Page for sap.m.SelectDialogBase"
+			},
 			SelectDialog: {
 				title: "QUnit Page for sap.m.SelectDialog",
 				sinon: {
@@ -1707,6 +1708,9 @@ sap.ui.define([
 					resourceroot: "test-resources/sap/m/qunit/table/columnmenu"
 				}
 			},
+			/**
+			 * @deprecated since 1.132
+			 */
 			"table.columnmenu.Item": {
 				title: "Test Page for sap.m.table.columnmenu.Item",
 				module: "test-resources/sap/m/qunit/table/columnmenu/Item.qunit",
@@ -1766,6 +1770,13 @@ sap.ui.define([
 			"table.columnmenu.QuickTotal": {
 				title: "Test Page for sap.m.table.columnmenu.QuickTotal",
 				module: "test-resources/sap/m/qunit/table/columnmenu/QuickTotal.qunit",
+				paths: {
+					resourceroot: "test-resources/sap/m/qunit/table/columnmenu"
+				}
+			},
+			"table.columnmenu.QuickResize": {
+				title: "Test Page for sap.m.table.columnmenu.QuickResize",
+				module: "test-resources/sap/m/qunit/table/columnmenu/QuickResize.qunit",
 				paths: {
 					resourceroot: "test-resources/sap/m/qunit/table/columnmenu"
 				}
@@ -2440,6 +2451,18 @@ sap.ui.define([
 			},
 			"plugins/DataStateIndicator": {
 				title: "Test Page for sap.m.plugins.DataStateIndicator"
+			},
+			"plugins/ColumnAIAction": {
+				title: "Test Page for sap.m.plugins.ColumnAIAction",
+				sinon: {
+					version: 'edge'
+				},
+				ui5: {
+					libs: ["sap.m", "sap.ui.table", "sap.ui.mdc"]
+				},
+				coverage: {
+					only: ["sap/m/plugins/ColumnAIAction"]
+				}
 			},
 			"plugins/ColumnResizer": {
 				title: "Test Page for sap.m.plugins.ColumnResizer"

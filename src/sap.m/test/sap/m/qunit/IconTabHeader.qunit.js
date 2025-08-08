@@ -114,6 +114,14 @@ sap.ui.define([
 		return oDeferred.promise;
 	}
 
+	const fnRunAllTimersAndRestore = (oClock) => {
+		if (!oClock) {
+			return;
+		}
+		oClock.runAll();
+		oClock.restore();
+	};
+
 	QUnit.module("Methods");
 
 	QUnit.test("_findItemByKey", function (assert) {
@@ -134,12 +142,12 @@ sap.ui.define([
 
 	QUnit.module("Overflow tab");
 
-	QUnit.test("Adding event delegates", function (assert) {
+	QUnit.test("Adding event delegates", async function (assert) {
 		// arrange
 		var oSpy = sinon.spy(IconTabFilter.prototype, "addEventDelegate"),
 			oITH = createHeaderWithItems(100);
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// assert
 		assert.ok(oSpy.calledWith(oITH._oOverflowEventDelegate, oITH._getOverflow()), "Event delegate is added to the overflow tab");
@@ -148,11 +156,11 @@ sap.ui.define([
 		oITH.destroy();
 	});
 
-	QUnit.test("Removing event delegates", function (assert) {
+	QUnit.test("Removing event delegates", async function (assert) {
 		// arrange
 		var oITH = createHeaderWithItems(100);
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var oOverflow = oITH._getOverflow(),
 			oSpy = sinon.spy(oOverflow, "removeEventDelegate"),
@@ -165,20 +173,27 @@ sap.ui.define([
 		assert.ok(oSpy.calledWith(oOverflowEventDelegate), "Event delegate is removed from the overflow tab");
 	});
 
-	QUnit.module("Resize");
+	QUnit.module("Resize", {
+		beforeEach: function () {
+			this.clock = sinon.useFakeTimers();
+		},
+		afterEach: function () {
+			fnRunAllTimersAndRestore(this.clock);
+		}
+	});
 
-	QUnit.test("when there is not enough space, items should be hidden", function(assert) {
+	QUnit.test("when there is not enough space, items should be hidden", async function(assert) {
 		// arrange
 		var oITH = createHeaderWithItems(4),
 			oLastItem = oITH.getItems()[3];
 
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		assert.notOk(oLastItem.$().hasClass("sapMITBFilterHidden"), "the last filter is visible");
 
 		oITH.$().width("200px");
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 		this.clock.tick(300);
 
 		// assert
@@ -188,7 +203,7 @@ sap.ui.define([
 		oITH.destroy();
 	});
 
-	QUnit.test("hide items together with preceding separator", function(assert) {
+	QUnit.test("hide items together with preceding separator", async function(assert) {
 		// arrange
 		var oITH = createHeaderWithItems(4, true),
 			aItems = oITH.getItems(),
@@ -196,7 +211,7 @@ sap.ui.define([
 			oLastItem = aItems[6];
 
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// assert - all visible
 		assert.notOk(oLastSeparator.$().hasClass("sapMITBFilterHidden"), "the last separator is visible");
@@ -204,7 +219,7 @@ sap.ui.define([
 
 		// act - resize
 		oITH.$().width("200px");
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 		this.clock.tick(300);
 
 		// assert - last item is hidden
@@ -213,7 +228,7 @@ sap.ui.define([
 
 		// act - select last item
 		oITH.setSelectedKey(oLastItem.getKey());
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 		this.clock.tick(300);
 
 		// assert - selected item is visible
@@ -224,7 +239,7 @@ sap.ui.define([
 		oITH.destroy();
 	});
 
-	QUnit.test("when first item is truncated, more button is still visible", function(assert) {
+	QUnit.test("when first item is truncated, more button is still visible", async function(assert) {
 		// arrange
 		var oITH = createHeaderWithItems(2),
 			oContainer = new Panel({
@@ -233,7 +248,7 @@ sap.ui.define([
 			});
 
 		oContainer.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// assert
 		assert.ok(oITH._getOverflow().$().hasClass("sapMITHOverflowVisible"), "the more button is visible");
@@ -244,12 +259,12 @@ sap.ui.define([
 
 	QUnit.module("Shifting behavior");
 
-	QUnit.test("Selecting an overflown tab causes it to show up in the tab strip", function (assert) {
+	QUnit.test("Selecting an overflown tab causes it to show up in the tab strip", async function (assert) {
 		// Arrange
 		var oITH = createHeaderWithItems(100);
 		var oTargetTab = oITH.getItems()[99];
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		var aVisibleTabs = oITH.$().find(".sapMITBItem:not(.sapMITBFilterHidden)").toArray();
@@ -258,7 +273,7 @@ sap.ui.define([
 
 		// Act
 		oITH.setSelectedKey("99");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		aVisibleTabs = oITH.$().find(".sapMITBItem:not(.sapMITBFilterHidden)").toArray();
@@ -269,7 +284,7 @@ sap.ui.define([
 		oITH.destroy();
 	});
 
-	QUnit.test("Tabs are correctly shifted with tabsOverflowMode=StartAndEnd", function (assert) {
+	QUnit.test("Tabs are correctly shifted with tabsOverflowMode=StartAndEnd", async function (assert) {
 		// Arrange
 		var oITH = createHeaderWithItems(10);
 		oITH.setTabsOverflowMode(TabsOverflowMode.StartAndEnd);
@@ -281,7 +296,7 @@ sap.ui.define([
 
 		// Act
 		oContainer.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		assert.strictEqual(oITH.getDomRef("head").querySelectorAll(".sapMITBFilter:not(.sapMITBFilterHidden)").length, 2, "Only two tabs should be visible");
@@ -291,7 +306,7 @@ sap.ui.define([
 		oContainer.destroy();
 	});
 
-	QUnit.test("Tabs are correctly calculated in overflow with tabsOverflowMode=StartAndEnd", function (assert) {
+	QUnit.test("Tabs are correctly calculated in overflow with tabsOverflowMode=StartAndEnd", async function (assert) {
 		// Arrange
 		var oITH = createHeaderWithItemsSubItems(10, 1);
 		oITH.setTabsOverflowMode(TabsOverflowMode.StartAndEnd);
@@ -303,7 +318,8 @@ sap.ui.define([
 
 		// Act
 		oContainer.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
+
 		// Assert
 		assert.strictEqual(oITH._getOverflow().getText(), "+9", "Only main tabs should be calculated in overflow tab counter");
 
@@ -312,9 +328,16 @@ sap.ui.define([
 		oContainer.destroy();
 	});
 
-	QUnit.module("Tab properties");
+	QUnit.module("Tab properties", {
+		beforeEach: function () {
+			this.clock = sinon.useFakeTimers();
+		},
+		afterEach: function () {
+			fnRunAllTimersAndRestore(this.clock);
+		}
+	});
 
-	QUnit.test("Tabs with items aggregation and property enabled=false should not open their dropdown", function (assert) {
+	QUnit.test("Tabs with items aggregation and property enabled=false should not open their dropdown", async function (assert) {
 		// Arrange
 		var oITH = createHeaderWithItems(1);
 		var oTab = oITH.getItems()[0];
@@ -323,7 +346,7 @@ sap.ui.define([
 
 		oTab.addItem(new IconTabFilter({ text: "SAP" }));
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// Act
 		oTab._expandButtonPress();
@@ -353,11 +376,11 @@ sap.ui.define([
 
 	QUnit.module("Properties");
 
-	QUnit.test("ariaTexts", function (assert) {
+	QUnit.test("ariaTexts", async function (assert) {
 		var oITH = createHeaderWithItems(10);
 
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		assert.notOk(oITH.$().attr("aria-label"), "'aria-label' attribute should NOT be set.");
 		assert.notOk(oITH.$("head").attr("aria-describedby"), "'aria-describedby' attribute should NOT be set.");
@@ -366,7 +389,7 @@ sap.ui.define([
 			headerLabel: "Available spaces",
 			headerDescription: "Select tab to show a space"
 		});
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		assert.strictEqual(oITH.$().attr("aria-label"), "Available spaces", "'aria-label' attribute should be set");
 		assert.strictEqual(oITH.$("head").attr("aria-describedby"), oITH._getInvisibleHeadText().getId(), "'aria-describedby' attribute should be set.");
@@ -376,43 +399,43 @@ sap.ui.define([
 		oITH.destroy();
 	});
 
-	QUnit.test("interactionMode", function (assert) {
+	QUnit.test("interactionMode", async function (assert) {
 		var oITH = createHeaderWithItemsSubItems(1, 0),
 			oFirstTab = oITH.getItems()[0];
 
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		assert.strictEqual(oFirstTab.getInteractionMode(), "Auto", "'interactionMode' property is with correct default value");
 		assert.notOk(oFirstTab.getDomRef().classList.contains("sapMITHUnselectable"), "Tab is rendered with two click areas");
 
 		oFirstTab.setInteractionMode("SelectLeavesOnly");
-		Core.applyChanges();
+		await nextUIUpdate();
 		assert.ok(oITH.getItems()[0].getDomRef().classList.contains("sapMITHUnselectable"), "Tab is rendered with one click area");
 
 		oFirstTab.setInteractionMode("Select");
-		Core.applyChanges();
+		await nextUIUpdate();
 		assert.notOk(oITH.getItems()[0].getDomRef().classList.contains("sapMITHUnselectable"), "Tab is rendered with two click areas");
 
 		// Clean-up
 		oITH.destroy();
 	});
 
-	QUnit.test("interactionMode - no subitems", function (assert) {
+	QUnit.test("interactionMode - no subitems", async function (assert) {
 		var oITH = createHeaderWithItems(1, false),
 			oFirstTab = oITH.getItems()[0];
 
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		assert.ok(oITH._isSelectable(oFirstTab), "Tab is selectable");
 
 		oFirstTab.setInteractionMode("SelectLeavesOnly");
-		Core.applyChanges();
+		await nextUIUpdate();
 		assert.ok(oITH._isSelectable(oFirstTab), "Tab is selectable");
 
 		oFirstTab.setInteractionMode("Select");
-		Core.applyChanges();
+		await nextUIUpdate();
 		assert.ok(oITH._isSelectable(oFirstTab), "Tab is selectable");
 
 		// Clean-up
@@ -421,7 +444,8 @@ sap.ui.define([
 
 
 	QUnit.module("Badges - simple tabs", {
-		beforeEach: function () {
+		beforeEach: async function () {
+			this.clock = sinon.useFakeTimers();
 			this.oITH = new IconTabHeader({
 				items: [
 					new IconTabFilter({
@@ -431,13 +455,15 @@ sap.ui.define([
 				]
 			});
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
+			await nextUIUpdate(this.clock);
 		},
 		afterEach: function () {
 			this.oITH.destroy();
+			fnRunAllTimersAndRestore(this.clock);
 		}
 	});
 
-	QUnit.test("Badge is shown on tab with text and icon", function (assert) {
+	QUnit.test("Badge is shown on tab with text and icon", async function (assert) {
 		// Arrange
 		this.oITH.setMode("Inline");
 		var oTab = 	new IconTabFilter({
@@ -449,13 +475,13 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// Assert
 		assert.ok(oTab.$().find(".sapMBadgeIndicator").length, "Badge indicator is rendered");
 	});
 
-	QUnit.test("Badge is shown", function (assert) {
+	QUnit.test("Badge is shown", async function (assert) {
 		// Arrange
 		var oTab = 	new IconTabFilter({
 			text: "Tab2",
@@ -465,13 +491,13 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// Assert
 		assert.ok(this.oITH.$().find(".sapMBadgeIndicator").length, "Badge indicator is rendered");
 	});
 
-	QUnit.test("Badge hiding after tab is selected", function (assert) {
+	QUnit.test("Badge hiding after tab is selected", async function (assert) {
 		// Arrange
 		var oTab = 	new IconTabFilter({
 			text: "Tab2",
@@ -481,7 +507,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// Act
 		this.oITH.setSelectedKey("tab2");
@@ -491,7 +517,7 @@ sap.ui.define([
 		assert.notOk(oTab._isBadgeAttached, "Badge indicator is removed");
 	});
 
-	QUnit.test("Badge hiding timeout is properly handled", function (assert) {
+	QUnit.test("Badge hiding timeout is properly handled", async function (assert) {
 		// Arrange
 		var oTab = new IconTabFilter({
 			text: "Tab2",
@@ -501,7 +527,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		// Act
 		this.oITH.setSelectedKey("tab2");
@@ -517,7 +543,8 @@ sap.ui.define([
 	});
 
 	QUnit.module("Badges - single click area tabs", {
-		beforeEach: function () {
+		beforeEach: async function () {
+			this.clock = sinon.useFakeTimers();
 			this.oITH = new IconTabHeader({
 				selectedKey: "initiallySelected",
 				items: [
@@ -527,13 +554,15 @@ sap.ui.define([
 				]
 			});
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
+			await nextUIUpdate(this.clock);
 		},
 		afterEach: function () {
 			this.oITH.destroy();
+			fnRunAllTimersAndRestore(this.clock);
 		}
 	});
 
-	QUnit.test("Badge is shown on the root tab when a nested tab has badge", function (assert) {
+	QUnit.test("Badge is shown on the root tab when a nested tab has badge", async function (assert) {
 		// Arrange
 		var oRootTab = new IconTabFilter({
 			text: "Tab2",
@@ -549,7 +578,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		var $badgeIndicator = oRootTab.$().find(".sapMBadgeIndicator");
 
@@ -559,7 +588,7 @@ sap.ui.define([
 		assert.ok(oRootTab.$().attr("aria-labelledby").indexOf($badgeIndicator.attr("id")) === 0, "aria-labelledby starts with the badge indicator id");
 	});
 
-	QUnit.test("Badge is removed from the root tab", function (assert) {
+	QUnit.test("Badge is removed from the root tab", async function (assert) {
 		// Arrange
 		var oRootTab = new IconTabFilter({
 			text: "Tab2",
@@ -569,7 +598,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		var $badgeIndicator = oRootTab.$().find(".sapMBadgeIndicator");
 		assert.ok(oRootTab.$().attr("aria-labelledby").indexOf($badgeIndicator.attr("id")) === 0, "aria-labelledby starts with the badge indicator id");
@@ -583,7 +612,7 @@ sap.ui.define([
 		assert.ok(oRootTab.$().attr("aria-labelledby").indexOf($badgeIndicator.attr("id")) === -1, "aria-labelledby doesn't contain the badge indicator id");
 	});
 
-	QUnit.test("Badge is removed from the root tab when it is removed from the nested tab", function (assert) {
+	QUnit.test("Badge is removed from the root tab when it is removed from the nested tab", async function (assert) {
 		// Arrange
 		var oRootTab = new IconTabFilter({
 			text: "Tab2",
@@ -599,7 +628,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 
 		var $badgeIndicator = oRootTab.$().find(".sapMBadgeIndicator");
 
@@ -620,7 +649,7 @@ sap.ui.define([
 		assert.ok(oRootTab.$().attr("aria-labelledby").indexOf($badgeIndicator.attr("id")) === -1, "aria-labelledby doesn't contain the badge indicator id");
 	});
 
-	QUnit.test("Badge is NOT removed from the root tab when there are more tabs inside it with badges", function (assert) {
+	QUnit.test("Badge is NOT removed from the root tab when there are more tabs inside it with badges", async function (assert) {
 		// Arrange
 		var oRootTab = new IconTabFilter({
 			text: "Tab2",
@@ -643,7 +672,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 		oRootTab._expandButtonPress();
 		var oFakeEvent = {
 			srcControl: oRootTab._getSelectList().getItems()[0],
@@ -658,7 +687,7 @@ sap.ui.define([
 		assert.ok(oRootTab.getAggregation("_expandButtonBadge")._isBadgeAttached, "Badge is NOT removed from the root tab");
 	});
 
-	QUnit.test("Badge is removed from the cloned item in the select list", function (assert) {
+	QUnit.test("Badge is removed from the cloned item in the select list", async function (assert) {
 		// Arrange
 		this.clock.restore();
 		const done = assert.async();
@@ -678,7 +707,7 @@ sap.ui.define([
 
 		this.oITH.placeAt("qunit-fixture");
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate(this.clock);
 		oRootTab._expandButtonPress();
 
 		oRootTab._oPopover.attachEventOnce("afterOpen", () => {
@@ -712,7 +741,7 @@ sap.ui.define([
 	});
 
 	QUnit.module("Badges - double click area tabs", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader({
 				items: [
 					new IconTabFilter({
@@ -722,13 +751,14 @@ sap.ui.define([
 				]
 			});
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("Badge is shown on the root tab and the expand button", function (assert) {
+	QUnit.test("Badge is shown on the root tab and the expand button", async function (assert) {
 		// Arrange
 		var oRootTab = new IconTabFilter({
 			text: "Tab2",
@@ -750,7 +780,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var $badgeIndicator = oRootTab.$().find(".sapMBadgeIndicator");
 
@@ -758,7 +788,7 @@ sap.ui.define([
 		assert.strictEqual($badgeIndicator.length, 2, "There are 2 badges rendered");
 	});
 
-	QUnit.test("aria-label of the 2 badges", function (assert) {
+	QUnit.test("aria-label of the 2 badges", async function (assert) {
 		// Arrange
 		var oRootTab = new IconTabFilter({
 			text: "Tab2",
@@ -780,7 +810,7 @@ sap.ui.define([
 			]
 		});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var $badgeIndicator1 = oRootTab.$().find(".sapMBadgeIndicator").eq(0),
 			$badgeIndicator2 = oRootTab.$().find(".sapMBadgeIndicator").eq(1);
@@ -790,7 +820,7 @@ sap.ui.define([
 		assert.strictEqual($badgeIndicator2.attr("aria-label"), oRB.getText("ICONTABFILTER_SUB_ITEMS_BADGES"), "'aria-label' is correct");
 	});
 
-	QUnit.test("There is badge on the root when a nested tab with badge is selected from the overflow", function (assert) {
+	QUnit.test("There is badge on the root when a nested tab with badge is selected from the overflow", async function (assert) {
 		// Arrange
 		fillWithItems(this.oITH, 100);
 
@@ -815,7 +845,7 @@ sap.ui.define([
 				]
 			});
 		this.oITH.addItem(oRootTab);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Act
 		oNestedItem.addCustomData(new BadgeCustomData());
@@ -826,7 +856,7 @@ sap.ui.define([
 			preventDefault: function () {}
 		};
 		this.oITH._getOverflow()._getSelectList().ontap(oFakeEvent);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		assert.ok(oRootTab.getAggregation("_expandButtonBadge")._isBadgeAttached, "Badge is added to the expand button");
@@ -838,31 +868,31 @@ sap.ui.define([
 	});
 
 	QUnit.module("Badges - overflow menu (More button)", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.iSize = 100;
 			this.oITH = createHeaderWithItems(this.iSize);
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("Badge is shown on the overflow tab when there are tabs with badges in it", function (assert) {
+	QUnit.test("Badge is shown on the overflow tab when there are tabs with badges in it", async function (assert) {
 		// Arrange
 		this.oITH.getItems()[this.iSize - 1].addCustomData(new BadgeCustomData());
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		assert.ok(this.oITH._getOverflow().getAggregation("_expandButtonBadge")._isBadgeAttached, "Badge is rendered on the overflow tab");
 	});
 
-	QUnit.test("Badge is removed from the overflow tab when there are no more tabs with badges in it", function (assert) {
+	QUnit.test("Badge is removed from the overflow tab when there are no more tabs with badges in it", async function (assert) {
 		// Arrange
-		this.clock.restore();
 		this.oITH.getItems()[this.iSize - 1].addCustomData(new BadgeCustomData());
 
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Act
 		this.oITH._getOverflow()._expandButtonPress();
@@ -878,7 +908,7 @@ sap.ui.define([
 	});
 
 	QUnit.module("Badges - dynamically added", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader({
 				items: [
 					new IconTabFilter({
@@ -907,20 +937,20 @@ sap.ui.define([
 			}
 
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("Badge is added on a root tab", function (assert) {
+	QUnit.test("Badge is added on a root tab", async function (assert) {
 		// Arrange
 		var oRootTab = this.oITH.getItems()[0],
 			oInvisibleMessageInstance = InvisibleMessage.getInstance();
 
 		oRootTab.addCustomData(new BadgeCustomData());
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var $badgeIndicator = oRootTab.$().find(".sapMBadgeIndicator"),
 			oInvisibleMsgDomRef = document.getElementById(oInvisibleMessageInstance.getId() + "-assertive");
@@ -932,14 +962,14 @@ sap.ui.define([
 		assert.strictEqual(oInvisibleMsgDomRef.textContent, oRB.getText("ICONTABFILTER_BADGE_MSG", [oRootTab.getText()]), "badge is announced");
 	});
 
-	QUnit.test("Badge is added on a child tab", function (assert) {
+	QUnit.test("Badge is added on a child tab", async function (assert) {
 		// Arrange
 		var oRootTab = this.oITH.getItems()[0],
 			oChildTab = oRootTab.getItems()[0],
 			oInvisibleMessageInstance = InvisibleMessage.getInstance();
 
 		oChildTab.addCustomData(new BadgeCustomData());
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var $badgeIndicator = oRootTab.$().find(".sapMBadgeIndicator"),
 			oInvisibleMsgDomRef = document.getElementById(oInvisibleMessageInstance.getId() + "-assertive");
@@ -951,14 +981,14 @@ sap.ui.define([
 		assert.strictEqual(oInvisibleMsgDomRef.textContent, oRB.getText("ICONTABFILTER_SUB_ITEM_BADGE", [oChildTab.getText(), oRootTab.getText()]), "badge is announced");
 	});
 
-	QUnit.test("Badge is added on an overflow tab", function (assert) {
+	QUnit.test("Badge is added on an overflow tab", async function (assert) {
 		// Arrange
 		var oRootTab = this.oITH.getItems()[90],
 			oOverflowTab = this.oITH._getOverflow(),
 			oInvisibleMessageInstance = InvisibleMessage.getInstance();
 
 		oRootTab.addCustomData(new BadgeCustomData());
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var $badgeIndicator = oOverflowTab.$().find(".sapMBadgeIndicator"),
 			oInvisibleMsgDomRef = document.getElementById(oInvisibleMessageInstance.getId() + "-assertive");
@@ -971,16 +1001,17 @@ sap.ui.define([
 	});
 
 	QUnit.module("Badges and selectedKey", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader();
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("Badge is removed from initially selected tab", function (assert) {
+	QUnit.test("Badge is removed from initially selected tab", async function (assert) {
 		// Arrange
 		var oSelectedTab = new IconTabFilter({
 			text: "Tab",
@@ -991,14 +1022,14 @@ sap.ui.define([
 		});
 		this.oITH.addItem(oSelectedTab);
 		this.oITH.setSelectedKey("tab");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		assert.notOk(oSelectedTab._isBadgeAttached, "The badge is removed from initially selected tab");
 	});
 
 	QUnit.module("Filters CustomData", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader();
 
 			// Arrange
@@ -1015,16 +1046,14 @@ sap.ui.define([
 			});
 			this.oITH.addItem(oRootTab);
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
-			Core.applyChanges();
 		}
 	});
 
 	QUnit.test("CustomData is cloned to the overflow item", function (assert) {
-		this.clock.restore();
 		var oOverflowTab = this.oITH._getOverflow();
 
 		QUnitUtils.triggerKeydown(oOverflowTab.$(), KeyCodes.ENTER);
@@ -1035,7 +1064,7 @@ sap.ui.define([
 	});
 
 	QUnit.module("Tabs Overflow Mode", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader({
 				tabsOverflowMode: TabsOverflowMode.StartAndEnd
 			}).addStyleClass("sapUiResponsiveContentPadding");
@@ -1052,14 +1081,14 @@ sap.ui.define([
 			fillWithItems(this.oITH, 100);
 
 			this.oScrollContainer.placeAt(DOM_RENDER_LOCATION);
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oScrollContainer.destroy();
 		}
 	});
 
-	QUnit.test("Tabs go in the startOverflow", function (assert) {
+	QUnit.test("Tabs go in the startOverflow", async function (assert) {
 
 		var oTargetTab = this.oITH.getItems()[0];
 
@@ -1071,7 +1100,7 @@ sap.ui.define([
 
 		// Act
 		this.oITH.setSelectedKey("50");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		aVisibleTabs = this.oITH.$().find(".sapMITBItem:not(.sapMITBFilterHidden)").toArray();
@@ -1081,10 +1110,10 @@ sap.ui.define([
 
 	});
 
-	QUnit.test("Both overflows show how many tabs they hold", function (assert) {
+	QUnit.test("Both overflows show how many tabs they hold", async function (assert) {
 		// Arrange
 		this.oITH.setSelectedKey("50");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var aItems = this.oITH.getItems(),
 			aVisibleTabs = this.oITH._getItemsInStrip(),
@@ -1107,25 +1136,25 @@ sap.ui.define([
 		const oSetItemsForStripSpy = this.spy(this.oITH, "_setItemsForStrip");
 		this.oITH.setSelectedKey("4");
 		await headerThemeApplied(this.oITH);
-		await nextUIUpdate(this.clock);
+		await nextUIUpdate();
 
 		assert.ok(oSetItemsForStripSpy.called, "_setItemsForStrip should be called");
 		assert.ok(this.oITH._getStartOverflow().$().hasClass("sapMITHOverflowVisible"), "start overflow button is visible");
 		assert.strictEqual(this.oITH._getStartOverflow().getText(), "+3", "start overflow button text is correct");
 	});
 
-	QUnit.test("End overflow button is visible when the before last item is selected", function (assert) {
+	QUnit.test("End overflow button is visible when the before last item is selected", async function (assert) {
 		// Arrange
 		this.oITH.setSelectedKey("98");
 		this.oScrollContainer.setWidth("220px");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		assert.ok(this.oITH._getOverflow().$().hasClass("sapMITHOverflowVisible"), "end overflow button is visible");
 		assert.strictEqual(this.oITH._getOverflow().getText(), "+1", "end overflow button text is correct");
 	});
 
 	QUnit.module("Badges - Start overflow", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader({
 				tabsOverflowMode: TabsOverflowMode.StartAndEnd
 			});
@@ -1136,10 +1165,10 @@ sap.ui.define([
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
 
 			this.oITH.setSelectedKey("50");
-			Core.applyChanges();
+			await nextUIUpdate();
 
 			this.oITH.getItems()[1].addCustomData(new BadgeCustomData());
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
@@ -1169,20 +1198,20 @@ sap.ui.define([
 
 	QUnit.module("Separator", {
 
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = createHeaderWithItems(40, true);
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("Separator goes to the overflow", function (assert) {
+	QUnit.test("Separator goes to the overflow", async function (assert) {
 
 		this.oITH.$().width("400px");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var aItems = this.oITH.getItems(),
 			oLastVisibleItem = aItems[6],
@@ -1194,7 +1223,7 @@ sap.ui.define([
 
 		// Act
 		this.oITH.setSelectedKey("10");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Assert
 		assert.ok(oLastVisibleItem.$().hasClass("sapMITBFilterHidden"), "the last item is not visible");
@@ -1202,17 +1231,17 @@ sap.ui.define([
 	});
 
 	QUnit.module("Accessibility", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader();
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("Count in aria-labelledby in default and inline mode", function (assert) {
+	QUnit.test("Count in aria-labelledby in default and inline mode", async function (assert) {
 		// Arrange
 		var oITH = this.oITH,
 			oFilter = new IconTabFilter({
@@ -1224,7 +1253,7 @@ sap.ui.define([
 			sCountElementId = oFilter.getId() + "-count";
 
 		oITH.addItem(oFilter);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		sAriaLabelledBy = oFilter.getDomRef().getAttribute("aria-labelledby");
 
@@ -1233,7 +1262,7 @@ sap.ui.define([
 
 		// Act
 		oITH.setMode(IconTabHeaderMode.Inline);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		sAriaLabelledBy = oFilter.getDomRef().getAttribute("aria-labelledby");
 
@@ -1242,17 +1271,17 @@ sap.ui.define([
 	});
 
 	QUnit.module("Events", {
-		beforeEach: function () {
+		beforeEach: async function () {
 			this.oITH = new IconTabHeader();
 			this.oITH.placeAt(DOM_RENDER_LOCATION);
-			Core.applyChanges();
+			await nextUIUpdate();
 		},
 		afterEach: function () {
 			this.oITH.destroy();
 		}
 	});
 
-	QUnit.test("select", function(assert) {
+	QUnit.test("select", async function(assert) {
 		// Arrange
 		this.oITH.addItem(
 			new IconTabFilter({
@@ -1267,7 +1296,7 @@ sap.ui.define([
 		);
 
 		var oSelectSpy = sinon.spy(this.oITH, "fireSelect");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Press SPACE key on second IconTabFilter to expand
 		QUnitUtils.triggerKeyup(this.oITH.getItems()[1].$(), KeyCodes.SPACE);
@@ -1277,7 +1306,7 @@ sap.ui.define([
 		assert.strictEqual(oSelectSpy.lastCall.args[0].previousKey, "key1", "first filter key is passed as previousKey select event arg");
 	});
 
-	QUnit.test("Right Click", function (assert) {
+	QUnit.test("Right Click", async function (assert) {
 		// Arrange
 		this.oITH.addItem(
 			new IconTabFilter({
@@ -1291,7 +1320,7 @@ sap.ui.define([
 			})
 		);
 		this.oITH.setSelectedKey("key1");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		// Act
 		var oMockEvent = {
@@ -1307,7 +1336,7 @@ sap.ui.define([
 		};
 
 		this.oITH.ontouchstart(oMockEvent);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		var iActiveTouch = this.oITH._iActiveTouch;
 
@@ -1317,7 +1346,7 @@ sap.ui.define([
 
 	QUnit.module("Focusing");
 
-	QUnit.test("Focused index on focus leave", function(assert) {
+	QUnit.test("Focused index on focus leave", async function(assert) {
 		var oITH = new IconTabHeader({
 			items: [
 				new IconTabFilter({
@@ -1344,10 +1373,10 @@ sap.ui.define([
 			]
 		});
 		oITH.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		oITH.setSelectedKey("tab4");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		oITH._onItemNavigationFocusLeave();
 
@@ -1357,7 +1386,7 @@ sap.ui.define([
 		oITH.destroy();
 	});
 
-	QUnit.test("Focused index on focus leave when StartAndEnd overflow", function(assert) {
+	QUnit.test("Focused index on focus leave when StartAndEnd overflow", async function(assert) {
 		var oITH = new IconTabHeader({
 			tabsOverflowMode: TabsOverflowMode.StartAndEnd,
 			items: [
@@ -1408,10 +1437,10 @@ sap.ui.define([
 		});
 
 		oScrollContainer.placeAt(DOM_RENDER_LOCATION);
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		oITH.setSelectedKey("tab5");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		oITH._onItemNavigationFocusLeave();
 
@@ -1419,7 +1448,7 @@ sap.ui.define([
 		assert.strictEqual(oITH._oItemNavigation.getFocusedIndex(), 5, "focused index is correct");
 
 		oITH.setSelectedKey("tab62");
-		Core.applyChanges();
+		await nextUIUpdate();
 
 		oITH._onItemNavigationFocusLeave();
 
